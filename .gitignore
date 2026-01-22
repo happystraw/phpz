@@ -1,0 +1,9 @@
+/.vscode
+/.cursor
+/.idea
+/*.lua
+# /.clangd
+/compile_flags.txt
+# /.clang-format
+zig-out
+.zig-cache
