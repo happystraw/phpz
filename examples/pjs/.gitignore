@@ -1,0 +1,8 @@
+/.vscode
+/.cursor
+/.idea
+/.claude
+/*.lua
+zig-out
+.zig-cache
+/modules

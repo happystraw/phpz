@@ -6,8 +6,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php";
+
     const php_ext_mod = Phpz.createPhpExtModule(b, .{
-        .php_include_root = .{ .cwd_relative = "/usr/include/php" },
+        .php_include_root = .{ .cwd_relative = php_include_root },
         .c_source_file = b.path("build/phpz.h"),
         .use_external_translator_c = true,
         .target = target,
@@ -26,8 +28,7 @@ pub fn build(b: *std.Build) void {
         .name = "phpz",
         .root_module = phpz_mod,
     });
-    _ = &lib;
-    b.installArtifact(lib);
+    b.installArtifact(lib); // only for development
 
     // Documentation generation step
     const doc_step = b.step("doc", "Generate documentation for phpz");
@@ -60,13 +61,22 @@ pub fn build(b: *std.Build) void {
     });
     doc_step.dependOn(&install_build_docs.step);
 
-    // Test step: runs the test command from examples/my_php_extension
-    const test_step = b.step("test", "Run the my_php_extension tests");
+    // Test step: runs the test command from examples
+    const test_step = b.step("test", "run examples tests");
     const test_cmd = b.addSystemCommand(&[_][]const u8{
         b.graph.zig_exe,
         "build",
         "test",
+        b.fmt("-Dphp-include-root={s}", .{php_include_root}),
     });
     test_cmd.setCwd(b.path("examples/my_php_extension"));
+    const test_pjs_cmd = b.addSystemCommand(&[_][]const u8{
+        b.graph.zig_exe,
+        "build",
+        "test",
+        b.fmt("-Dphp-include-root={s}", .{php_include_root}),
+    });
+    test_pjs_cmd.setCwd(b.path("examples/pjs"));
     test_step.dependOn(&test_cmd.step);
+    test_step.dependOn(&test_pjs_cmd.step);
 }
