@@ -6,8 +6,8 @@
     .dependencies = .{
         // TODO: remove it, use zig builtin translate c
         .translate_c = .{
-            .url = "git+https://codeberg.org/ziglang/translate-c.git?ref=update#94d10894daaaf263b2f18c62c2fb0dadb21c3747",
-            .hash = "translate_c-0.0.0-Q_BUWgvfBgC25oFk3kGxQ0-KaqP8z0g6Fck-Nhm1f57_",
+            .url = "git+https://codeberg.org/ziglang/translate-c.git#0a09d70ebc061359f703d6f14f38ec2a972bc5dc",
+            .hash = "translate_c-0.0.0-Q_BUWgvfBgCBwgavSlEZSYXAX_khLK0GRyIHwZHCbm1L",
         },
     },
     .paths = .{

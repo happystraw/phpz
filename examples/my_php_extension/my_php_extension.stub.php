@@ -13,10 +13,28 @@ namespace {
     function whoami(string $name, int|string|null $age = NULL): string
     {
     }
-
 }
 
 namespace MyPHPExt{
+    final class Counter
+    {
+        public function __construct(int $n)
+        {
+        }
+
+        public function add(int $n): void
+        {
+        }
+
+        public function dec(int $n): void
+        {
+        }
+
+        public function value(): int
+        {
+        }
+    }
+
     final class Human implements \Stringable
     {
         public function __construct(string $name, int|null $age)
@@ -40,10 +58,6 @@ namespace MyPHPExt{
         }
 
         public function __toString(): string
-        {
-        }
-
-        public static function version(): void
         {
         }
     }

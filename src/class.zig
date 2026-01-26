@@ -1,8 +1,3 @@
-const std = @import("std");
-
-const c = @import("root.zig").c;
-const function_helper = @import("function.zig");
-
 /// Type alias for Zend class entry structure.
 /// Represents a PHP class definition in the Zend engine.
 pub const ClassEntry = c.zend_class_entry;
@@ -88,7 +83,7 @@ pub const ClassEntry = c.zend_class_entry;
 pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     return extern struct {
         /// The wrapped Zig data structure
-        inner: T,
+        impl: T,
 
         /// PHP object header (must be the last field for proper memory layout)
         std: c.zend_object,
@@ -118,7 +113,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             var intern: *Self = @ptrCast(@alignCast(c.zend_object_alloc(@sizeOf(Self), ce.?)));
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
-            if (@hasDecl(T, "init")) intern.inner.init();
+            if (@hasDecl(T, "init")) intern.impl.init();
             intern.std.handlers = &handlers;
             return &intern.std;
         }
@@ -132,8 +127,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Note: This is an internal function called by PHP's garbage collector.
         pub fn deinit(obj: ?*c.zend_object) callconv(.c) void {
-            var intern: *Self = @fieldParentPtr("std", obj.?);
-            if (@hasDecl(T, "deinit")) intern.inner.deinit();
+            var intern: *Self = .from(.std, obj.?);
+            if (@hasDecl(T, "deinit")) intern.impl.deinit();
             c.zend_object_std_dtor(obj);
         }
 
@@ -246,5 +241,90 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         pub fn method(comptime func_name: [:0]const u8, comptime func: std.meta.DeclEnum(T)) void {
             function_helper.method(Self, func_name, @field(T, @tagName(func)));
         }
+
+        /// Increments the reference count of the object.
+        pub fn addref(self: *Self) void {
+            var obj: zend.Object = .from(&self.std);
+            obj.addref();
+        }
+
+        /// Decrements the reference count of the object.
+        pub fn delref(self: *Self) void {
+            var obj: zend.Object = .from(&self.std);
+            obj.delref();
+        }
+
+        /// Retrieves the parent struct pointer from a field pointer.
+        pub fn from(comptime field: std.meta.FieldEnum(Self), field_ptr: *@FieldType(Self, @tagName(field))) *Self {
+            return @fieldParentPtr(@tagName(field), field_ptr);
+        }
+
+        /// Creates a new instance of the class.
+        pub fn new() *Self {
+            return .from(.std, Self.init(Self.entry).?);
+        }
+
+        /// Update object property value.
+        pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) void {
+            switch (zk) {
+                .null => c.zend_update_property_null(entry, &self.std, prop_name.ptr, prop_name.len),
+                .bool => c.zend_update_property_bool(entry, &self.std, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+                .int => c.zend_update_property_long(entry, &self.std, prop_name.ptr, prop_name.len, prop_value),
+                .float => c.zend_update_property_double(entry, &self.std, prop_name.ptr, prop_name.len, prop_value),
+                .string => c.zend_update_property_stringl(entry, &self.std, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+                .undef => unreachable,
+                else => {
+                    var zv: c.zval = undefined;
+                    var zval: Zval = .from(&zv);
+                    zval.set(zk, prop_value);
+                    c.zend_update_property(entry, &self.std, prop_name.ptr, prop_name.len, &zv);
+                },
+            }
+        }
+
+        /// Read object property.
+        pub fn property(self: *Self, prop_name: []const u8, silent: bool) ?Zval {
+            var rv: c.zval = undefined;
+            const val = c.zend_read_property(entry, &self.std, prop_name.ptr, prop_name.len, silent, &rv);
+            const zv: Zval = .from(@ptrCast(val));
+            return if (zv.is(.undef)) null else zv;
+        }
+
+        /// Unset (delete) object property.
+        pub fn unsetProperty(self: *Self, prop_name: []const u8) void {
+            c.zend_unset_property(entry, &self.std, prop_name.ptr, prop_name.len);
+        }
+
+        /// Set static property value.
+        pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) !void {
+            const result = switch (zk) {
+                .null => c.zend_update_static_property_null(entry, prop_name.ptr, prop_name.len),
+                .bool => c.zend_update_static_property_bool(entry, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+                .int => c.zend_update_static_property_long(entry, prop_name.ptr, prop_name.len, prop_value),
+                .float => c.zend_update_static_property_double(entry, prop_name.ptr, prop_name.len, prop_value),
+                .string => c.zend_update_static_property_stringl(entry, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+                else => blk: {
+                    var zv: c.zval = undefined;
+                    var zval: Zval = .from(&zv);
+                    zval.set(zk, prop_value);
+                    break :blk c.zend_update_static_property(entry, prop_name.ptr, prop_name.len, &zv);
+                },
+            };
+            if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
+        }
+
+        /// Read static property.
+        pub fn staticProperty(prop_name: []const u8, silent: bool) ?Zval {
+            const val = c.zend_read_static_property(entry, prop_name.ptr, prop_name.len, silent);
+            const zv: Zval = .from(@ptrCast(val));
+            return if (zv.is(.undef)) null else zv;
+        }
     };
 }
+
+const std = @import("std");
+
+const c = @import("root.zig").c;
+const Zval = @import("Zval.zig");
+const zend = @import("zend.zig");
+const function_helper = @import("function.zig");

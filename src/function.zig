@@ -92,8 +92,8 @@ fn makePhpFn(comptime T: type, comptime func_name: [:0]const u8, comptime func: 
             var ret = Zval.from(return_value.?);
             const args = blk: {
                 if (fn_kind == .method) {
-                    var obj: *T = @fieldParentPtr("std", ctx.thisObject().?);
-                    const receiver = if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(T, "inner")) obj.inner else &obj.inner;
+                    var obj: *T = .from(.std, ctx.thisObject().?);
+                    const receiver = if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(T, "impl")) obj.impl else &obj.impl;
                     break :blk switch (fn_call_conv) {
                         .standard => .{ receiver, &ctx, &ret },
                         .no_params => .{receiver},
@@ -188,9 +188,9 @@ fn detectPhpFnCallConv(comptime T: type, comptime f: anytype) struct { PhpFnKind
 
     const offset: comptime_int, const fn_kind = blk: {
         if (T != void and fn_type_info.params.len > 0) {
-            const InnerType = @FieldType(T, "inner");
+            const ImplType = @FieldType(T, "impl");
             const ReceiverType = fn_type_info.params[0].type orelse void;
-            if (ReceiverType == InnerType or ReceiverType == *InnerType) {
+            if (ReceiverType == ImplType or ReceiverType == *ImplType) {
                 break :blk .{ 1, .method };
             }
             break :blk .{ 0, .static_method };

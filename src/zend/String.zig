@@ -2,10 +2,6 @@ const String = @This();
 
 inner: *c.zend_string,
 
-pub const Error = error{
-    AllocationFailed,
-};
-
 pub inline fn empty() String {
     return .{ .inner = @ptrCast(c.zend_empty_string) };
 }
@@ -17,12 +13,7 @@ pub inline fn char(ch: u8) String {
 pub fn init(str: []const u8) String {
     if (str.len == 0) return .empty();
     if (str.len == 1) return char(str[0]);
-
-    // NOTE: use direct allocation, avoid zend_string_init function(cause index out of bound error)
-    const result_str = c.zend_string_alloc(str.len, false);
-    @memcpy(@as([*]u8, @ptrCast(&result_str.*.val))[0..str.len], str[0..]);
-    @as([*]u8, @ptrCast(&result_str.*.val))[str.len] = 0;
-    return .{ .inner = result_str };
+    return .{ .inner = phpz.zig_zend_string_init(str.ptr, str.len, false) };
 }
 
 pub fn from(zstr: *c.zend_string) String {
@@ -89,19 +80,20 @@ pub fn hash(self: *const String) u64 {
 }
 
 pub inline fn refcount(self: *const String) u32 {
-    return c.GC_REFCOUNT(@ptrCast(&self.inner.gc));
+    return c.zend_gc_refcount(&self.inner.gc);
 }
 
 pub fn addref(self: *String) void {
-    _ = c.GC_ADDREF(@ptrCast(&self.inner.gc));
+    _ = c.zend_gc_addref(&self.inner.gc);
 }
 
-pub fn delref(self: *String) u32 {
-    return c.GC_DELREF(@ptrCast(&self.inner.gc));
+pub fn delref(self: *String) void {
+    _ = c.zend_gc_delref(&self.inner.gc);
 }
 
 pub inline fn isInterned(self: *const String) bool {
     return c.ZSTR_IS_INTERNED(self.inner) != 0;
 }
 
-const c = @import("../root.zig").c;
+const phpz = @import("../root.zig");
+const c = phpz.c;

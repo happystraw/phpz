@@ -54,10 +54,14 @@ This will generate `my_php_extension_arginfo.h` containing all the necessary arg
 
 Create a C header file (e.g., `my_php_extension.h`):
 
+> [phpz.h](./build/phpz.h) provides the core C API needed for building PHP extensions (includes `php.h` and `Zend/zend_API.h`). 
+>
+> Include it in your extension header to access all necessary PHP C APIs.
+
 ```c
-#include "php.h"
-#include "Zend/zend_API.h"
+#include "phpz.h"
 #include "my_php_extension_arginfo.h"
+// ... other header files
 ```
 
 Configure your `build.zig`:

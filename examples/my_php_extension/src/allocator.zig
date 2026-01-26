@@ -4,7 +4,7 @@ const phpz = @import("phpz");
 
 var debug_allocator = if (builtin.mode == .Debug) std.heap.DebugAllocator(.{}).init else {};
 
-pub const gpa = if (builtin.mode == .Debug) debug_allocator.allocator() else phpz.mem.php_allocator;
+pub const gpa = if (builtin.mode == .Debug) debug_allocator.allocator() else phpz.heap.php_allocator;
 
 pub fn deinit() void {
     if (builtin.mode == .Debug) {

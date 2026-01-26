@@ -3,11 +3,13 @@ const Object = @This();
 inner: *c.zval,
 
 pub const Error = error{
+    TypeMismatch,
+    NullPointer,
     InitFailed,
 };
-pub fn from(zv: *c.zval) Zval.Error!Object {
-    if (Zval.phpType(zv) != c.IS_OBJECT) return error.TypeMismatch;
-    if (zv.value.obj == null) return error.NullPointer;
+pub fn from(zv: *c.zval) Error!Object {
+    if (Zval.phpType(zv) != c.IS_OBJECT) return Error.TypeMismatch;
+    if (zv.value.obj == null) return Error.NullPointer;
     return .{ .inner = zv };
 }
 
@@ -93,10 +95,6 @@ pub fn set(self: *Object, comptime zk: Zval.Kind, key: []const u8, val: Zval.Typ
         .mixed => c.add_property_zval_ex(self.inner, key.ptr, key.len, val),
         .undef => @compileError("'undef' represents an uninitialized value and cannot be set as object property"),
     }
-}
-
-pub fn get() void {
-
 }
 
 pub fn toZval(self: *Object) Zval {

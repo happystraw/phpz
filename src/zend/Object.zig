@@ -4,7 +4,6 @@ inner: *c.zend_object,
 
 pub const Error = error{
     InitFailed,
-    InvalidObject,
     CloneFailed,
 };
 
@@ -36,12 +35,12 @@ pub fn deinit(self: *Object) void {
 
 /// Increment refcount
 pub fn addref(self: *Object) void {
-    _ = c.GC_ADDREF(@ptrCast(&self.inner.gc));
+    _ = c.zend_gc_addref(&self.inner.gc);
 }
 
 /// Decrement refcount
-pub fn delref(self: *Object) u32 {
-    return c.GC_DELREF(@ptrCast(&self.inner.gc));
+pub fn delref(self: *Object) void {
+    _ = c.zend_gc_delref(&self.inner.gc);
 }
 
 /// Get the class entry
@@ -226,7 +225,7 @@ pub fn cloneWith(
 
 /// Get refcount
 pub inline fn refcount(self: *const Object) u32 {
-    return c.GC_REFCOUNT(@ptrCast(&self.inner.gc));
+    return c.zend_gc_refcount(&self.inner.gc);
 }
 
 /// Check if object is immutable

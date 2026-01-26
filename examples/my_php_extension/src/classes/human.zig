@@ -51,10 +51,6 @@ const Human = extern struct {
         defer gpa.free(result);
         ret.set(.string, result);
     }
-
-    pub fn version() void {
-        _ = phpz.printf("Class name: %s\n", .{Class.name.ptr});
-    }
 };
 
 pub const Class = phpz.Class("MyPHPExt\\Human", Human);
@@ -66,7 +62,6 @@ comptime {
     Class.method("getAge", .getAge);
     Class.method("setAge", .setAge);
     Class.method("__toString", .string);
-    Class.method("version", .version);
 }
 
 const std = @import("std");
@@ -74,4 +69,4 @@ const std = @import("std");
 const phpz = @import("phpz");
 const c = phpz.c;
 
-const gpa = @import("allocator.zig").gpa;
+const gpa = @import("../allocator.zig").gpa;

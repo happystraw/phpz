@@ -1,4 +1,4 @@
-fn hello_world() void {
+fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
 }
 
@@ -27,7 +27,7 @@ fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
 }
 
 comptime {
-    phpz.function("hello_world", hello_world);
+    phpz.function("hello_world", hello);
     phpz.function("whoami", whoami);
 }
 

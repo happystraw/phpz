@@ -77,7 +77,7 @@ pub const Options = struct {
     /// Set to false for static linking (less common for PHP extensions).
     shared: bool = true,
 
-    /// Deprecated: Use built-in translate-c instead. This option will be removed in Zig 0.16.0.
+    /// Set false to use built-in translate-c instead.
     use_external_translator_c: bool = true,
 };
 
@@ -118,6 +118,9 @@ pub fn createPhpExtModule(b: *Build, options: Options) *Build.Module {
             .optimize = options.optimize,
         });
 
+        // phpz.h
+        php_ext.addIncludePath(b.path("build"));
+
         // Add Zig's C include path (for stdint.h, stddef.h, etc.)
         if (b.graph.zig_lib_directory.path) |path| {
             php_ext.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
@@ -130,16 +133,19 @@ pub fn createPhpExtModule(b: *Build, options: Options) *Build.Module {
             php_ext.addIncludePath(root.path(b, "Zend"));
             php_ext.addIncludePath(root.path(b, "TSRM"));
         }
+
         return php_ext.mod;
     }
 
-    // === RECOMMENDED PATH: Builtin translate-c ===
     // Uses Zig's native C translation for better IDE support.
     const php_ext = b.addTranslateC(.{
         .root_source_file = options.c_source_file,
         .target = options.target,
         .optimize = options.optimize,
     });
+
+    // phpz.h
+    php_ext.addIncludePath(b.path("build"));
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_root) |root| {

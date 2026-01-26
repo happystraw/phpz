@@ -1,6 +1,5 @@
 // for module
-#include "php.h"
-#include "Zend/zend_API.h"
+#include "phpz.h"
 #include "ext/standard/info.h"
 #include "Zend/zend_interfaces.h"
 #include "my_php_extension_arginfo.h"

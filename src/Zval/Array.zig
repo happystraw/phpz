@@ -3,15 +3,15 @@ const Array = @This();
 inner: *c.zval,
 
 pub const Error = error{
-    /// Failed to set value to array by index
+    TypeMismatch,
+    NullPointer,
     SetIndexFailed,
-    /// Failed to append value to array
     AppendFailed,
 };
 
-pub fn from(zv: *c.zval) !Array {
-    if (Zval.phpType(zv) != c.IS_ARRAY) error.TypeMismatch;
-    if (zv.value.arr == null) return error.NullPointer;
+pub fn from(zv: *c.zval) Error!Array {
+    if (Zval.phpType(zv) != c.IS_ARRAY) Error.TypeMismatch;
+    if (zv.value.arr == null) return Error.NullPointer;
     return .{ .inner = zv };
 }
 

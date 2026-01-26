@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
 
     const php_ext_mod = Phpz.createPhpExtModule(b, .{
         .php_include_root = .{ .cwd_relative = "/usr/include/php" },
-        .c_source_file = b.path("examples/my_php_extension/my_php_extension.h"),
+        .c_source_file = b.path("build/phpz.h"),
         .use_external_translator_c = true,
         .target = target,
         .optimize = optimize,

@@ -1,28 +1,31 @@
 const std = @import("std");
 
-pub const c = @import("php_ext");
+pub const c = @import("c.zig").c;
 
-pub const mem = @import("mem.zig");
+pub const heap = @import("heap.zig");
 
-const mod = @import("module.zig");
-pub const module = mod.module;
-pub const ModuleEntry = mod.ModuleEntry;
+const mod_helper = @import("module.zig");
+pub const module = mod_helper.module;
+pub const ModuleEntry = mod_helper.ModuleEntry;
 
-const class = @import("class.zig");
-pub const Class = class.Class;
-pub const ClassEntry = class.ClassEntry;
+const class_helper = @import("class.zig");
+pub const Class = class_helper.Class;
+pub const ClassEntry = class_helper.ClassEntry;
 
-pub const function = @import("function.zig").function;
+const function_helper = @import("function.zig");
+pub const function = function_helper.function;
+pub const method = function_helper.method;
+
 pub const ExecContext = @import("ExecContext.zig");
-pub const zend = @import("zend.zig");
 pub const Zval = @import("Zval.zig");
+pub const zend = @import("zend.zig");
 
 pub fn forceTypeResolution() void {
     comptime {
-        // PHP C 头文件中存在循环类型依赖：
-        // zif_handler -> zval -> zend_value -> zend_function -> zend_internal_function -> zif_handler
-        //
-        // 这是一个临时的解决方案：在 comptime 块中创建使用这些类型的函数签名，强制编译器提前解析它们
+        // NOTE: Circular type dependency exists in PHP C headers:
+        //   zif_handler -> zval -> zend_value -> zend_function -> zend_internal_function -> zif_handler
+        // This is a temporary workaround: create function signatures using these types in a comptime block
+        // to force the compiler to resolve them early
         // See: https://github.com/ziglang/zig/issues/12325
         _ = ?*const fn (execute_data: [*c]c.zend_execute_data, return_value: [*c]c.zval) callconv(.c) void;
     }
@@ -30,4 +33,14 @@ pub fn forceTypeResolution() void {
 
 pub fn printf(fmt: [:0]const u8, args: anytype) usize {
     return @call(.auto, c.php_printf, .{fmt.ptr} ++ args);
+}
+
+pub export fn zig_zend_string_init(str: [*]const u8, len: usize, persistent: bool) *c.zend_string {
+    // NOTE: use direct allocation, avoid zend_string_init function(cause index out of bound error)
+    // See: https://codeberg.org/ziglang/translate-c/issues/277
+    // See: https://codeberg.org/ziglang/translate-c/issues/79
+    const result_str = c.zend_string_alloc(len, persistent);
+    @memcpy(@as([*]u8, @ptrCast(&result_str.*.val))[0..len], str[0..]);
+    @as([*]u8, @ptrCast(&result_str.*.val))[len] = 0;
+    return @ptrCast(result_str);
 }

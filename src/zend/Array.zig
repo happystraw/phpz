@@ -4,7 +4,6 @@ inner: *c.HashTable,
 
 pub const Error = error{
     NotFound,
-    OperationFailed,
 };
 
 /// Create an empty array
@@ -128,17 +127,17 @@ pub fn compare(self: *const Array, other: *const Array, ordered: bool) c_int {
 
 /// Get refcount
 pub inline fn refcount(self: *const Array) u32 {
-    return c.GC_REFCOUNT(@ptrCast(&self.inner.gc));
+    return c.zend_gc_refcount(&self.inner.gc);
 }
 
 /// Increment refcount
 pub fn addref(self: *Array) void {
-    _ = c.GC_ADDREF(@ptrCast(&self.inner.gc));
+    _ = c.zend_gc_addref(&self.inner.gc);
 }
 
 /// Decrement refcount
-pub fn delref(self: *Array) u32 {
-    return c.GC_DELREF(@ptrCast(&self.inner.gc));
+pub fn delref(self: *Array) void {
+    _ = c.zend_gc_delref(&self.inner.gc);
 }
 
 /// Check if array is immutable

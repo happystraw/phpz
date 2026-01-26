@@ -5,10 +5,11 @@ const c = phpz.c;
 
 const allocator = @import("allocator.zig");
 
-const human = @import("human.zig");
+const classes = @import("classes.zig");
 
 fn startup() !void {
-    human.Class.register();
+    classes.counter.Class.register();
+    classes.human.Class.register();
 }
 
 fn shutdown() !void {
