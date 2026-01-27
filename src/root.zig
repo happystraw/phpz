@@ -20,7 +20,7 @@ pub const ExecContext = @import("ExecContext.zig");
 pub const Zval = @import("Zval.zig");
 pub const zend = @import("zend.zig");
 
-pub fn forceTypeResolution() void {
+pub fn resolveCircularTypes() void {
     comptime {
         // NOTE: Circular type dependency exists in PHP C headers:
         //   zif_handler -> zval -> zend_value -> zend_function -> zend_internal_function -> zif_handler
@@ -35,8 +35,11 @@ pub fn printf(fmt: [:0]const u8, args: anytype) usize {
     return @call(.auto, c.php_printf, .{fmt.ptr} ++ args);
 }
 
+/// Alternative to `zend_string_init` function, primarily used as a replacement
+/// for zend_string_init in *_arginfo.h files.
+/// Uses direct allocation to avoid the translate-c generated `zend_string_init`
+/// function (which can cause index out of bounds errors).
 pub export fn zig_zend_string_init(str: [*]const u8, len: usize, persistent: bool) *c.zend_string {
-    // NOTE: use direct allocation, avoid zend_string_init function(cause index out of bound error)
     // See: https://codeberg.org/ziglang/translate-c/issues/277
     // See: https://codeberg.org/ziglang/translate-c/issues/79
     const result_str = c.zend_string_alloc(len, persistent);

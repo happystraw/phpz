@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib); // only for development
 
     // Documentation generation step
-    const doc_step = b.step("doc", "Generate documentation for phpz");
+    const doc_step = b.step("docs", "Generate documentation for phpz");
 
     // Generate docs for main library (src/root.zig)
     const doc_obj = b.addObject(.{

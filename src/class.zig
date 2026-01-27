@@ -11,7 +11,7 @@ pub const ClassEntry = c.zend_class_entry;
 /// The generated wrapper structure layout:
 /// ```
 /// extern struct {
-///     inner: T,              // Your Zig data structure
+///     impl: T,               // Your Zig data structure
 ///     std: zend_object,      // PHP object header (must be last field)
 /// }
 /// ```

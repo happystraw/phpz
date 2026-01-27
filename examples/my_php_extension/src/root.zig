@@ -28,7 +28,7 @@ fn info(entry: *phpz.ModuleEntry) void {
 }
 
 comptime {
-    phpz.forceTypeResolution();
+    phpz.resolveCircularTypes();
 
     _ = @import("functions.zig");
 

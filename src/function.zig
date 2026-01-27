@@ -69,6 +69,7 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
     }
 }
 
+/// Register a Zig function as a PHP class method.
 pub fn method(comptime T: type, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
         const real_func_name: [:0]const u8 = blk: {
