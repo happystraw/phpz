@@ -54,7 +54,7 @@ This will generate `my_php_extension_arginfo.h` containing all the necessary arg
 
 Create a C header file (e.g., `my_php_extension.h`):
 
-> [phpz.h](./build/phpz.h) provides the core C API needed for building PHP extensions (includes `php.h` and `Zend/zend_API.h`). 
+> [phpz.h](./build/phpz.h) provides the core C API needed for building PHP extensions (includes `php.h` and `Zend/zend_API.h`).
 >
 > Include it in your extension header to access all necessary PHP C APIs.
 
@@ -81,7 +81,7 @@ const phpz: Phpz = .init(phpz_dep, .{
 const ext_lib = b.addLibrary(.{
     .name = "my_php_extension",
     .root_module = b.createModule(.{
-        .root_source_file = b.path("src/ext.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .imports = &.{
             .{ .name = "phpz", .module = phpz.mod },
         },

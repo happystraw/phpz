@@ -34,8 +34,8 @@
 //!
 //! Create a C header file (e.g., my_extension.h) that includes PHP headers:
 //! ```c
-//! #include <php.h>
-//! #include <Zend/zend_API.h>
+//! #include "phpz.h"
+//! #include "my_extension_arginfo.h"
 //! ```
 //!
 //! Then use the phpz module in your Zig code:
@@ -43,10 +43,6 @@
 //! const phpz = @import("phpz");
 //! const c = phpz.c;
 //! ```
-
-const std = @import("std");
-const Build = std.Build;
-
 const Phpz = @This();
 
 /// The compiled Phpz module with PHP extension support
@@ -71,6 +67,7 @@ pub const Options = struct {
     ///   - main/
     ///   - Zend/
     ///   - TSRM/
+    ///   - win32/ (windows only)
     php_include_root: ?Build.LazyPath = null,
 
     /// Build as a shared library (.so/.dll/.dylib) for PHP to load dynamically.
@@ -107,53 +104,50 @@ pub fn initInner(b: *Build, options: Options) Phpz {
 
 pub fn createPhpExtModule(b: *Build, options: Options) *Build.Module {
     if (options.use_external_translator_c) {
-        // === DEPRECATED PATH: External translator-c ===
         // This method uses an external dependency for C translation.
-        // Will be removed in a future version.
         const translate_c_dep = b.dependency("translate_c", .{});
-        const Translator = @import("translate_c").Translator;
         const php_ext: Translator = .init(translate_c_dep, .{
             .c_source_file = options.c_source_file,
             .target = options.target,
             .optimize = options.optimize,
         });
-
-        // phpz.h
-        php_ext.addIncludePath(b.path("build"));
-
         // Add Zig's C include path (for stdint.h, stddef.h, etc.)
         if (b.graph.zig_lib_directory.path) |path| {
             php_ext.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
         }
-
-        // Add PHP-specific include paths
-        if (options.php_include_root) |root| {
-            php_ext.addIncludePath(root);
-            php_ext.addIncludePath(root.path(b, "main"));
-            php_ext.addIncludePath(root.path(b, "Zend"));
-            php_ext.addIncludePath(root.path(b, "TSRM"));
-        }
-
+        addIncludePaths(php_ext, b, options);
         return php_ext.mod;
     }
 
-    // Uses Zig's native C translation for better IDE support.
+    // Builtin translate-c
     const php_ext = b.addTranslateC(.{
         .root_source_file = options.c_source_file,
         .target = options.target,
         .optimize = options.optimize,
     });
+    addIncludePaths(php_ext, b, options);
+    return php_ext.createModule();
+}
 
+fn addIncludePaths(php_ext: anytype, b: *Build, options: Options) void {
     // phpz.h
     php_ext.addIncludePath(b.path("build"));
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_root) |root| {
         php_ext.addIncludePath(root);
-        php_ext.addIncludePath(root.path(b, "main")); // PHP main headers
-        php_ext.addIncludePath(root.path(b, "Zend")); // Zend engine headers
-        php_ext.addIncludePath(root.path(b, "TSRM")); // Thread-safe resource manager
+        php_ext.addIncludePath(root.path(b, "main"));
+        php_ext.addIncludePath(root.path(b, "Zend"));
+        php_ext.addIncludePath(root.path(b, "TSRM"));
+        switch (options.target.query.os_tag orelse builtin.os.tag) {
+            .windows => php_ext.addIncludePath(root.path(b, "win32")),
+            else => {},
+        }
     }
-
-    return php_ext.createModule();
 }
+
+const std = @import("std");
+const Build = std.Build;
+const builtin = @import("builtin");
+
+const Translator = @import("translate_c").Translator;
