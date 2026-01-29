@@ -63,20 +63,18 @@ pub fn build(b: *std.Build) void {
 
     // Test step: runs the test command from examples
     const test_step = b.step("test", "run examples tests");
-    const test_cmd = b.addSystemCommand(&[_][]const u8{
-        b.graph.zig_exe,
-        "build",
-        "test",
-        b.fmt("-Dphp-include-root={s}", .{php_include_root}),
-    });
-    test_cmd.setCwd(b.path("examples/my_php_extension"));
-    const test_pjs_cmd = b.addSystemCommand(&[_][]const u8{
-        b.graph.zig_exe,
-        "build",
-        "test",
-        b.fmt("-Dphp-include-root={s}", .{php_include_root}),
-    });
-    test_pjs_cmd.setCwd(b.path("examples/pjs"));
-    test_step.dependOn(&test_cmd.step);
-    test_step.dependOn(&test_pjs_cmd.step);
+    const test_examples = [_][]const u8{
+        "my_php_extension",
+        "pjs",
+    };
+    inline for (test_examples) |test_example| {
+        const test_cmd = b.addSystemCommand(&[_][]const u8{
+            b.graph.zig_exe,
+            "build",
+            "test",
+            b.fmt("-Dphp-include-root={s}", .{php_include_root}),
+        });
+        test_cmd.setCwd(b.path("examples").join(b.allocator, test_example) catch unreachable);
+        test_step.dependOn(&test_cmd.step);
+    }
 }

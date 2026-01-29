@@ -53,7 +53,6 @@ pub fn build(b: *std.Build) void {
     const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", "-dextension=./modules/my_php_extension.so", "--ri", "my_php_extension" });
     test_cmd.step.dependOn(b.getInstallStep());
     test_info_cmd.step.dependOn(b.getInstallStep());
-    test_cmd.step.dependOn(&test_info_cmd.step);
-
     test_step.dependOn(&test_cmd.step);
+    test_step.dependOn(&test_info_cmd.step);
 }

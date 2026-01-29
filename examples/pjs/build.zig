@@ -65,7 +65,6 @@ pub fn build(b: *std.Build) void {
     });
     test_cmd.step.dependOn(b.getInstallStep());
     test_info_cmd.step.dependOn(b.getInstallStep());
-    test_cmd.step.dependOn(&test_info_cmd.step);
-
     test_step.dependOn(&test_cmd.step);
+    test_step.dependOn(&test_info_cmd.step);
 }

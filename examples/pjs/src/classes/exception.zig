@@ -1,6 +1,6 @@
 pub const Exception = extern struct {
-    pub fn register(impl: anytype) *phpz.ClassEntry {
-        return impl(c.spl_ce_RuntimeException);
+    pub fn registerFully(extends: anytype) *phpz.ClassEntry {
+        return extends(c.spl_ce_RuntimeException);
     }
 
     pub fn throws(message: [:0]const u8) void {

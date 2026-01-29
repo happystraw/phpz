@@ -23,7 +23,8 @@ pub const ClassEntry = c.zend_class_entry;
 /// Optional T declarations:
 ///   - `init()`: Called after object allocation, before constructor
 ///   - `deinit()`: Called during object destruction, before deallocation
-///   - `register(fn) *ClassEntry`: Custom class registration (e.g., to set parent class)
+///   - `register(fn) *ClassEntry`: Custom entry registration (e.g., to set parent class)
+///   - `registerFully(fn) *ClassEntry`: Full control registration (you handle all setup)
 ///
 /// Example:
 /// ```zig
@@ -97,7 +98,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         pub var entry: *ClassEntry = undefined;
 
         /// Object handlers for this class (cloned from std_object_handlers)
-        var handlers: c.zend_object_handlers = undefined;
+        /// Only allocated when using default or custom entry registration mode.
+        const need_handlers = !@hasDecl(T, "registerFully");
+        var handlers: if (need_handlers) c.zend_object_handlers else void = if (need_handlers) undefined else {};
 
         /// Object allocation and initialization callback for PHP.
         ///
@@ -114,7 +117,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
             if (@hasDecl(T, "init")) intern.impl.init();
-            intern.std.handlers = &handlers;
+            if (need_handlers) intern.std.handlers = &handlers;
             return &intern.std;
         }
 
@@ -135,10 +138,24 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// Register this class with PHP.
         ///
         /// This function must be called during module initialization (in startup_fn)
-        /// to make the class available to PHP code. It:
-        /// 1. Calls the auto-generated register_class_* function from translate-c
-        /// 2. Sets up object creation handler (init)
-        /// 3. Configures object handlers (deinit, offset)
+        /// to make the class available to PHP code.
+        ///
+        /// Registration Modes (controlled by optional T declarations):
+        ///
+        /// 1. Default Mode (no special declarations):
+        ///    - Calls auto-generated register_class_* function
+        ///    - Framework sets up: create_object handler, object handlers, offset
+        ///
+        /// 2. Custom Entry Mode (T.register declared):
+        ///    - `pub fn register(fn) *ClassEntry`
+        ///    - Useful for setting parent class or implementing interfaces
+        ///    - Framework still sets up handlers after your customization
+        ///    Example: `return impl(c.zend_ce_stringable);` // Implement Stringable
+        ///
+        /// 3. Full Control Mode (T.registerFully declared):
+        ///    - `pub fn registerFully(fn) *ClassEntry`
+        ///    - Complete control over registration, framework setup is skipped
+        ///    - You must manually configure create_object, handlers, etc.
         ///
         /// The register_class_* function is generated from PHP stub files during
         /// the translate-c process and contains class metadata (methods, properties).
@@ -172,6 +189,11 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
                 break :blk result;
             };
+
+            if (@hasDecl(T, "registerFully")) {
+                entry = @call(.auto, T.registerFully, .{@field(c, register_class_fn_name)});
+                return;
+            }
 
             entry = if (@hasDecl(T, "register"))
                 @call(.auto, T.register, .{@field(c, register_class_fn_name)})
