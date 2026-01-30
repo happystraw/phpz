@@ -7,8 +7,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php";
-    const ext_shared = b.option(bool, "ext-shared", "Build as a shared PHP extension") orelse true;
-    const build_static = b.option(bool, "build-static", "Build as static library for linking") orelse false;
 
     const phpz_dep = b.dependency("phpz", .{});
     const phpz: Phpz = .init(phpz_dep, .{
@@ -18,7 +16,6 @@ pub fn build(b: *std.Build) void {
         .php_include_root = .{
             .cwd_relative = php_include_root,
         },
-        .shared = ext_shared,
     });
 
     const ext_lib = b.addLibrary(.{
@@ -31,22 +28,22 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "phpz", .module = phpz.mod },
             },
         }),
-        .linkage = if (build_static) .static else .dynamic,
+        .linkage = .dynamic,
     });
 
-    if (ext_shared and !build_static) {
-        // for zig build system
-        const install_file = b.addInstallFileWithDir(
-            ext_lib.getEmittedBin(),
-            .{ .custom = "../modules" },
-            "my_php_extension.so",
-        );
-        install_file.step.dependOn(&ext_lib.step);
-        b.getInstallStep().dependOn(&install_file.step);
-    } else {
-        // for php build system
-        b.installArtifact(ext_lib);
+    // On macos, allow undefined symbols to be resolved at runtime by PHP
+    if (target.result.os.tag == .macos) {
+        ext_lib.linker_allow_shlib_undefined = true;
     }
+
+    // for zig build system
+    const install_file = b.addInstallFileWithDir(
+        ext_lib.getEmittedBin(),
+        .{ .custom = "../modules" },
+        "my_php_extension.so",
+    );
+    install_file.step.dependOn(&ext_lib.step);
+    b.getInstallStep().dependOn(&install_file.step);
 
     const test_step = b.step("test", "Test the PHP extension");
     const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", "-dextension=./modules/my_php_extension.so", "test.php" });

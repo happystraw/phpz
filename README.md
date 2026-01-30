@@ -9,7 +9,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 ## Requirements
 
 - zig: 0.16.0-dev.2261+d6b3dd25a or newer
-- php: 8.3, 8.4, 8.5 tested in linux
+- php: 8.3, 8.4, 8.5 tested on linux/macos
 
 ## Usage
 

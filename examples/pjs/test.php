@@ -22,7 +22,7 @@ try {
     echo 'eval:       a()', PHP_EOL;
     $ctx->eval("a()");
 } catch(Exception $e) {
-    echo 'exception:  ', 'class: ', $e::class, ', error: ',  $e->getTraceAsString(), PHP_EOL;
+    echo 'exception:  ', 'class: ', $e::class, ', error: ',  $e->getMessage(), PHP_EOL, $e->getTraceAsString(), PHP_EOL;
 }
 echo '--------', PHP_EOL;
 
