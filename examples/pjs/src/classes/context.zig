@@ -32,9 +32,9 @@ pub const Context = extern struct {
             defer exc.deinit(self.core);
             if (exc.toZigSlice(self.core)) |msg| {
                 defer self.core.freeCString(msg.ptr);
-                exception.throws(msg);
+                exception.throw(msg);
             } else {
-                exception.throws("unknown error");
+                exception.throw("unknown error");
             }
             return error.JavaScriptException;
         }

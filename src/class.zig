@@ -1,7 +1,3 @@
-/// Type alias for Zend class entry structure.
-/// Represents a PHP class definition in the Zend engine.
-pub const ClassEntry = c.zend_class_entry;
-
 /// Create a PHP class wrapper around a Zig type.
 ///
 /// This function generates a wrapper structure that bridges Zig code with PHP's
@@ -24,7 +20,6 @@ pub const ClassEntry = c.zend_class_entry;
 ///   - `init()`: Called after object allocation, before constructor
 ///   - `deinit()`: Called during object destruction, before deallocation
 ///   - `register(fn) *ClassEntry`: Custom entry registration (e.g., to set parent class)
-///   - `registerFully(fn) *ClassEntry`: Full control registration (you handle all setup)
 ///
 /// Example:
 /// ```zig
@@ -98,9 +93,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         pub var entry: *ClassEntry = undefined;
 
         /// Object handlers for this class (cloned from std_object_handlers)
-        /// Only allocated when using default or custom entry registration mode.
-        const need_handlers = !@hasDecl(T, "registerFully");
-        var handlers: if (need_handlers) c.zend_object_handlers else void = if (need_handlers) undefined else {};
+        var handlers: c.zend_object_handlers = undefined;
 
         /// Object allocation and initialization callback for PHP.
         ///
@@ -117,7 +110,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
             if (@hasDecl(T, "init")) intern.impl.init();
-            if (need_handlers) intern.std.handlers = &handlers;
+            intern.std.handlers = &handlers;
             return &intern.std;
         }
 
@@ -152,11 +145,6 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///    - Framework still sets up handlers after your customization
         ///    Example: `return impl(c.zend_ce_stringable);` // Implement Stringable
         ///
-        /// 3. Full Control Mode (T.registerFully declared):
-        ///    - `pub fn registerFully(fn) *ClassEntry`
-        ///    - Complete control over registration, framework setup is skipped
-        ///    - You must manually configure create_object, handlers, etc.
-        ///
         /// The register_class_* function is generated from PHP stub files during
         /// the translate-c process and contains class metadata (methods, properties).
         ///
@@ -168,37 +156,11 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn register() void {
-            const register_class_fn_name = comptime blk: {
-                var buffer: [class_name.len]u8 = undefined;
-                for (class_name, 0..) |ch, i| {
-                    buffer[i] = if (ch == '\\') '_' else ch;
-                }
-                const replaced = &buffer;
-                const result = std.fmt.comptimePrint("register_class_{s}", .{replaced});
-
-                if (!@hasDecl(c, result)) {
-                    @compileError(
-                        \\ class register function not found:
-                    ++ result ++
-                        \\
-                        \\ You need to generate arginfo header file and include it in your C code:
-                        \\ 1. Generate the arginfo header: php gen_stub.php your_extension.stub.php
-                        \\ 2. Include in your extension: #include "your_extension_arginfo.h"
-                    );
-                }
-
-                break :blk result;
-            };
-
-            if (@hasDecl(T, "registerFully")) {
-                entry = @call(.auto, T.registerFully, .{@field(c, register_class_fn_name)});
-                return;
-            }
-
+            const register_class_fn = @field(c, getRegisterClassFnName(class_name));
             entry = if (@hasDecl(T, "register"))
-                @call(.auto, T.register, .{@field(c, register_class_fn_name)})
+                @call(.auto, T.register, .{register_class_fn})
             else
-                @call(.auto, @field(c, register_class_fn_name), .{});
+                @call(.auto, register_class_fn, .{});
 
             // FIXME: unnamed_1 ...
             entry.unnamed_1.create_object = &init;
@@ -283,7 +245,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Creates a new instance of the class.
         pub fn new() *Self {
-            return .from(.std, Self.init(Self.entry).?);
+            return .from(.std, init(entry).?);
         }
 
         /// Update object property value.
@@ -344,9 +306,100 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     };
 }
 
+/// Create a derived PHP class without Zig data binding.
+///
+/// This function creates a lightweight PHP class wrapper that only handles
+/// class registration. Unlike `Class`, it does not manage object lifecycle
+/// or bind Zig data structures. The internal implementation is handled by
+/// PHP's native object system.
+///
+/// Use cases:
+///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
+///   - Simple derived classes that only need inheritance without custom data
+///   - Classes where internal implementation is handled elsewhere
+///
+/// Parameters:
+///   - class_name: PHP class name (supports namespaces with backslash)
+///   - T: A type with optional `register` declaration for custom registration
+///
+/// Optional T declarations:
+///   - `register(fn) *ClassEntry`: Custom registration (e.g., to set parent class)
+///
+/// Example:
+/// ```zig
+/// // Create a custom exception class
+/// pub const MyException = phpz.DerivedClass("MyExt\\MyException", struct {
+///     pub fn register(impl: anytype) *phpz.ClassEntry {
+///         return impl(c.spl_ce_RuntimeException);
+///     }
+/// });
+///
+/// // Throw the exception
+/// pub fn throw(message: [:0]const u8) void {
+///     _ = c.zend_throw_exception(MyException.entry, message.ptr, 0);
+/// }
+///
+/// // Register during module initialization
+/// pub fn moduleStartup() !void {
+///     MyException.register();
+/// }
+/// ```
+pub fn DerivedClass(comptime class_name: [:0]const u8, comptime T: type) type {
+    return struct {
+        /// The PHP class name
+        pub const name = class_name;
+
+        /// The PHP class entry
+        pub var entry: *ClassEntry = undefined;
+
+        pub fn register() void {
+            const register_class_fn = @field(c, getRegisterClassFnName(class_name));
+            entry = if (@hasDecl(T, "register"))
+                @call(.auto, T.register, .{register_class_fn})
+            else
+                @call(.auto, register_class_fn, .{});
+        }
+    };
+}
+
+/// Generates the register_class_* function name from a PHP class name.
+///
+/// This function converts a PHP class name (which may contain backslashes for
+/// namespaces) into the corresponding C function name generated by PHP's
+/// gen_stub.php tool.
+///
+/// Example:
+///   "MyExt\\Student" -> "register_class_MyExt_Student"
+///
+/// The function also validates that the generated function exists in the
+/// translated C headers, providing a helpful error message if not found.
+fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
+    var buffer: [class_name.len]u8 = undefined;
+    for (class_name, 0..) |ch, i| {
+        buffer[i] = if (ch == '\\') '_' else ch;
+    }
+    const replaced = &buffer;
+    const result = std.fmt.comptimePrint("register_class_{s}", .{replaced});
+
+    if (!@hasDecl(c, result)) {
+        @compileError(
+            \\ class register function not found:
+        ++ result ++
+            \\
+            \\ You need to generate arginfo header file and include it in your C code:
+            \\ 1. Generate the arginfo header: php gen_stub.php your_extension.stub.php
+            \\ 2. Include in your extension: #include "your_extension_arginfo.h"
+        );
+    }
+
+    return result;
+}
+
 const std = @import("std");
 
 const c = @import("root.zig").c;
-const Zval = @import("Zval.zig");
-const zend = @import("zend.zig");
+/// Type alias for Zend class entry structure.
+pub const ClassEntry = c.zend_class_entry;
 const function_helper = @import("function.zig");
+const zend = @import("zend.zig");
+const Zval = @import("Zval.zig");
