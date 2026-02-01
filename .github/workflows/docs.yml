@@ -1,7 +1,10 @@
 name: Deploy docs
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Test"]
+    types:
+      - completed
     branches: ["dev"]
   workflow_dispatch:
 
@@ -16,6 +19,7 @@ concurrency:
 
 jobs:
   deploy-docs:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -27,9 +31,10 @@ jobs:
         uses: actions/configure-pages@v3
       - uses: mlugg/setup-zig@v2
       - name: Install PHP development headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y php-dev
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: php-dev
+          version: 1.0
       - name: Generate docs
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)

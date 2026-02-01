@@ -1,3 +1,14 @@
+//! PHP class registration and object lifecycle management.
+//!
+//! This module provides utilities for creating PHP classes from Zig types:
+//!
+//! - `Class`: Full-featured class wrapper with Zig data binding and lifecycle management
+//! - `DerivedClass`: Lightweight class registration for derived classes without custom data
+//!
+//! Both functions generate class wrappers that integrate with PHP's object system,
+//! handling registration through auto-generated `register_class_*` functions from
+//! PHP stub files.
+
 /// Create a PHP class wrapper around a Zig type.
 ///
 /// This function generates a wrapper structure that bridges Zig code with PHP's
