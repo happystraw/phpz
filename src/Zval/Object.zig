@@ -3,10 +3,9 @@ const Object = @This();
 inner: *c.zval,
 
 pub const Error = error{
-    TypeMismatch,
     NullPointer,
     InitFailed,
-};
+} || Zval.Error;
 pub fn from(zv: *c.zval) Error!Object {
     if (Zval.phpType(zv) != c.IS_OBJECT) return Error.TypeMismatch;
     if (zv.value.obj == null) return Error.NullPointer;

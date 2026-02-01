@@ -4,13 +4,12 @@ const c = @import("root.zig").c;
 const ExecContext = @import("ExecContext.zig");
 const Zval = @import("Zval.zig");
 
-const class = @import("class.zig");
-
 const PhpFn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
-const PhpFnKind = enum { function, method, static_method };
+const PhpFnKind = enum { function, method };
 const PhpFnCallConv = enum { standard, no_params, only_ctx, only_ret };
 const PhpFnReturnKind = enum { error_union, scalar };
 const PhpFnReturnType = union(PhpFnReturnKind) { error_union: Zval.Kind, scalar: Zval.Kind };
+const PhpMethodKind = enum { object, static };
 
 /// Register a Zig function as a PHP function.
 ///
@@ -65,104 +64,94 @@ const PhpFnReturnType = union(PhpFnReturnKind) { error_union: Zval.Kind, scalar:
 /// ```
 pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        exportPhpFn(.function, func_name, makePhpFn(void, func_name, func));
+        exportPhpFn(
+            .function,
+            func_name,
+            makePhpFn(func_name ++ "()", func),
+        );
     }
 }
 
 /// Register a Zig function as a PHP class method.
-pub fn method(comptime T: type, comptime func_name: [:0]const u8, comptime func: anytype) void {
+///
+/// Similar to `function`, but exports with `zim_` prefix instead of `zif_`.
+/// Use `methodWithClass` if you need automatic static/object method detection.
+pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        const real_func_name: [:0]const u8 = blk: {
-            var buffer: [T.name.len]u8 = undefined;
-            for (T.name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
-            const replaced = &buffer;
-            const result = std.fmt.comptimePrint("{s}_{s}", .{ replaced, func_name });
-            break :blk result;
-        };
-        exportPhpFn(.method, real_func_name, makePhpFn(T, func_name, func));
+        exportPhpFn(
+            .method,
+            makeMethodExportName(class_name, func_name),
+            makePhpFn(class_name ++ "::" ++ func_name ++ "()", func),
+        );
     }
 }
 
-fn makePhpFn(comptime T: type, comptime func_name: [:0]const u8, comptime func: anytype) PhpFn {
-    const fn_kind, const fn_call_conv = detectPhpFnCallConv(T, func);
-    const fn_return_type = detectPhpFnReturnType(@typeInfo(@TypeOf(func)).@"fn".return_type.?);
+/// Register a Zig function as a PHP class method with Class type.
+///
+/// Accepts a Class type (returned by `class.Class()`) which enables automatic
+/// detection of static vs object methods based on the function signature.
+pub fn methodWithClass(comptime Class: anytype, comptime func_name: [:0]const u8, comptime func: anytype) void {
+    comptime {
+        exportPhpFn(
+            .method,
+            makeMethodExportName(Class.name, func_name),
+            makePhpMethod(Class, Class.name ++ "::" ++ func_name ++ "()", func),
+        );
+    }
+}
 
+fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
+    const call_conv = comptime detectPhpFnCallConv(func);
+    return struct {
+        fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
+            var ctx = ExecContext.init(execute_data.?);
+            var ret = Zval.from(return_value.?);
+            const args = switch (call_conv) {
+                .standard => .{ &ctx, &ret },
+                .only_ctx => .{&ctx},
+                .only_ret => .{&ret},
+                .no_params => .{},
+            };
+            if (call_conv == .no_params) ctx.parseNone() catch return;
+            invoke(func_desc, func, args, &ret);
+        }
+    }.@"fn";
+}
+
+fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
+    const kind, const call_conv = comptime detectPhpMethodCallConv(Class, func);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             var ctx = ExecContext.init(execute_data.?);
             var ret = Zval.from(return_value.?);
             const args = blk: {
-                if (fn_kind == .method) {
-                    var obj: *T = .from(.std, ctx.thisObject().?);
-                    const receiver = if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(T, "impl")) obj.impl else &obj.impl;
-                    break :blk switch (fn_call_conv) {
+                if (kind == .object) {
+                    const obj: *Class = .from(.std, ctx.thisObject().?);
+                    const receiver = if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl")) obj.impl else &obj.impl;
+                    break :blk switch (call_conv) {
                         .standard => .{ receiver, &ctx, &ret },
-                        .no_params => .{receiver},
                         .only_ctx => .{ receiver, &ctx },
                         .only_ret => .{ receiver, &ret },
+                        .no_params => .{receiver},
                     };
                 }
-
-                if (fn_call_conv == .no_params) ctx.parseNone() catch return;
-                break :blk switch (fn_call_conv) {
+                break :blk switch (call_conv) {
                     .standard => .{ &ctx, &ret },
-                    .no_params => .{},
                     .only_ctx => .{&ctx},
                     .only_ret => .{&ret},
+                    .no_params => .{},
                 };
             };
-            switch (fn_return_type) {
-                .error_union => |error_union| switch (error_union) {
-                    .undef => {
-                        @call(.auto, func, args) catch |err| {
-                            if (c.EG("exception") != null) return;
-                            if (T == void) {
-                                c.zend_throw_error(null, "%s at %s()", @errorName(err).ptr, func_name.ptr);
-                            } else {
-                                c.zend_throw_error(null, "%s at %s::%s()", @errorName(err).ptr, T.name.ptr, func_name.ptr);
-                            }
-                            return;
-                        };
-                    },
-                    else => |kind| {
-                        const result = @call(.auto, func, args) catch |err| {
-                            if (c.EG("exception") != null) return;
-                            if (T == void) {
-                                c.zend_throw_error(null, "%s at %s()", @errorName(err).ptr, func_name.ptr);
-                            } else {
-                                c.zend_throw_error(null, "%s at %s::%s()", @errorName(err).ptr, T.name.ptr, func_name.ptr);
-                            }
-                            return;
-                        };
-                        ret.set(kind, switch (kind) {
-                            .int => @intCast(result),
-                            .float => @floatCast(result),
-                            else => result,
-                        });
-                    },
-                },
-                .scalar => |scalar| switch (scalar) {
-                    .undef => {
-                        @call(.auto, func, args);
-                    },
-                    else => |kind| {
-                        const result = @call(.auto, func, args);
-                        ret.set(kind, switch (kind) {
-                            .int => @intCast(result),
-                            .float => @floatCast(result),
-                            else => result,
-                        });
-                    },
-                },
-            }
+            if (call_conv == .no_params) ctx.parseNone() catch return;
+            invoke(func_desc, func, args, &ret);
         }
     }.@"fn";
 }
 
-fn exportPhpFn(comptime ft: PhpFnKind, comptime func_name: [:0]const u8, comptime func: PhpFn) void {
-    const full_name = switch (ft) {
+fn exportPhpFn(comptime func_kind: PhpFnKind, comptime func_name: [:0]const u8, comptime func: PhpFn) void {
+    const full_name = switch (func_kind) {
         .function => "zif_" ++ func_name,
-        .method, .static_method => "zim_" ++ func_name,
+        .method => "zim_" ++ func_name,
     };
     @export(&func, .{ .name = full_name });
 }
@@ -182,21 +171,52 @@ fn detectPhpFnReturnType(comptime T: type) PhpFnReturnType {
     return if (is_error_union) .{ .error_union = scalar_type } else .{ .scalar = scalar_type };
 }
 
-fn detectPhpFnCallConv(comptime T: type, comptime f: anytype) struct { PhpFnKind, PhpFnCallConv } {
-    const type_info = @typeInfo(@TypeOf(f));
+fn detectPhpFnCallConv(comptime func: anytype) PhpFnCallConv {
+    const type_info = @typeInfo(@TypeOf(func));
+    if (type_info != .@"fn") @compileError("export php method/function must be a fn type");
+    const fn_type_info = type_info.@"fn";
+
+    if (fn_type_info.params.len == 2 and
+        fn_type_info.params[0].type.? == *ExecContext and
+        fn_type_info.params[1].type.? == *Zval) return .standard;
+
+    if (fn_type_info.params.len == 0) return .no_params;
+    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *ExecContext) return .only_ctx;
+    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *Zval) return .only_ret;
+
+    @compileLog(@TypeOf(func));
+    @compileError(
+        \\php function/method bind error: function signature must be:
+        \\
+        \\params:
+        \\  - (ctx: *ExecContext, ret: *Zval)
+        \\  - (ctx: *ExecContext)
+        \\  - (ret: *Zval)
+        \\  - ()
+        \\returns:
+        \\  - void
+        \\  - int
+        \\  - bool
+        \\  - float
+        \\  ErrorSet is optional.
+    );
+}
+
+fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) struct { PhpMethodKind, PhpFnCallConv } {
+    const type_info = @typeInfo(@TypeOf(func));
     if (type_info != .@"fn") @compileError("export php method/function must be a fn type");
     const fn_type_info = type_info.@"fn";
 
     const offset: comptime_int, const fn_kind = blk: {
-        if (T != void and fn_type_info.params.len > 0) {
-            const ImplType = @FieldType(T, "impl");
+        if (fn_type_info.params.len > 0) {
+            const ImplType = @FieldType(Class, "impl");
             const ReceiverType = fn_type_info.params[0].type orelse void;
             if (ReceiverType == ImplType or ReceiverType == *ImplType) {
-                break :blk .{ 1, .method };
+                break :blk .{ 1, .object };
             }
-            break :blk .{ 0, .static_method };
+            break :blk .{ 0, .static };
         }
-        break :blk .{ 0, .function };
+        break :blk .{ 0, .static };
     };
 
     if (fn_type_info.params.len == offset + 2 and
@@ -207,15 +227,17 @@ fn detectPhpFnCallConv(comptime T: type, comptime f: anytype) struct { PhpFnKind
     if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *ExecContext) return .{ fn_kind, .only_ctx };
     if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *Zval) return .{ fn_kind, .only_ret };
 
-    @compileLog(fn_kind, @TypeOf(f));
+    @compileLog(fn_kind, @TypeOf(func));
     @compileError(
-        \\php function/method bind error: function signature must be:
+        \\php method bind error: method signature must be:
         \\
         \\params:
+        \\  static:
         \\  - (ctx: *ExecContext, ret: *Zval)
         \\  - (ctx: *ExecContext)
         \\  - (ret: *Zval)
         \\  - ()
+        \\  object:
         \\  - (self: T|*T, ctx: *ExecContext, ret: *Zval)
         \\  - (self: T|*T, ctx: *ExecContext)
         \\  - (self: T|*T, ret: *Zval)
@@ -227,4 +249,49 @@ fn detectPhpFnCallConv(comptime T: type, comptime f: anytype) struct { PhpFnKind
         \\  - float
         \\  ErrorSet is optional.
     );
+}
+
+fn makeMethodExportName(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8) [:0]const u8 {
+    comptime {
+        var buffer: [class_name.len:0]u8 = undefined;
+        for (class_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
+        buffer[class_name.len] = 0;
+        return std.fmt.comptimePrint("{s}_{s}", .{ buffer, func_name });
+    }
+}
+
+inline fn invoke(
+    comptime func_desc: [:0]const u8,
+    comptime func: anytype,
+    args: anytype,
+    ret: *Zval,
+) void {
+    const fn_return_type = comptime detectPhpFnReturnType(@typeInfo(@TypeOf(func)).@"fn".return_type.?);
+    switch (fn_return_type) {
+        .error_union => |kind| {
+            const maybe_result = @call(.auto, func, args) catch |err| {
+                if (c.EG("exception") == null) {
+                    c.zend_throw_error(null, "%s at %s", @errorName(err).ptr, func_desc.ptr);
+                }
+                return;
+            };
+            if (kind != .undef) {
+                ret.set(kind, castResult(kind, maybe_result));
+            }
+        },
+        .scalar => |kind| {
+            const result = @call(.auto, func, args);
+            if (kind != .undef) {
+                ret.set(kind, castResult(kind, result));
+            }
+        },
+    }
+}
+
+inline fn castResult(comptime kind: Zval.Kind, result: anytype) @TypeOf(result) {
+    return switch (kind) {
+        .int => @intCast(result),
+        .float => @floatCast(result),
+        else => result,
+    };
 }

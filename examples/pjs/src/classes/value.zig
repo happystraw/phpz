@@ -25,9 +25,7 @@ pub const Value = extern struct {
         self.ctx.addref();
 
         if (php_value.unwrap()) |value| {
-            self.updateValue(value) catch {
-                c.zend_argument_type_error(2, "must be int|float|string|bool|null, unsupported value type '%s'", @tagName(value.kind()).ptr);
-            };
+            self.updateValue(value) catch return ctx.typeError(2, "must be int|float|string|bool|null, unsupported value type '%s'", .{@tagName(value.kind()).ptr});
         } else {
             const php_obj: *Class = .from(.impl, self);
             php_obj.updateProperty(.null, "value", {});

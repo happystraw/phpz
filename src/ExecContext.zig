@@ -251,5 +251,33 @@ pub fn calledScope(self: *ExecContext) ?*c.zend_class_entry {
     return @ptrCast(c.zend_get_called_scope(self.execute_data));
 }
 
+/// Throws a parameter type error, used when the argument type does not match expectations.
+///
+/// Parameters:
+///   - arg_num: The position (index) of the argument (starting from 1)
+///   - format: Format string for the error message
+///   - args: Arguments for the format string
+///
+/// Returns:
+///   - Returns the Zig error type ArgumentTypeError
+pub inline fn typeError(_: ExecContext, arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) !void {
+    @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
+    return error.ArgumentTypeError;
+}
+
+/// Throws a parameter value error, used when the argument value does not meet requirements.
+///
+/// Parameters:
+///   - arg_num: The position (index) of the argument (starting from 1)
+///   - format: Format string for the error message
+///   - args: Arguments for the format string
+///
+/// Returns:
+///   - Returns the Zig error type ArgumentValueError
+pub inline fn valueError(_: ExecContext, arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) !void {
+    @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
+    return error.ArgumentValueError;
+}
+
 const c = @import("root.zig").c;
 const Zval = @import("Zval.zig");

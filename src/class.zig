@@ -233,8 +233,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///     StudentClass.method("setAge", .setAge);
         /// }
         /// ```
-        pub fn method(comptime func_name: [:0]const u8, comptime func: std.meta.DeclEnum(T)) void {
-            function_helper.method(Self, func_name, @field(T, @tagName(func)));
+        pub fn method(comptime func_name: [:0]const u8, comptime func_decl: std.meta.DeclEnum(T)) void {
+            function_helper.methodWithClass(Self, func_name, @field(T, @tagName(func_decl)));
         }
 
         /// Increments the reference count of the object.

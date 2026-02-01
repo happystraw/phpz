@@ -17,8 +17,7 @@ fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
             break :blk try std.fmt.allocPrint(gpa, "my name is {s}", .{name});
         } else {
             // Invalid type - throw TypeError
-            c.zend_argument_type_error(2, "must be of type int|string|null, %s given", @tagName(age.kind()).ptr);
-            return;
+            return ctx.typeError(2, "must be of type int|string|null, %s given", .{@tagName(age.kind()).ptr});
         }
     } else try std.fmt.allocPrint(gpa, "my name is {s}", .{name});
     defer gpa.free(result);
@@ -34,6 +33,5 @@ comptime {
 const std = @import("std");
 
 const phpz = @import("phpz");
-const c = phpz.c;
 
 const gpa = @import("allocator.zig").gpa;

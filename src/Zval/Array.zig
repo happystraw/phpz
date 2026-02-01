@@ -3,11 +3,10 @@ const Array = @This();
 inner: *c.zval,
 
 pub const Error = error{
-    TypeMismatch,
     NullPointer,
     SetIndexFailed,
     AppendFailed,
-};
+} || Zval.Error;
 
 pub fn from(zv: *c.zval) Error!Array {
     if (Zval.phpType(zv) != c.IS_ARRAY) Error.TypeMismatch;
