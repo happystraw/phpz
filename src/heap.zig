@@ -13,6 +13,7 @@ const php_allocator_impl = struct {
 
     /// NOTE: ZEND_DEBUG=1 emalloc/erealloc/efree macros lose file/line tracking when wrapped in Zig.
     /// Please use `std.heap.DebugAllocator` for debugging purposes.
+    /// https://github.com/ziglang/zig/issues/23512
     const debug = c.ZEND_DEBUG == 1;
     inline fn debug_emalloc(size: usize) ?*anyopaque {
         const src = @src();
@@ -70,7 +71,8 @@ const php_allocator_impl = struct {
     }
 };
 
-const c = @import("root.zig").c;
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Alignment = std.mem.Alignment;
+
+const c = @import("root.zig").c;

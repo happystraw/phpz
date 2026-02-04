@@ -1,7 +1,3 @@
-const std = @import("std");
-
-pub const Phpz = @import("./build/Phpz.zig");
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -78,3 +74,7 @@ pub fn build(b: *std.Build) void {
         test_step.dependOn(&test_cmd.step);
     }
 }
+
+const std = @import("std");
+
+pub const Phpz = @import("./build/Phpz.zig");

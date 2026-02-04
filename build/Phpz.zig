@@ -139,7 +139,7 @@ fn addIncludePaths(php_ext: anytype, b: *Build, options: Options) void {
         php_ext.addIncludePath(root.path(b, "main"));
         php_ext.addIncludePath(root.path(b, "Zend"));
         php_ext.addIncludePath(root.path(b, "TSRM"));
-        switch (options.target.query.os_tag orelse builtin.os.tag) {
+        switch (options.target.result.os.tag) {
             .windows => php_ext.addIncludePath(root.path(b, "win32")),
             else => {},
         }
