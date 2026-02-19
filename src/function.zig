@@ -110,9 +110,11 @@ fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
                 .standard => .{ &ctx, &ret },
                 .only_ctx => .{&ctx},
                 .only_ret => .{&ret},
-                .no_params => .{},
+                .no_params => blk: {
+                    ctx.parseNone() catch return;
+                    break :blk .{};
+                },
             };
-            if (call_conv == .no_params) ctx.parseNone() catch return;
             invoke(func_desc, func, args, &ret);
         }
     }.@"fn";
@@ -124,25 +126,21 @@ fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptim
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             var ctx = ExecContext.init(execute_data.?);
             var ret = Zval.from(return_value.?);
-            const args = blk: {
-                if (kind == .object) {
-                    const obj: *Class = .from(.std, ctx.thisObject().?);
-                    const receiver = if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl")) obj.impl else &obj.impl;
-                    break :blk switch (call_conv) {
-                        .standard => .{ receiver, &ctx, &ret },
-                        .only_ctx => .{ receiver, &ctx },
-                        .only_ret => .{ receiver, &ret },
-                        .no_params => .{receiver},
-                    };
-                }
-                break :blk switch (call_conv) {
-                    .standard => .{ &ctx, &ret },
-                    .only_ctx => .{&ctx},
-                    .only_ret => .{&ret},
-                    .no_params => .{},
-                };
+            const args = (if (kind == .object) blk: {
+                const obj: *Class = .from(.std, ctx.thisObject().?);
+                break :blk if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl"))
+                    .{obj.impl}
+                else
+                    .{&obj.impl};
+            } else .{}) ++ switch (call_conv) {
+                .standard => .{ &ctx, &ret },
+                .only_ctx => .{&ctx},
+                .only_ret => .{&ret},
+                .no_params => blk: {
+                    ctx.parseNone() catch return;
+                    break :blk .{};
+                },
             };
-            if (call_conv == .no_params) ctx.parseNone() catch return;
             invoke(func_desc, func, args, &ret);
         }
     }.@"fn";
@@ -207,16 +205,14 @@ fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) stru
     if (type_info != .@"fn") @compileError("export php method/function must be a fn type");
     const fn_type_info = type_info.@"fn";
 
-    const offset: comptime_int, const fn_kind = blk: {
-        if (fn_type_info.params.len > 0) {
-            const ImplType = @FieldType(Class, "impl");
-            const ReceiverType = fn_type_info.params[0].type orelse void;
-            if (ReceiverType == ImplType or ReceiverType == *ImplType) {
-                break :blk .{ 1, .object };
-            }
-            break :blk .{ 0, .static };
-        }
-        break :blk .{ 0, .static };
+    const offset: comptime_int, const fn_kind: PhpMethodKind = blk: {
+        if (fn_type_info.params.len == 0) break :blk .{ 0, .static };
+        const ImplType = @FieldType(Class, "impl");
+        const ReceiverType = fn_type_info.params[0].type orelse void;
+        break :blk if (ReceiverType == ImplType or ReceiverType == *ImplType)
+            .{ 1, .object }
+        else
+            .{ 0, .static };
     };
 
     if (fn_type_info.params.len == offset + 2 and
@@ -253,10 +249,9 @@ fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) stru
 
 fn makeMethodExportName(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8) [:0]const u8 {
     comptime {
-        var buffer: [class_name.len:0]u8 = undefined;
+        var buffer: [class_name.len]u8 = undefined;
         for (class_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
-        buffer[class_name.len] = 0;
-        return std.fmt.comptimePrint("{s}_{s}", .{ buffer, func_name });
+        return &buffer ++ "_" ++ func_name;
     }
 }
 
@@ -288,7 +283,7 @@ inline fn invoke(
     }
 }
 
-inline fn castResult(comptime kind: Zval.Kind, result: anytype) @TypeOf(result) {
+inline fn castResult(comptime kind: Zval.Kind, result: anytype) Zval.Type(kind) {
     return switch (kind) {
         .int => @intCast(result),
         .float => @floatCast(result),

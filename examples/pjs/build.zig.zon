@@ -2,7 +2,7 @@
     .name = .pjs,
     .version = "0.0.0",
     .fingerprint = 0xfdae12e932c96e8d,
-    .minimum_zig_version = "0.16.0-dev.2261+d6b3dd25a",
+    .minimum_zig_version = "0.16.0-dev.2565+684032671",
     .dependencies = .{
         .phpz = .{
             .path = "../../",

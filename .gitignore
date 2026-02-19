@@ -7,3 +7,4 @@
 # /.clang-format
 zig-out
 .zig-cache
+zig-pkg
