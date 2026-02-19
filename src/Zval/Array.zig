@@ -9,7 +9,7 @@ pub const Error = error{
 } || Zval.Error;
 
 pub fn from(zv: *c.zval) Error!Array {
-    if (Zval.phpType(zv) != c.IS_ARRAY) Error.TypeMismatch;
+    if (Zval.phpType(zv) != c.IS_ARRAY) return Error.TypeMismatch;
     if (zv.value.arr == null) return Error.NullPointer;
     return .{ .inner = zv };
 }

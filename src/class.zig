@@ -88,6 +88,10 @@
 /// }
 /// ```
 pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
+    comptime {
+        if (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".layout != .@"extern")
+            @compileError("Class type T must be an extern struct");
+    }
     return extern struct {
         /// The wrapped Zig data structure
         impl: T,
@@ -167,12 +171,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn register() void {
-            const register_class_fn = @field(c, getRegisterClassFnName(class_name));
-            entry = if (@hasDecl(T, "register"))
-                @call(.auto, T.register, .{register_class_fn})
-            else
-                @call(.auto, register_class_fn, .{});
-
+            entry = callRegisterClassFn(class_name, T);
             // FIXME: unnamed_1 ...
             entry.unnamed_1.create_object = &init;
             handlers = c.std_object_handlers;
@@ -239,14 +238,12 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Increments the reference count of the object.
         pub fn addref(self: *Self) void {
-            var obj: zend.Object = .from(&self.std);
-            obj.addref();
+            _ = c.zend_gc_addref(&self.std.gc);
         }
 
         /// Decrements the reference count of the object.
         pub fn delref(self: *Self) void {
-            var obj: zend.Object = .from(&self.std);
-            obj.delref();
+            _ = c.zend_gc_delref(&self.std.gc);
         }
 
         /// Retrieves the parent struct pointer from a field pointer.
@@ -256,7 +253,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Creates a new instance of the class.
         pub fn new() *Self {
-            return .from(.std, init(entry).?);
+            return .from(.std, init(entry) orelse @panic("Out of memory"));
         }
 
         /// Update object property value.
@@ -364,11 +361,7 @@ pub fn DerivedClass(comptime class_name: [:0]const u8, comptime T: type) type {
         pub var entry: *ClassEntry = undefined;
 
         pub fn register() void {
-            const register_class_fn = @field(c, getRegisterClassFnName(class_name));
-            entry = if (@hasDecl(T, "register"))
-                @call(.auto, T.register, .{register_class_fn})
-            else
-                @call(.auto, register_class_fn, .{});
+            entry = callRegisterClassFn(class_name, T);
         }
     };
 }
@@ -385,12 +378,9 @@ pub fn DerivedClass(comptime class_name: [:0]const u8, comptime T: type) type {
 /// The function also validates that the generated function exists in the
 /// translated C headers, providing a helpful error message if not found.
 fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
-    var buffer: [class_name.len]u8 = undefined;
-    for (class_name, 0..) |ch, i| {
-        buffer[i] = if (ch == '\\') '_' else ch;
-    }
-    const replaced = &buffer;
-    const result = std.fmt.comptimePrint("register_class_{s}", .{replaced});
+    comptime var buffer: [class_name.len:0]u8 = undefined;
+    for (class_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
+    const result = "register_class_" ++ &buffer;
 
     if (!@hasDecl(c, result)) {
         @compileError(
@@ -404,6 +394,14 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
     }
 
     return result;
+}
+
+fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *ClassEntry {
+    const register_class_fn = @field(c, getRegisterClassFnName(class_name));
+    return if (@hasDecl(T, "register"))
+        @call(.auto, T.register, .{register_class_fn})
+    else
+        @call(.auto, register_class_fn, .{});
 }
 
 const std = @import("std");
