@@ -6,7 +6,7 @@ fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
     var name: []u8 = undefined;
     var age_opt: phpz.Zval.Optional = .init;
 
-    try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.inner });
+    try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
 
     const result: []const u8 = if (age_opt.unwrap()) |age| blk: {
         if (age.is(.int)) {
@@ -17,7 +17,7 @@ fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
             break :blk try std.fmt.allocPrint(gpa, "my name is {s}", .{name});
         } else {
             // Invalid type - throw TypeError
-            return ctx.typeError(2, "must be of type int|string|null, %s given", .{@tagName(age.kind()).ptr});
+            return errors.argumentTypeError(2, "must be of type int|string|null, %s given", .{@tagName(age.kind()).ptr});
         }
     } else try std.fmt.allocPrint(gpa, "my name is {s}", .{name});
     defer gpa.free(result);
@@ -33,5 +33,6 @@ comptime {
 const std = @import("std");
 
 const phpz = @import("phpz");
+const errors = phpz.errors;
 
 const gpa = @import("allocator.zig").gpa;

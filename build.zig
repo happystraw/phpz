@@ -1,38 +1,64 @@
+const std = @import("std");
+
+pub const Phpz = @import("./build/Phpz.zig");
+
+const BuildOptions = struct {
+    php_include_root: []const u8,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+};
+
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const options = BuildOptions{
+        .php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php",
+        .target = b.standardTargetOptions(.{}),
+        .optimize = b.standardOptimizeOption(.{}),
+    };
 
-    const php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php";
+    const mod = createPhpzModule(b, options);
 
-    const php_ext_mod = Phpz.createPhpExtModule(b, .{
-        .php_include_root = .{ .cwd_relative = php_include_root },
-        .c_source_file = b.path("build/phpz.h"),
-        .use_external_translator_c = true,
-        .target = target,
-        .optimize = optimize,
-    });
-    const phpz_mod = b.createModule(.{
-        .link_libc = true,
+    addCheckStep(b, mod);
+    addGenerateDocsStep(b, mod);
+    addTestStep(b, options);
+}
+
+fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
+    return b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
+        .target = options.target,
+        .optimize = options.optimize,
         .imports = &.{
-            .{ .name = "php_ext", .module = php_ext_mod },
+            .{
+                .name = "php_ext",
+                .module = Phpz.createPhpExtModule(b, .{
+                    .php_include_root = .{ .cwd_relative = options.php_include_root },
+                    .c_source_file = b.path("build/phpz.h"),
+                    .use_external_translator_c = true,
+                    .target = options.target,
+                    .optimize = options.optimize,
+                }),
+            },
         },
+        .link_libc = true,
     });
-    const lib = b.addLibrary(.{
-        .name = "phpz",
-        .root_module = phpz_mod,
-    });
-    b.installArtifact(lib); // only for development
+}
 
-    // Documentation generation step
+fn addCheckStep(b: *std.Build, mod: *std.Build.Module) void {
+    const lib_check = b.addLibrary(.{
+        .name = "phpz",
+        .root_module = mod,
+    });
+    const check = b.step("check", "Check that phpz builds correctly");
+    check.dependOn(&lib_check.step);
+}
+
+fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module) void {
     const doc_step = b.step("docs", "Generate documentation for phpz");
 
     // Generate docs for main library (src/root.zig)
     const doc_obj = b.addObject(.{
         .name = "phpz",
-        .root_module = phpz_mod,
+        .root_module = mod,
     });
     const install_docs = b.addInstallDirectory(.{
         .source_dir = doc_obj.getEmittedDocs(),
@@ -46,8 +72,8 @@ pub fn build(b: *std.Build) void {
         .name = "phpz-build",
         .root_module = b.createModule(.{
             .root_source_file = b.path("build/Phpz.zig"),
-            .target = target,
-            .optimize = optimize,
+            .target = mod.resolved_target,
+            .optimize = mod.optimize,
         }),
     });
     const install_build_docs = b.addInstallDirectory(.{
@@ -56,25 +82,22 @@ pub fn build(b: *std.Build) void {
         .install_subdir = "docs/build",
     });
     doc_step.dependOn(&install_build_docs.step);
+}
 
-    // Test step: runs the test command from examples
-    const test_step = b.step("test", "run examples tests");
-    const test_examples = [_][]const u8{
+fn addTestStep(b: *std.Build, options: BuildOptions) void {
+    const step = b.step("test", "Run tests for phpz");
+    const examples = [_][]const u8{
         "my_php_extension",
         "pjs",
     };
-    inline for (test_examples) |test_example| {
+    inline for (examples) |test_example| {
         const test_cmd = b.addSystemCommand(&[_][]const u8{
             b.graph.zig_exe,
             "build",
             "test",
-            b.fmt("-Dphp-include-root={s}", .{php_include_root}),
+            b.fmt("-Dphp-include-root={s}", .{options.php_include_root}),
         });
         test_cmd.setCwd(b.path("examples").join(b.allocator, test_example) catch unreachable);
-        test_step.dependOn(&test_cmd.step);
+        step.dependOn(&test_cmd.step);
     }
 }
-
-const std = @import("std");
-
-pub const Phpz = @import("./build/Phpz.zig");

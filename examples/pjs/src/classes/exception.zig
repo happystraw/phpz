@@ -3,10 +3,11 @@ pub fn register(extends: anytype) *phpz.ClassEntry {
 }
 
 pub fn throw(message: [:0]const u8) void {
-    _ = c.zend_throw_exception(Class.entry, message.ptr, 0);
+    _ = errors.throwException(Class.entry, message);
 }
 
 pub const Class = phpz.DerivedClass("Pjs\\Exception", @This());
 
 const phpz = @import("phpz");
 const c = phpz.c;
+const errors = phpz.errors;

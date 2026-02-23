@@ -8,9 +8,9 @@ pub const Context = extern struct {
     }
 
     pub fn construct(self: *Context, ctx: *phpz.ExecContext) !void {
-        var php_rt_zv: c.zval = undefined;
-        var php_rt: phpz.Zval = .from(&php_rt_zv);
-        try ctx.parse("O", .{ &php_rt.inner, runtime.Class.entry });
+        var php_rt_zv: *c.zval = undefined;
+        try ctx.parse("O", .{ &php_rt_zv, runtime.Class.entry });
+        const php_rt: *phpz.Zval = .from(php_rt_zv);
 
         self.rt = .from(.std, try php_rt.as(.object));
         self.rt.addref();

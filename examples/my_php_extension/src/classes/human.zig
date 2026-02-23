@@ -10,7 +10,7 @@ const Human = extern struct {
     pub fn construct(self: *Human, ctx: *phpz.ExecContext) !void {
         var name: []u8 = undefined;
         var age: phpz.Zval.Optional = .init;
-        try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age.inner });
+        try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
         self.name = name.ptr;
         self.name_len = name.len;
         if (age.unwrap()) |zv| if (zv.is(.int)) self.safeSetAge(zv.asUnchecked(.int));

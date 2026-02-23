@@ -1,8 +1,9 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
-const ExecContext = @import("ExecContext.zig");
-const Zval = @import("Zval.zig");
+const ExecContext = @import("exec_context.zig").ExecContext;
+const Zval = @import("zval.zig").Zval;
+const errors = @import("errors.zig");
 
 const PhpFn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 const PhpFnKind = enum { function, method };
@@ -104,18 +105,18 @@ fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
     const call_conv = comptime detectPhpFnCallConv(func);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            var ctx = ExecContext.init(execute_data.?);
-            var ret = Zval.from(return_value.?);
+            const ctx = ExecContext.from(execute_data.?);
+            const ret = Zval.from(return_value.?);
             const args = switch (call_conv) {
-                .standard => .{ &ctx, &ret },
-                .only_ctx => .{&ctx},
-                .only_ret => .{&ret},
+                .standard => .{ ctx, ret },
+                .only_ctx => .{ctx},
+                .only_ret => .{ret},
                 .no_params => blk: {
                     ctx.parseNone() catch return;
                     break :blk .{};
                 },
             };
-            invoke(func_desc, func, args, &ret);
+            invoke(func_desc, func, args, ret);
         }
     }.@"fn";
 }
@@ -124,8 +125,8 @@ fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptim
     const kind, const call_conv = comptime detectPhpMethodCallConv(Class, func);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            var ctx = ExecContext.init(execute_data.?);
-            var ret = Zval.from(return_value.?);
+            const ctx = ExecContext.from(execute_data.?);
+            const ret = Zval.from(return_value.?);
             const args = (if (kind == .object) blk: {
                 const obj: *Class = .from(.std, ctx.thisObject().?);
                 break :blk if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl"))
@@ -133,15 +134,15 @@ fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptim
                 else
                     .{&obj.impl};
             } else .{}) ++ switch (call_conv) {
-                .standard => .{ &ctx, &ret },
-                .only_ctx => .{&ctx},
-                .only_ret => .{&ret},
+                .standard => .{ ctx, ret },
+                .only_ctx => .{ctx},
+                .only_ret => .{ret},
                 .no_params => blk: {
                     ctx.parseNone() catch return;
                     break :blk .{};
                 },
             };
-            invoke(func_desc, func, args, &ret);
+            invoke(func_desc, func, args, ret);
         }
     }.@"fn";
 }
@@ -266,7 +267,7 @@ inline fn invoke(
         .error_union => |kind| {
             const maybe_result = @call(.auto, func, args) catch |err| {
                 if (c.EG("exception") == null) {
-                    c.zend_throw_error(null, "%s at %s", @errorName(err).ptr, func_desc.ptr);
+                    errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
                 }
                 return;
             };

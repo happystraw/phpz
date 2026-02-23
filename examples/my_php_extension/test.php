@@ -13,6 +13,12 @@ hello_world();
 echo whoami('Alice', 25), PHP_EOL;
 echo whoami('Bob', '30'), PHP_EOL;
 echo whoami('Charlie'), PHP_EOL;
+try {
+    whoami('Charlie', []);
+    exit(1); // unreachable
+} catch (\Throwable $e) {
+    echo 'error: ', 'class: ', $e::class, ', error: ',  $e->getMessage(), PHP_EOL, $e->getTraceAsString(), PHP_EOL;
+}
 
 echo '---------- Methods (' . Counter::class  . ') ----------', PHP_EOL;
 $obj = new Counter(10);

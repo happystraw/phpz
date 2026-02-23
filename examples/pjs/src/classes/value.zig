@@ -16,16 +16,20 @@ pub const Value = extern struct {
     }
 
     pub fn construct(self: *Value, ctx: *phpz.ExecContext) !void {
-        var php_ctx_zv: c.zval = undefined;
-        var php_ctx: phpz.Zval = .from(&php_ctx_zv);
+        var php_ctx_zv: *c.zval = undefined;
         var php_value: phpz.Zval.Optional = .init;
-        try ctx.parse("O|z", .{ &php_ctx.inner, context.Class.entry, &php_value.inner });
+        try ctx.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
+        const php_ctx_obj: *phpz.Zval.Object = try .from(php_ctx_zv);
 
-        self.ctx = .from(.std, try php_ctx.as(.object));
+        self.ctx = .from(.std, php_ctx_obj.object());
         self.ctx.addref();
 
         if (php_value.unwrap()) |value| {
-            self.updateValue(value) catch return ctx.typeError(2, "must be int|float|string|bool|null, unsupported value type '%s'", .{@tagName(value.kind()).ptr});
+            self.updateValue(value) catch return errors.argumentTypeError(
+                2,
+                "must be int|float|string|bool|null, unsupported value type '%s'",
+                .{@tagName(value.kind()).ptr},
+            );
         } else {
             const php_obj: *Class = .from(.impl, self);
             php_obj.updateProperty(.null, "value", {});
@@ -33,7 +37,7 @@ pub const Value = extern struct {
         }
     }
 
-    fn updateValue(self: *Value, zv: phpz.Zval) !void {
+    fn updateValue(self: *Value, zv: *phpz.Zval) !void {
         const php_obj: *Class = .from(.impl, self);
         switch (zv.kind()) {
             .null => {
@@ -112,6 +116,7 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 const c = phpz.c;
+const errors = phpz.errors;
 const quickjs = @import("quickjs");
 
 const context = @import("context.zig");
