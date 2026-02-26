@@ -23,24 +23,13 @@ pub fn build(b: *std.Build) void {
 }
 
 fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
-    return b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
+    return Phpz.initInner(b, .{
+        .php_include_root = .{ .cwd_relative = options.php_include_root },
+        .c_source_file = b.path("build/phpz.h"),
+        .use_external_translator_c = true,
         .target = options.target,
         .optimize = options.optimize,
-        .imports = &.{
-            .{
-                .name = "php_ext",
-                .module = Phpz.createPhpExtModule(b, .{
-                    .php_include_root = .{ .cwd_relative = options.php_include_root },
-                    .c_source_file = b.path("build/phpz.h"),
-                    .use_external_translator_c = true,
-                    .target = options.target,
-                    .optimize = options.optimize,
-                }),
-            },
-        },
-        .link_libc = true,
-    });
+    }).mod;
 }
 
 fn addCheckStep(b: *std.Build, mod: *std.Build.Module) void {
