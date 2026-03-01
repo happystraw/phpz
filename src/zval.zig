@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const c = @import("root.zig").c;
 const zend = @import("zend.zig");
 
@@ -107,40 +108,6 @@ pub const Zval = opaque {
         };
     }
 
-    /// Get the PHP type ID of a raw zval.
-    ///
-    /// Returns the internal PHP type constant (IS_LONG, IS_STRING, etc.).
-    /// Use kind() or is() for type checking in most cases instead.
-    ///
-    /// Parameters:
-    ///   - zv: Raw zval pointer
-    ///
-    /// Returns:
-    ///   The PHP type ID (u8)
-    pub fn phpType(zv: *c.zval) u8 {
-        return c.zval_get_type(zv);
-    }
-
-    /// Get the PHP type name of a raw zval as a C string.
-    ///
-    /// Returns a human-readable type name like "integer", "string", "array", etc.
-    /// Useful for error messages.
-    ///
-    /// Parameters:
-    ///   - zv: Raw zval pointer
-    ///
-    /// Returns:
-    ///   Null-terminated string with the type name
-    ///
-    /// Example:
-    /// ```zig
-    /// const type_name = Zval.phpTypeName(zv);
-    /// std.debug.print("Got type: {s}\n", .{type_name});
-    /// ```
-    pub fn phpTypeName(zv: *c.zval) [*:0]const u8 {
-        return c.zend_zval_type_name(zv);
-    }
-
     /// Create a Zval wrapper from a raw zval pointer.
     ///
     /// This is typically used internally by the function/method wrapper,
@@ -173,7 +140,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn kind(self: *Zval) Kind {
-        return switch (phpType(self.ptr())) {
+        return switch (raw.getType(self.ptr())) {
             c.IS_UNDEF => .undef,
             c.IS_NULL => .null,
             c.IS_LONG => .int,
@@ -211,20 +178,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn is(self: *Zval, comptime zk: Kind) bool {
-        const t = phpType(self.ptr());
-        return switch (zk) {
-            .undef => t == c.IS_UNDEF,
-            .null => t == c.IS_NULL,
-            .int => t == c.IS_LONG,
-            .float => t == c.IS_DOUBLE,
-            .bool => t == c.IS_TRUE or t == c.IS_FALSE,
-            .string => t == c.IS_STRING,
-            .array => t == c.IS_ARRAY,
-            .object => t == c.IS_OBJECT,
-            .resource => t == c.IS_RESOURCE,
-            .reference => t == c.IS_REFERENCE,
-            .mixed => t != c.IS_UNDEF,
-        };
+        return raw.is(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value with type checking.
@@ -247,8 +201,7 @@ pub const Zval = opaque {
     /// };
     /// ```
     pub fn as(self: *Zval, comptime zt: Kind) Error!Type(zt) {
-        if (!self.is(zt)) return Error.TypeMismatch;
-        return self.asUnchecked(zt);
+        return raw.as(self.ptr(), zt);
     }
 
     /// Convert this zval to a Zig value without type checking.
@@ -274,24 +227,7 @@ pub const Zval = opaque {
     /// const num = zval.asUnchecked(.int); // Undefined behavior if not an int!
     /// ```
     pub fn asUnchecked(self: *Zval, comptime zk: Kind) Type(zk) {
-        return switch (zk) {
-            .undef, .null => @compileError(std.fmt.comptimePrint(
-                "'{s}' has no value to convert - use 'is(.{s})' to check the type instead",
-                .{ @tagName(zk), @tagName(zk) },
-            )),
-            .int => self.ptr().value.lval,
-            .float => self.ptr().value.dval,
-            .string => blk: {
-                const zend_str = self.ptr().value.str;
-                break :blk @as([*]const u8, @ptrCast(&zend_str.*.val))[0..zend_str.*.len];
-            },
-            .bool => phpType(self.ptr()) == c.IS_TRUE,
-            .array => self.ptr().value.arr orelse unreachable,
-            .object => self.ptr().value.obj orelse unreachable,
-            .resource => self.ptr().value.res orelse unreachable,
-            .reference => self.ptr().value.ref orelse unreachable,
-            .mixed => self.ptr(),
-        };
+        return raw.asUnchecked(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value, or return a default value on type mismatch.
@@ -351,50 +287,7 @@ pub const Zval = opaque {
     ///   - For .undef and .null: The val parameter should be {} (void value)
     ///   - For .array, .object, .resource: Pass the appropriate pointer type
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
-        const self_ptr = self.ptr();
-        switch (zk) {
-            .undef => {
-                self_ptr.u1.type_info = c.IS_UNDEF;
-            },
-            .null => {
-                self_ptr.u1.type_info = c.IS_NULL;
-            },
-            .int => {
-                self_ptr.value.lval = @intCast(val);
-                self_ptr.u1.type_info = c.IS_LONG;
-            },
-            .float => {
-                self_ptr.value.dval = @floatCast(val);
-                self_ptr.u1.type_info = c.IS_DOUBLE;
-            },
-            .string => {
-                const str: *zend.String = zend.String.init(val);
-                self_ptr.value.str = str.ptr();
-                self_ptr.u1.type_info = if (str.isInterned()) c.IS_INTERNED_STRING_EX else c.IS_STRING_EX;
-            },
-            .bool => {
-                self_ptr.u1.type_info = if (val) c.IS_TRUE else c.IS_FALSE;
-            },
-            .array => {
-                self_ptr.value.arr = val;
-                self_ptr.u1.type_info = c.IS_ARRAY_EX;
-            },
-            .object => {
-                self_ptr.value.obj = val;
-                self_ptr.u1.type_info = c.IS_OBJECT_EX;
-            },
-            .resource => {
-                self_ptr.value.res = val;
-                self_ptr.u1.type_info = c.IS_RESOURCE_EX;
-            },
-            .reference => {
-                self_ptr.value.ref = val;
-                self_ptr.u1.type_info = c.IS_REFERENCE_EX;
-            },
-            .mixed => {
-                @memcpy(@as([*]u8, @ptrCast(self_ptr))[0..@sizeOf(c.zval)], @as([*]const u8, @ptrCast(val))[0..@sizeOf(c.zval)]);
-            },
-        }
+        raw.set(self.ptr(), zk, val);
     }
 
     /// Optional zval wrapper for handling nullable PHP parameters.
@@ -410,7 +303,7 @@ pub const Zval = opaque {
     ///     var optional_age: Zval.Optional = .init;
     ///
     ///     // 's' = required string, '|' = following params optional, 'z!' = nullable zval
-    ///     try ctx.parse("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.inner });
+    ///     try ctx.parse("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
     ///
     ///     // Check if the optional parameter was provided
     ///     if (optional_age.unwrap()) |age_zval| {
@@ -472,6 +365,156 @@ pub const Zval = opaque {
         /// ```
         pub fn unwrap(self: *Optional) ?*Zval {
             return if (self.ptr) |zv| Zval.from(zv) else null;
+        }
+    };
+
+    /// Operations on raw `*c.zval` pointers, without the `*Zval` wrapper.
+    ///
+    /// Useful when `zend_parse_parameters` gives you a `*c.zval` directly
+    /// and you don't want to wrap it first.
+    ///
+    /// Example:
+    /// ```zig
+    /// var raw: *c.zval = undefined;
+    /// try ctx.parse("z", .{&raw});
+    ///
+    /// if (Zval.raw.is(raw, .int)) {
+    ///     const n = Zval.raw.asUnchecked(raw, .int);
+    /// }
+    /// Zval.raw.set(raw, .null, {});
+    /// ```
+    pub const raw = struct {
+        /// Get the PHP type ID of a raw zval.
+        ///
+        /// Returns the internal PHP type constant (IS_LONG, IS_STRING, etc.).
+        /// Use kind() or is() for type checking in most cases instead.
+        ///
+        /// Parameters:
+        ///   - zv: Raw zval pointer
+        ///
+        /// Returns:
+        ///   The PHP type ID (u8)
+        pub fn getType(zv: *c.zval) u8 {
+            return c.zval_get_type(zv);
+        }
+
+        /// Get the PHP type name of a raw zval as a C string.
+        ///
+        /// Returns a human-readable type name like "integer", "string", "array", etc.
+        /// Useful for error messages.
+        ///
+        /// Parameters:
+        ///   - zv: Raw zval pointer
+        ///
+        /// Returns:
+        ///   Null-terminated string with the type name
+        ///
+        /// Example:
+        /// ```zig
+        /// const type_name = Zval.raw.getTypeName(zv);
+        /// std.debug.print("Got type: {s}\n", .{type_name});
+        /// ```
+        pub fn getTypeName(zv: *c.zval) [*:0]const u8 {
+            return c.zend_zval_type_name(zv);
+        }
+
+        /// Check if a raw zval is of a specific type.
+        pub fn is(zv: *c.zval, comptime zk: Kind) bool {
+            const t = getType(zv);
+            return switch (zk) {
+                .undef => t == c.IS_UNDEF,
+                .null => t == c.IS_NULL,
+                .int => t == c.IS_LONG,
+                .float => t == c.IS_DOUBLE,
+                .bool => t == c.IS_TRUE or t == c.IS_FALSE,
+                .string => t == c.IS_STRING,
+                .array => t == c.IS_ARRAY,
+                .object => t == c.IS_OBJECT,
+                .resource => t == c.IS_RESOURCE,
+                .reference => t == c.IS_REFERENCE,
+                .mixed => t != c.IS_UNDEF,
+            };
+        }
+
+        /// Convert a raw zval to a Zig value with type checking.
+        pub fn as(zv: *c.zval, comptime zt: Kind) Error!Type(zt) {
+            if (!raw.is(zv, zt)) return Error.TypeMismatch;
+            return raw.asUnchecked(zv, zt);
+        }
+
+        /// Convert a raw zval to a Zig value without type checking.
+        pub fn asUnchecked(zv: *c.zval, comptime zk: Kind) Type(zk) {
+            return switch (zk) {
+                .undef, .null => @compileError(std.fmt.comptimePrint(
+                    "'{s}' has no value to convert - use 'Zval.is/Zval.raw.is(.{s})' to check the type instead",
+                    .{ @tagName(zk), @tagName(zk) },
+                )),
+                .int => zv.value.lval,
+                .float => zv.value.dval,
+                .string => blk: {
+                    const zend_str = zv.value.str;
+                    break :blk @as([*]const u8, @ptrCast(&zend_str.*.val))[0..zend_str.*.len];
+                },
+                .bool => getType(zv) == c.IS_TRUE,
+                .array => zv.value.arr orelse unreachable,
+                .object => zv.value.obj orelse unreachable,
+                .resource => zv.value.res orelse unreachable,
+                .reference => zv.value.ref orelse unreachable,
+                .mixed => zv,
+            };
+        }
+
+        /// Set a raw zval to the specified type and value.
+        pub fn set(zv: *c.zval, comptime zk: Kind, val: Type(zk)) void {
+            switch (zk) {
+                .undef => {
+                    zv.u1.type_info = c.IS_UNDEF;
+                },
+                .null => {
+                    zv.u1.type_info = c.IS_NULL;
+                },
+                .int => {
+                    zv.value.lval = @intCast(val);
+                    zv.u1.type_info = c.IS_LONG;
+                },
+                .float => {
+                    zv.value.dval = @floatCast(val);
+                    zv.u1.type_info = c.IS_DOUBLE;
+                },
+                .string => {
+                    const str: *zend.String = .init(val);
+                    zv.value.str = str.ptr();
+                    zv.u1.type_info = if (str.isInterned()) c.IS_INTERNED_STRING_EX else c.IS_STRING_EX;
+                },
+                .bool => {
+                    zv.u1.type_info = if (val) c.IS_TRUE else c.IS_FALSE;
+                },
+                .array => {
+                    zv.value.arr = val;
+                    zv.u1.type_info = c.IS_ARRAY_EX;
+                },
+                .object => {
+                    zv.value.obj = val;
+                    zv.u1.type_info = c.IS_OBJECT_EX;
+                },
+                .resource => {
+                    zv.value.res = val;
+                    zv.u1.type_info = c.IS_RESOURCE_EX;
+                },
+                .reference => {
+                    zv.value.ref = val;
+                    zv.u1.type_info = c.IS_REFERENCE_EX;
+                },
+                .mixed => {
+                    @memcpy(@as([*]u8, @ptrCast(zv))[0..@sizeOf(c.zval)], @as([*]const u8, @ptrCast(val))[0..@sizeOf(c.zval)]);
+                },
+            }
+        }
+
+        pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
+            var z: c.zval = undefined;
+            raw.set(&z, zk, val);
+            return z;
         }
     };
 };

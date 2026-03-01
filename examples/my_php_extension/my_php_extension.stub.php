@@ -13,6 +13,10 @@ namespace {
     function whoami(string $name, int|string|null $age = NULL): string
     {
     }
+
+    function human(string $name, int|null $age = null): MyPHPExt\Human
+    {
+    }
 }
 
 namespace MyPHPExt{
@@ -37,7 +41,7 @@ namespace MyPHPExt{
 
     final class Human implements \Stringable
     {
-        public function __construct(string $name, int|null $age)
+        public function __construct(string $name, int|null $age = NULL)
         {
         }
 

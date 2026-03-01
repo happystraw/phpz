@@ -150,54 +150,13 @@ pub const Object = opaque {
         return c.instanceof_function(self.class(), ce) != 0;
     }
 
-    /// Call a method on the object (simple version with return value)
-    pub fn callMethod(
-        self: *Object,
-        method_name: []const u8,
-        retval: *c.zval,
-        params: []c.zval,
-    ) Error!void {
-        const result = c.zend_call_method(
-            self.ptr(),
-            null,
-            null,
-            method_name.ptr,
-            method_name.len,
-            retval,
-            @intCast(params.len),
-            if (params.len > 0) &params[0] else null,
-            if (params.len > 1) &params[1] else null,
-        );
-        if (result == null) return Error.MethodCallFailed;
-    }
-
-    /// Call a known function on the object
-    pub fn callKnownFunction(
-        self: *Object,
-        func: *c.zend_function,
-        called_scope: ?*c.zend_class_entry,
-        retval: *c.zval,
-        params: []c.zval,
-        named_params: ?*c.HashTable,
-    ) void {
-        c.zend_call_known_function(
-            func,
-            self.ptr(),
-            called_scope,
-            retval,
-            @intCast(params.len),
-            if (params.len > 0) params.ptr else null,
-            named_params,
-        );
-    }
-
     /// Call a method if it exists (returns false if method doesn't exist)
     pub fn callMethodIfExists(
         self: *Object,
         method_name: []const u8,
-        retval: *c.zval,
+        retval: ?*c.zval,
         params: []c.zval,
-    ) bool {
+    ) Error!void {
         const zstr = String.init(method_name);
         defer zstr.deinit();
 
@@ -206,9 +165,10 @@ pub const Object = opaque {
             zstr.ptr(),
             retval,
             @intCast(params.len),
-            if (params.len > 0) params.ptr else null,
+            if (params.len > 0) @ptrCast(params.ptr) else null,
         );
-        return result == c.SUCCESS;
+        if (result == c.SUCCESS) return;
+        return Error.MethodCallFailed;
     }
 
     /// Clone the object

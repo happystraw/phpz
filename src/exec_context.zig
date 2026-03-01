@@ -190,7 +190,7 @@ pub const ExecContext = opaque {
     ///   The $this zval pointer, or null if not in an object context
     pub fn this(self: *ExecContext) ?*c.zval {
         const this_zval = &self.ptr().This;
-        if (Zval.phpType(this_zval) == c.IS_OBJECT) {
+        if (Zval.raw.getType(this_zval) == c.IS_OBJECT) {
             return this_zval;
         }
         return null;

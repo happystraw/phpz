@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 82909b6f055f3bae011e93eee724eba9b35f8996 */
+ * Stub hash: 34277a10877a73123353c80210768a7a2326ff5c */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello_world, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -7,6 +7,11 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_whoami, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_MASK(0, age, MAY_BE_LONG|MAY_BE_STRING|MAY_BE_NULL, "NULL")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_human, 0, 1, MyPHPExt\\Human, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Counter___construct, 0, 0, 1)
@@ -22,9 +27,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Counter_value, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Human___construct, 0, 0, 2)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Human___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO(0, age, IS_LONG, 1)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "NULL")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Human_setName, 0, 1, IS_VOID, 0)
@@ -46,6 +51,7 @@ ZEND_END_ARG_INFO()
 
 ZEND_FUNCTION(hello_world);
 ZEND_FUNCTION(whoami);
+ZEND_FUNCTION(human);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, add);
 ZEND_METHOD(MyPHPExt_Counter, dec);
@@ -61,6 +67,7 @@ ZEND_METHOD(MyPHPExt_Human, __toString);
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello_world, arginfo_hello_world)
 	ZEND_FE(whoami, arginfo_whoami)
+	ZEND_FE(human, arginfo_human)
 	ZEND_FE_END
 };
 
