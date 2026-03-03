@@ -2,12 +2,12 @@
     .name = .phpz,
     .version = "0.0.0",
     .fingerprint = 0x935004cc3861700f,
-    .minimum_zig_version = "0.16.0-dev.2565+684032671",
+    .minimum_zig_version = "0.16.0-dev.2694+74f361a5c",
     .dependencies = .{
         // TODO: remove it, use zig builtin translate c
         .translate_c = .{
-            .url = "git+https://codeberg.org/ziglang/translate-c.git#d2be2f19ef7c9caa1561d38c96581ac79dd4c654",
-            .hash = "translate_c-0.0.0-Q_BUWmzfBgDpDBF7fotbAH17b1W8SUO48VCbXxmdy0xW",
+            .url = "git+https://codeberg.org/ziglang/translate-c.git#41c10fa66ac81343c33f2b8c746f181b41eaaa27",
+            .hash = "translate_c-0.0.0-Q_BUWmzfBgB9xHX46yL5TqvhB-xdK_8LxucLXVmwQSCC",
         },
     },
     .paths = .{
