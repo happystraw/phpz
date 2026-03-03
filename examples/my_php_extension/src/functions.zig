@@ -11,11 +11,11 @@ fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
 }
 
-fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
+fn whoami(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
     var name: []u8 = undefined;
     var age_opt: phpz.Zval.Optional = .init;
 
-    try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
+    try frame.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
 
     const result: []const u8 = if (age_opt.unwrap()) |age| blk: {
         if (age.is(.int)) {
@@ -34,11 +34,11 @@ fn whoami(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
     ret.set(.string, result);
 }
 
-fn human(ctx: *phpz.ExecContext, ret: *phpz.Zval) !void {
+fn human(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
     var name_zv: *c.zval = undefined;
     var age_zv: ?*c.zval = null;
 
-    try ctx.parse("z|z!", .{ &name_zv, &age_zv });
+    try frame.parse("z|z!", .{ &name_zv, &age_zv });
 
     const human_obj: *HumanClass = .new();
     const human_std_obj: *phpz.zend.Object = .from(&human_obj.std);

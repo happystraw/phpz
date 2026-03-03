@@ -1,21 +1,21 @@
 pub const Counter = extern struct {
     n: i64,
 
-    pub fn construct(self: *Counter, ctx: *phpz.ExecContext) !void {
+    pub fn construct(self: *Counter, frame: *phpz.CallFrame) !void {
         var n: i64 = 0;
-        try ctx.parse("l", .{&n});
+        try frame.parse("l", .{&n});
         self.n = n;
     }
 
-    pub fn add(self: *Counter, ctx: *phpz.ExecContext) !void {
+    pub fn add(self: *Counter, frame: *phpz.CallFrame) !void {
         var n: i64 = 0;
-        try ctx.parse("l", .{&n});
+        try frame.parse("l", .{&n});
         self.n +|= n;
     }
 
-    pub fn dec(self: *Counter, ctx: *phpz.ExecContext) !void {
+    pub fn dec(self: *Counter, frame: *phpz.CallFrame) !void {
         var n: i64 = 0;
-        try ctx.parse("l", .{&n});
+        try frame.parse("l", .{&n});
         self.n -|= n;
     }
 

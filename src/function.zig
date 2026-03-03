@@ -1,13 +1,13 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
-const ExecContext = @import("exec_context.zig").ExecContext;
+const CallFrame = @import("call_frame.zig").CallFrame;
 const Zval = @import("zval.zig").Zval;
 const errors = @import("errors.zig");
 
 const PhpFn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 const PhpFnKind = enum { function, method };
-const PhpFnCallConv = enum { standard, no_params, only_ctx, only_ret };
+const PhpFnCallConv = enum { standard, no_params, only_frame, only_ret };
 const PhpFnReturnKind = enum { error_union, scalar };
 const PhpFnReturnType = union(PhpFnReturnKind) { error_union: Zval.Kind, scalar: Zval.Kind };
 const PhpMethodKind = enum { object, static };
@@ -19,8 +19,8 @@ const PhpMethodKind = enum { object, static };
 /// adapted to match PHP's calling convention.
 ///
 /// Supported function signatures:
-///   - `fn (ctx: *ExecContext, ret: *Zval) !void` - Full control with parameters and return value
-///   - `fn (ctx: *ExecContext) !void` - Only access parameters
+///   - `fn (frame: *CallFrame, ret: *Zval) !void` - Full control with parameters and return value
+///   - `fn (frame: *CallFrame) !void` - Only access parameters
 ///   - `fn (ret: *Zval) !void` - Only set return value
 ///   - `fn () !void` - No parameters or return value
 ///
@@ -41,16 +41,16 @@ const PhpMethodKind = enum { object, static };
 ///     _ = phpz.printf("Hello from ZIG!\n", .{});
 /// }
 ///
-/// fn add(ctx: *ExecContext, ret: *Zval) !void {
+/// fn add(frame: *CallFrame, ret: *Zval) !void {
 ///     var a: i64 = undefined;
 ///     var b: i64 = undefined;
-///     try ctx.parse("ll", .{ &a, &b });
+///     try frame.parse("ll", .{ &a, &b });
 ///     ret.set(.int, a + b);
 /// }
 ///
-/// fn greet(ctx: *ExecContext, ret: *Zval) !void {
+/// fn greet(frame: *CallFrame, ret: *Zval) !void {
 ///     var name: []u8 = undefined;
-///     try ctx.parse("s", .{ &name.ptr, &name.len });
+///     try frame.parse("s", .{ &name.ptr, &name.len });
 ///     const greeting = try std.fmt.allocPrint(allocator, "Hello, {s}!", .{name});
 ///     defer allocator.free(greeting);
 ///     ret.set(.string, greeting);
@@ -105,14 +105,14 @@ fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
     const call_conv = comptime detectPhpFnCallConv(func);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            const ctx = ExecContext.from(execute_data.?);
+            const frame = CallFrame.from(execute_data.?);
             const ret = Zval.from(return_value.?);
             const args = switch (call_conv) {
-                .standard => .{ ctx, ret },
-                .only_ctx => .{ctx},
+                .standard => .{ frame, ret },
+                .only_frame => .{frame},
                 .only_ret => .{ret},
                 .no_params => blk: {
-                    ctx.parseNone() catch return;
+                    frame.parseNone() catch return;
                     break :blk .{};
                 },
             };
@@ -125,20 +125,20 @@ fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptim
     const kind, const call_conv = comptime detectPhpMethodCallConv(Class, func);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            const ctx = ExecContext.from(execute_data.?);
+            const frame = CallFrame.from(execute_data.?);
             const ret = Zval.from(return_value.?);
             const args = (if (kind == .object) blk: {
-                const obj: *Class = .from(.std, ctx.thisObject().?);
+                const obj: *Class = .from(.std, frame.thisObject().?);
                 break :blk if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl"))
                     .{obj.impl}
                 else
                     .{&obj.impl};
             } else .{}) ++ switch (call_conv) {
-                .standard => .{ ctx, ret },
-                .only_ctx => .{ctx},
+                .standard => .{ frame, ret },
+                .only_frame => .{frame},
                 .only_ret => .{ret},
                 .no_params => blk: {
-                    ctx.parseNone() catch return;
+                    frame.parseNone() catch return;
                     break :blk .{};
                 },
             };
@@ -176,11 +176,11 @@ fn detectPhpFnCallConv(comptime func: anytype) PhpFnCallConv {
     const fn_type_info = type_info.@"fn";
 
     if (fn_type_info.params.len == 2 and
-        fn_type_info.params[0].type.? == *ExecContext and
+        fn_type_info.params[0].type.? == *CallFrame and
         fn_type_info.params[1].type.? == *Zval) return .standard;
 
     if (fn_type_info.params.len == 0) return .no_params;
-    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *ExecContext) return .only_ctx;
+    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *CallFrame) return .only_frame;
     if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *Zval) return .only_ret;
 
     @compileLog(@TypeOf(func));
@@ -188,8 +188,8 @@ fn detectPhpFnCallConv(comptime func: anytype) PhpFnCallConv {
         \\php function/method bind error: function signature must be:
         \\
         \\params:
-        \\  - (ctx: *ExecContext, ret: *Zval)
-        \\  - (ctx: *ExecContext)
+        \\  - (frame: *CallFrame, ret: *Zval)
+        \\  - (frame: *CallFrame)
         \\  - (ret: *Zval)
         \\  - ()
         \\returns:
@@ -217,11 +217,11 @@ fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) stru
     };
 
     if (fn_type_info.params.len == offset + 2 and
-        fn_type_info.params[offset].type.? == *ExecContext and
+        fn_type_info.params[offset].type.? == *CallFrame and
         fn_type_info.params[offset + 1].type.? == *Zval) return .{ fn_kind, .standard };
 
     if (fn_type_info.params.len == offset) return .{ fn_kind, .no_params };
-    if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *ExecContext) return .{ fn_kind, .only_ctx };
+    if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *CallFrame) return .{ fn_kind, .only_frame };
     if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *Zval) return .{ fn_kind, .only_ret };
 
     @compileLog(fn_kind, @TypeOf(func));
@@ -230,13 +230,13 @@ fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) stru
         \\
         \\params:
         \\  static:
-        \\  - (ctx: *ExecContext, ret: *Zval)
-        \\  - (ctx: *ExecContext)
+        \\  - (frame: *CallFrame, ret: *Zval)
+        \\  - (frame: *CallFrame)
         \\  - (ret: *Zval)
         \\  - ()
         \\  object:
-        \\  - (self: T|*T, ctx: *ExecContext, ret: *Zval)
-        \\  - (self: T|*T, ctx: *ExecContext)
+        \\  - (self: T|*T, frame: *CallFrame, ret: *Zval)
+        \\  - (self: T|*T, frame: *CallFrame)
         \\  - (self: T|*T, ret: *Zval)
         \\  - (self: T|*T)
         \\returns:

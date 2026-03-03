@@ -15,10 +15,10 @@ pub const Value = extern struct {
         self.ctx.delref();
     }
 
-    pub fn construct(self: *Value, ctx: *phpz.ExecContext) !void {
+    pub fn construct(self: *Value, frame: *phpz.CallFrame) !void {
         var php_ctx_zv: *c.zval = undefined;
         var php_value: phpz.Zval.Optional = .init;
-        try ctx.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
+        try frame.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
         const php_ctx_obj: *phpz.Zval.Object = try .from(php_ctx_zv);
 
         self.ctx = .from(.std, php_ctx_obj.object());

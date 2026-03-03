@@ -1,9 +1,9 @@
 const c = @import("root.zig").c;
 const Zval = @import("zval.zig").Zval;
 
-/// Execution Context for PHP Functions and Methods
+/// Call Frame for PHP Functions and Methods
 ///
-/// ExecContext provides access to the current PHP execution context, allowing
+/// CallFrame provides access to the current PHP call frame, allowing
 /// you to parse function parameters, access the current object (in methods),
 /// and retrieve scope information.
 ///
@@ -12,10 +12,10 @@ const Zval = @import("zval.zig").Zval;
 ///
 /// Example:
 /// ```zig
-/// fn myFunction(ctx: *ExecContext, ret: *Zval) !void {
+/// fn myFunction(frame: *CallFrame, ret: *Zval) !void {
 ///     var name: []u8 = undefined;
 ///     var age: i64 = undefined;
-///     try ctx.parse("sl", .{ &name.ptr, &name.len, &age });
+///     try frame.parse("sl", .{ &name.ptr, &name.len, &age });
 ///
 ///     const greeting = try std.fmt.allocPrint(allocator,
 ///         "Hello {s}, you are {d} years old!", .{name, age});
@@ -23,14 +23,14 @@ const Zval = @import("zval.zig").Zval;
 ///     ret.set(.string, greeting);
 /// }
 /// ```
-pub const ExecContext = opaque {
+pub const CallFrame = opaque {
     /// Errors that can occur during parameter parsing
     pub const Error = error{
         /// Parameter parsing failed (wrong type, missing required param, etc.)
         ParseFailure,
     };
 
-    /// Initialize an ExecContext from PHP execution data.
+    /// Initialize an CallFrame from PHP execution data.
     ///
     /// This is typically called automatically by the function/method wrapper.
     /// You don't need to call this manually in user code.
@@ -39,13 +39,13 @@ pub const ExecContext = opaque {
     ///   - execute_data: The PHP execution data pointer
     ///
     /// Returns:
-    ///   An initialized ExecContext
-    pub inline fn from(execute_data: *c.zend_execute_data) *ExecContext {
+    ///   An initialized CallFrame
+    pub inline fn from(execute_data: *c.zend_execute_data) *CallFrame {
         return @ptrCast(execute_data);
     }
 
     /// Get the underlying zend_execute_data pointer
-    pub inline fn ptr(self: *ExecContext) *c.zend_execute_data {
+    pub inline fn ptr(self: *CallFrame) *c.zend_execute_data {
         return @ptrCast(@alignCast(self));
     }
 
@@ -53,7 +53,7 @@ pub const ExecContext = opaque {
     ///
     /// Returns:
     ///   The argument count
-    pub inline fn argCount(self: *ExecContext) u32 {
+    pub inline fn argCount(self: *CallFrame) u32 {
         return self.ptr().This.u2.num_args;
     }
 
@@ -103,12 +103,12 @@ pub const ExecContext = opaque {
     /// // Parse two integers: function(int $a, int $b)
     /// var a: i64 = undefined;
     /// var b: i64 = undefined;
-    /// try ctx.parse("ll", .{ &a, &b });
+    /// try frame.parse("ll", .{ &a, &b });
     ///
     /// // Parse string and optional integer: function(string $name, int $age = null)
     /// var name: []u8 = undefined;
     /// var age_opt: Zval.Optional = .init;
-    /// try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.inner });
+    /// try frame.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.inner });
     /// if (age_opt.unwrap()) |age_zval| {
     ///     if (age_zval.is(.int)) {
     ///         const age = age_zval.asUnchecked(.int);
@@ -117,9 +117,9 @@ pub const ExecContext = opaque {
     ///
     /// // Parse string only: function(string $message)
     /// var message: []u8 = undefined;
-    /// try ctx.parse("s", .{ &message.ptr, &message.len });
+    /// try frame.parse("s", .{ &message.ptr, &message.len });
     /// ```
-    pub fn parse(self: *ExecContext, comptime type_spec: [:0]const u8, args: anytype) Error!void {
+    pub fn parse(self: *CallFrame, comptime type_spec: [:0]const u8, args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
             @compileError("parse: args must be a tuple (use .{} syntax)");
         }
@@ -142,12 +142,12 @@ pub const ExecContext = opaque {
     ///
     /// Example:
     /// ```zig
-    /// fn helloWorld(ctx: *ExecContext, ret: *Zval) !void {
-    ///     try ctx.parseNone();
+    /// fn helloWorld(frame: *CallFrame, ret: *Zval) !void {
+    ///     try frame.parseNone();
     ///     ret.set(.string, "Hello, World!");
     /// }
     /// ```
-    pub fn parseNone(self: *ExecContext) Error!void {
+    pub fn parseNone(self: *CallFrame) Error!void {
         if (self.argCount() != 0) {
             c.zend_wrong_parameters_none_error();
             return Error.ParseFailure;
@@ -168,7 +168,7 @@ pub const ExecContext = opaque {
     ///
     /// Returns:
     ///   Error.ParseFailure if parsing fails
-    pub fn parseMethod(self: *ExecContext, comptime type_spec: [:0]const u8, args: anytype) Error!void {
+    pub fn parseMethod(self: *CallFrame, comptime type_spec: [:0]const u8, args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
             @compileError("parseMethod: args must be a tuple (use .{} syntax)");
         }
@@ -188,7 +188,7 @@ pub const ExecContext = opaque {
     ///
     /// Returns:
     ///   The $this zval pointer, or null if not in an object context
-    pub fn this(self: *ExecContext) ?*c.zval {
+    pub fn this(self: *CallFrame) ?*c.zval {
         const this_zval = &self.ptr().This;
         if (Zval.raw.getType(this_zval) == c.IS_OBJECT) {
             return this_zval;
@@ -206,12 +206,12 @@ pub const ExecContext = opaque {
     ///
     /// Example:
     /// ```zig
-    /// fn myMethod(self: *MyClass, ctx: *ExecContext, ret: *Zval) !void {
+    /// fn myMethod(self: *MyClass, frame: *CallFrame, ret: *Zval) !void {
     ///     // The wrapper already extracts 'self', but if you need raw access:
-    ///     const obj = ctx.thisObject();
+    ///     const obj = frame.thisObject();
     /// }
     /// ```
-    pub fn thisObject(self: *ExecContext) ?*c.zend_object {
+    pub fn thisObject(self: *CallFrame) ?*c.zend_object {
         return c.zend_get_this_object(self.ptr());
     }
 
@@ -222,7 +222,7 @@ pub const ExecContext = opaque {
     ///
     /// Returns:
     ///   The zend_class_entry pointer, or null if not in a class context
-    pub fn scope(self: *ExecContext) ?*c.zend_class_entry {
+    pub fn scope(self: *CallFrame) ?*c.zend_class_entry {
         return @ptrCast(self.ptr().func.?.common.scope);
     }
 
@@ -240,7 +240,7 @@ pub const ExecContext = opaque {
     ///
     /// Returns:
     ///   The zend_class_entry pointer of the called class
-    pub fn calledScope(self: *ExecContext) ?*c.zend_class_entry {
+    pub fn calledScope(self: *CallFrame) ?*c.zend_class_entry {
         return @ptrCast(c.zend_get_called_scope(self.ptr()));
     }
 };

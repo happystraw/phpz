@@ -54,9 +54,9 @@
 ///         return impl(c.zend_ce_stringable); // Implement Stringable
 ///     }
 ///
-///     pub fn construct(self: *Student, ctx: *ExecContext) !void {
+///     pub fn construct(self: *Student, frame: *CallFrame) !void {
 ///         var name: []u8 = undefined;
-///         try ctx.parse("s", .{ &name.ptr, &name.len });
+///         try frame.parse("s", .{ &name.ptr, &name.len });
 ///         self.name = name.ptr;
 ///         self.name_len = name.len;
 ///     }
@@ -65,9 +65,9 @@
 ///         ret.set(.string, self.name[0..self.name_len]);
 ///     }
 ///
-///     pub fn setAge(self: *Student, ctx: *ExecContext) !void {
+///     pub fn setAge(self: *Student, frame: *CallFrame) !void {
 ///         var age: i64 = undefined;
-///         try ctx.parse("l", .{&age});
+///         try frame.parse("l", .{&age});
 ///         self.age = @intCast(age);
 ///     }
 /// };
@@ -196,8 +196,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///   - Other PHP magic methods are supported
         ///
         /// Method signatures follow the same rules as phpz.method():
-        ///   - `fn (self: T, ctx: *ExecContext, ret: *Zval) !void`
-        ///   - `fn (self: *T, ctx: *ExecContext) !void`
+        ///   - `fn (self: T, frame: *CallFrame, ret: *Zval) !void`
+        ///   - `fn (self: *T, frame: *CallFrame) !void`
         ///   - `fn (self: T, ret: *Zval) !void`
         ///   - `fn (self: T) !ReturnType`
         ///
@@ -207,9 +207,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///     name: []const u8,
         ///     age: u8,
         ///
-        ///     pub fn construct(self: *Student, ctx: *ExecContext) !void {
+        ///     pub fn construct(self: *Student, frame: *CallFrame) !void {
         ///         var name: []u8 = undefined;
-        ///         try ctx.parse("s", .{ &name.ptr, &name.len });
+        ///         try frame.parse("s", .{ &name.ptr, &name.len });
         ///         self.name = name;
         ///     }
         ///
@@ -217,9 +217,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///         ret.set(.string, self.name);
         ///     }
         ///
-        ///     pub fn setAge(self: *Student, ctx: *ExecContext) !void {
+        ///     pub fn setAge(self: *Student, frame: *CallFrame) !void {
         ///         var age: i64 = undefined;
-        ///         try ctx.parse("l", .{&age});
+        ///         try frame.parse("l", .{&age});
         ///         self.age = @intCast(age);
         ///     }
         /// };

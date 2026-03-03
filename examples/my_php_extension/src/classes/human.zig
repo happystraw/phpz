@@ -7,10 +7,10 @@ const Human = extern struct {
         return impl(c.zend_ce_stringable);
     }
 
-    pub fn construct(self: *Human, ctx: *phpz.ExecContext) !void {
+    pub fn construct(self: *Human, frame: *phpz.CallFrame) !void {
         var name: []u8 = undefined;
         var age: phpz.Zval.Optional = .init;
-        try ctx.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
+        try frame.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
         self.name = name.ptr;
         self.name_len = name.len;
         if (age.unwrap()) |zv| if (zv.is(.int)) self.safeSetAge(zv.asUnchecked(.int));
@@ -20,9 +20,9 @@ const Human = extern struct {
         ret.set(.string, self.name[0 .. self.name_len - 1]);
     }
 
-    pub fn setName(self: *Human, ctx: *phpz.ExecContext) !void {
+    pub fn setName(self: *Human, frame: *phpz.CallFrame) !void {
         var name: []u8 = undefined;
-        try ctx.parse("s", .{ &name.ptr, &name.len });
+        try frame.parse("s", .{ &name.ptr, &name.len });
         self.name = name.ptr;
         self.name_len = name.len;
     }
@@ -31,9 +31,9 @@ const Human = extern struct {
         return self.age;
     }
 
-    pub fn setAge(self: *Human, ctx: *phpz.ExecContext) !void {
+    pub fn setAge(self: *Human, frame: *phpz.CallFrame) !void {
         var age: i64 = undefined;
-        try ctx.parse("l", .{&age});
+        try frame.parse("l", .{&age});
         self.safeSetAge(age);
     }
 
