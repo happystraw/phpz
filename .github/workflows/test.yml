@@ -33,3 +33,7 @@ jobs:
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test -Dphp-include-root="$PHP_INCLUDE_DIR"
+      - name: Run tests (ReleaseSafe)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe

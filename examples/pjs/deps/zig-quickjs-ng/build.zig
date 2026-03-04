@@ -1,12 +1,20 @@
 const std = @import("std");
+const Translator = @import("translate_c").Translator;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     // C headers
-    const c = translateC(b, target, optimize);
-    const c_mod = c.addModule("quickjs_c");
+    // const c = translateC(b, target, optimize);
+    // const c_mod = c.addModule("quickjs_c");
+    const c_mod = createExternalTranslateCModule(b, target, optimize);
+    // _ = b.addModule("quickjs_c", .{
+    //     .root_source_file = c_mod.root_source_file,
+    //     .target = c_mod.resolved_target,
+    //     .optimize = c_mod.optimize,
+    //     .link_libc = c_mod.link_libc,
+    // });
 
     // Library
     const lib = try library(b, target, optimize);
@@ -50,6 +58,24 @@ pub fn translateC(
 
     translate.addIncludePath(upstream.path(""));
     return translate;
+}
+
+// TODO: remove it, use zig builtin translate c when 0.16.0 is released
+fn createExternalTranslateCModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Module {
+    const translate_c = b.dependency("translate_c", .{});
+    const upstream = b.dependency("quickjs", .{});
+
+    const t: Translator = .init(translate_c, .{
+        .c_source_file = upstream.path("quickjs.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    t.addIncludePath(upstream.path(""));
+    return t.mod;
 }
 
 pub fn library(

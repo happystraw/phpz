@@ -26,7 +26,6 @@ fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
     return Phpz.initInner(b, .{
         .php_include_root = .{ .cwd_relative = options.php_include_root },
         .c_source_file = b.path("build/phpz.h"),
-        .use_external_translator_c = true,
         .target = options.target,
         .optimize = options.optimize,
     }).mod;
@@ -85,6 +84,7 @@ fn addTestStep(b: *std.Build, options: BuildOptions) void {
             "build",
             "test",
             b.fmt("-Dphp-include-root={s}", .{options.php_include_root}),
+            b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}),
         });
         test_cmd.setCwd(b.path("examples").join(b.allocator, test_example) catch unreachable);
         step.dependOn(&test_cmd.step);

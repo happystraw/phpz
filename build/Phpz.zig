@@ -15,7 +15,6 @@
 //!     .optimize = optimize,
 //!     .php_include_root = .{ .cwd_relative = "/usr/include/php" },
 //!     .shared = true,
-//!     .use_external_translator_c = false, // Use builtin translate-c (recommended)
 //! });
 //!
 //! const ext_lib = b.addLibrary(.{
@@ -74,7 +73,7 @@ pub const Options = struct {
     /// Set to false for static linking (less common for PHP extensions).
     shared: bool = true,
 
-    /// Set false to use built-in translate-c instead.
+    /// TODO: remove it, use zig builtin translate c when 0.16.0 is released
     use_external_translator_c: bool = true,
 };
 
