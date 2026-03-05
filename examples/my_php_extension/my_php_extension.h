@@ -1,3 +1,6 @@
+#ifndef MY_PHP_EXTENSION_H
+#define MY_PHP_EXTENSION_H
+
 // for module
 #include "phpz.h"
 #include "ext/standard/info.h"
@@ -7,3 +10,5 @@
 // only for static build (in source tree)
 extern zend_module_entry my_php_extension_module_entry;
 #define phpext_my_php_extension_ptr &my_php_extension_module_entry
+
+#endif
