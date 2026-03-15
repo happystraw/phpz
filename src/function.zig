@@ -7,10 +7,6 @@ const errors = @import("errors.zig");
 
 const PhpFn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 const PhpFnKind = enum { function, method };
-const PhpFnCallConv = enum { standard, no_params, only_frame, only_ret };
-const PhpFnReturnKind = enum { error_union, scalar };
-const PhpFnReturnType = union(PhpFnReturnKind) { error_union: Zval.Kind, scalar: Zval.Kind };
-const PhpMethodKind = enum { object, static };
 
 /// Register a Zig function as a PHP function.
 ///
@@ -19,17 +15,12 @@ const PhpMethodKind = enum { object, static };
 /// adapted to match PHP's calling convention.
 ///
 /// Supported function signatures:
-///   - `fn (frame: *CallFrame, ret: *Zval) !void` - Full control with parameters and return value
-///   - `fn (frame: *CallFrame) !void` - Only access parameters
-///   - `fn (ret: *Zval) !void` - Only set return value
-///   - `fn () !void` - No parameters or return value
+///   - `fn (*CallFrame, *Zval) void|!void` - Access parameters and set return value
+///   - `fn (*CallFrame) void|!void`        - Access parameters only
+///   - `fn (*Zval) void|!void`             - Set return value only
+///   - `fn () void|!void`                  - No parameters or return value
 ///
-/// Supported return types:
-///   - `void` - No return value (PHP null)
-///   - `!void` - Error union (throws PHP error on error)
-///   - `int` or `!int` - PHP integer
-///   - `bool` or `!bool` - PHP boolean
-///   - `float` or `!float` - PHP float
+/// When the function takes no parameters, PHP will reject calls with extra arguments.
 ///
 /// Parameters:
 ///   - func_name: The name of the PHP function (null-terminated string)
@@ -102,47 +93,65 @@ pub fn methodWithClass(comptime Class: anytype, comptime func_name: [:0]const u8
 }
 
 fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
-    const call_conv = comptime detectPhpFnCallConv(func);
+    const Args = std.meta.ArgsTuple(@TypeOf(func));
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             const frame = CallFrame.from(execute_data.?);
-            const ret = Zval.from(return_value.?);
-            const args = switch (call_conv) {
-                .standard => .{ frame, ret },
-                .only_frame => .{frame},
-                .only_ret => .{ret},
-                .no_params => blk: {
+            const args = switch (Args) {
+                @Tuple(&.{ *CallFrame, *Zval }) => .{ frame, Zval.from(return_value.?) },
+                @Tuple(&.{*CallFrame}) => .{frame},
+                @Tuple(&.{*Zval}) => .{Zval.from(return_value.?)},
+                @Tuple(&.{}) => blk: {
                     frame.parseNone() catch return;
                     break :blk .{};
                 },
+                else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: {any}", .{ func_desc, Args })),
             };
-            invoke(func_desc, func, args, ret);
+            _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
+                if (c.EG("exception") == null) {
+                    errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
+                }
+            };
         }
     }.@"fn";
 }
 
 fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
-    const kind, const call_conv = comptime detectPhpMethodCallConv(Class, func);
+    const Args = std.meta.ArgsTuple(@TypeOf(func));
+    const args_type_info = @typeInfo(Args).@"struct";
+    const impl_type = @FieldType(Class, "impl");
+    const kind: enum { static, object } = comptime if (args_type_info.fields.len > 0) blk: {
+        const first = args_type_info.fields[0].type;
+        break :blk if (first == impl_type or first == *impl_type or first == *const impl_type) .object else .static;
+    } else .static;
+    const impl_offset = comptime @intFromBool(kind == .object);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             const frame = CallFrame.from(execute_data.?);
-            const ret = Zval.from(return_value.?);
-            const args = (if (kind == .object) blk: {
+            const args: Args = (if (kind == .object) blk: {
                 const obj: *Class = .from(.std, frame.thisObject().?);
-                break :blk if (@typeInfo(@TypeOf(func)).@"fn".params[0].type.? == @FieldType(Class, "impl"))
-                    .{obj.impl}
-                else
-                    .{&obj.impl};
-            } else .{}) ++ switch (call_conv) {
-                .standard => .{ frame, ret },
-                .only_frame => .{frame},
-                .only_ret => .{ret},
-                .no_params => blk: {
+                break :blk if (impl_type == args_type_info.fields[0].type) .{obj.impl} else .{&obj.impl};
+            } else .{}) ++ rest: {
+                const rest_count = args_type_info.fields.len - impl_offset;
+                break :rest if (rest_count == 2)
+                    .{ frame, Zval.from(return_value.?) }
+                else if (rest_count == 1)
+                    if (comptime args_type_info.fields[impl_offset].type == *CallFrame)
+                        .{frame}
+                    else
+                        .{Zval.from(return_value.?)}
+                else if (rest_count == 0) blk: {
                     frame.parseNone() catch return;
                     break :blk .{};
-                },
+                } else {
+                    @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: {any}", .{ func_desc, Args }));
+                };
             };
-            invoke(func_desc, func, args, ret);
+            _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
+                if (c.EG("exception") == null) {
+                    errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
+                }
+            };
         }
     }.@"fn";
 }
@@ -155,139 +164,10 @@ fn exportPhpFn(comptime func_kind: PhpFnKind, comptime func_name: [:0]const u8, 
     @export(&func, .{ .name = full_name });
 }
 
-fn detectPhpFnReturnType(comptime T: type) PhpFnReturnType {
-    const is_error_union = @typeInfo(T) == .error_union;
-    const scalar_type: Zval.Kind = detect_return_type: switch (T) {
-        void => .undef,
-        bool => .bool,
-        else => |t| switch (@typeInfo(t)) {
-            .int => .int,
-            .float => .float,
-            .error_union => |error_union| continue :detect_return_type error_union.payload,
-            else => @compileError("php function/method bind error: return type must be int | bool | float | void, ErrorSet is optional."),
-        },
-    };
-    return if (is_error_union) .{ .error_union = scalar_type } else .{ .scalar = scalar_type };
-}
-
-fn detectPhpFnCallConv(comptime func: anytype) PhpFnCallConv {
-    const type_info = @typeInfo(@TypeOf(func));
-    if (type_info != .@"fn") @compileError("export php method/function must be a fn type");
-    const fn_type_info = type_info.@"fn";
-
-    if (fn_type_info.params.len == 2 and
-        fn_type_info.params[0].type.? == *CallFrame and
-        fn_type_info.params[1].type.? == *Zval) return .standard;
-
-    if (fn_type_info.params.len == 0) return .no_params;
-    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *CallFrame) return .only_frame;
-    if (fn_type_info.params.len == 1 and fn_type_info.params[0].type.? == *Zval) return .only_ret;
-
-    @compileLog(@TypeOf(func));
-    @compileError(
-        \\php function/method bind error: function signature must be:
-        \\
-        \\params:
-        \\  - (frame: *CallFrame, ret: *Zval)
-        \\  - (frame: *CallFrame)
-        \\  - (ret: *Zval)
-        \\  - ()
-        \\returns:
-        \\  - void
-        \\  - int
-        \\  - bool
-        \\  - float
-        \\  ErrorSet is optional.
-    );
-}
-
-fn detectPhpMethodCallConv(comptime Class: anytype, comptime func: anytype) struct { PhpMethodKind, PhpFnCallConv } {
-    const type_info = @typeInfo(@TypeOf(func));
-    if (type_info != .@"fn") @compileError("export php method/function must be a fn type");
-    const fn_type_info = type_info.@"fn";
-
-    const offset: comptime_int, const fn_kind: PhpMethodKind = blk: {
-        if (fn_type_info.params.len == 0) break :blk .{ 0, .static };
-        const ImplType = @FieldType(Class, "impl");
-        const ReceiverType = fn_type_info.params[0].type orelse void;
-        break :blk if (ReceiverType == ImplType or ReceiverType == *ImplType)
-            .{ 1, .object }
-        else
-            .{ 0, .static };
-    };
-
-    if (fn_type_info.params.len == offset + 2 and
-        fn_type_info.params[offset].type.? == *CallFrame and
-        fn_type_info.params[offset + 1].type.? == *Zval) return .{ fn_kind, .standard };
-
-    if (fn_type_info.params.len == offset) return .{ fn_kind, .no_params };
-    if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *CallFrame) return .{ fn_kind, .only_frame };
-    if (fn_type_info.params.len == offset + 1 and fn_type_info.params[offset].type.? == *Zval) return .{ fn_kind, .only_ret };
-
-    @compileLog(fn_kind, @TypeOf(func));
-    @compileError(
-        \\php method bind error: method signature must be:
-        \\
-        \\params:
-        \\  static:
-        \\  - (frame: *CallFrame, ret: *Zval)
-        \\  - (frame: *CallFrame)
-        \\  - (ret: *Zval)
-        \\  - ()
-        \\  object:
-        \\  - (self: T|*T, frame: *CallFrame, ret: *Zval)
-        \\  - (self: T|*T, frame: *CallFrame)
-        \\  - (self: T|*T, ret: *Zval)
-        \\  - (self: T|*T)
-        \\returns:
-        \\  - void
-        \\  - int
-        \\  - bool
-        \\  - float
-        \\  ErrorSet is optional.
-    );
-}
-
 fn makeMethodExportName(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8) [:0]const u8 {
     comptime {
         var buffer: [class_name.len]u8 = undefined;
         for (class_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
         return &buffer ++ "_" ++ func_name;
     }
-}
-
-inline fn invoke(
-    comptime func_desc: [:0]const u8,
-    comptime func: anytype,
-    args: anytype,
-    ret: *Zval,
-) void {
-    const fn_return_type = comptime detectPhpFnReturnType(@typeInfo(@TypeOf(func)).@"fn".return_type.?);
-    switch (fn_return_type) {
-        .error_union => |kind| {
-            const maybe_result = @call(.auto, func, args) catch |err| {
-                if (c.EG("exception") == null) {
-                    errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
-                }
-                return;
-            };
-            if (kind != .undef) {
-                ret.set(kind, castResult(kind, maybe_result));
-            }
-        },
-        .scalar => |kind| {
-            const result = @call(.auto, func, args);
-            if (kind != .undef) {
-                ret.set(kind, castResult(kind, result));
-            }
-        },
-    }
-}
-
-inline fn castResult(comptime kind: Zval.Kind, result: anytype) Zval.Type(kind) {
-    return switch (kind) {
-        .int => @intCast(result),
-        .float => @floatCast(result),
-        else => result,
-    };
 }

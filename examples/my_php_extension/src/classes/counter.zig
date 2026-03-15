@@ -19,8 +19,8 @@ pub const Counter = extern struct {
         self.n -|= n;
     }
 
-    pub fn value(self: Counter) i64 {
-        return self.n;
+    pub fn value(self: Counter, ret: *phpz.Zval) void {
+        ret.set(.int, self.n);
     }
 };
 

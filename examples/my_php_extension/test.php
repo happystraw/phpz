@@ -19,6 +19,7 @@ try {
 } catch (\Throwable $e) {
     echo '[Error Test]: ', 'class: ', $e::class, ', error: ',  $e->getMessage(), PHP_EOL, $e->getTraceAsString(), PHP_EOL;
 }
+
 echo 'Create object human: ', human("Dave"), PHP_EOL;
 echo 'Create object human: ', human("Eve", 28), PHP_EOL;
 
@@ -29,6 +30,7 @@ $obj->dec(5);
 echo 'counter: ', $obj->value(), PHP_EOL;
 
 echo '---------- Methods (' . Human::class  . ') ----------', PHP_EOL;
+echo 'Humans belong to the species ', Human::species(), PHP_EOL;
 $obj = new Human("Rick", 18);
 echo 'getAge: ', $obj->getAge(), PHP_EOL;
 echo (string)$obj, PHP_EOL;

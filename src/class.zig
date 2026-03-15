@@ -195,11 +195,17 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///   - "__get", "__set": Property accessors for dynamic properties
         ///   - Other PHP magic methods are supported
         ///
-        /// Method signatures follow the same rules as phpz.method():
-        ///   - `fn (self: T, frame: *CallFrame, ret: *Zval) !void`
-        ///   - `fn (self: *T, frame: *CallFrame) !void`
-        ///   - `fn (self: T, ret: *Zval) !void`
-        ///   - `fn (self: T) !ReturnType`
+        /// Supported method signatures (T is the impl type):
+        ///   Object methods — first parameter is self (T, *T, or *const T):
+        ///   - `fn (T|*T|*const T, *CallFrame, *Zval) void|!void`
+        ///   - `fn (T|*T|*const T, *CallFrame) void|!void`
+        ///   - `fn (T|*T|*const T, *Zval) void|!void`
+        ///   - `fn (T|*T|*const T) void|!void`
+        ///   Static methods — first parameter is not self:
+        ///   - `fn (*CallFrame, *Zval) void|!void`
+        ///   - `fn (*CallFrame) void|!void`
+        ///   - `fn (*Zval) void|!void`
+        ///   - `fn () void|!void`
         ///
         /// Example:
         /// ```zig

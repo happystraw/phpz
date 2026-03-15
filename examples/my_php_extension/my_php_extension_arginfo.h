@@ -1,17 +1,17 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 34277a10877a73123353c80210768a7a2326ff5c */
+ * Stub hash: da8c5ec8a5488889c14a06a77118dbd140d85912 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello_world, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_whoami, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_MASK(0, age, MAY_BE_LONG|MAY_BE_STRING|MAY_BE_NULL, "NULL")
+	ZEND_ARG_TYPE_MASK(0, age, MAY_BE_LONG|MAY_BE_STRING|MAY_BE_NULL, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_human, 0, 1, MyPHPExt\\Human, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "NULL")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Counter___construct, 0, 0, 1)
@@ -48,6 +48,8 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Human___toString arginfo_class_MyPHPExt_Human_getName
 
+#define arginfo_class_MyPHPExt_Human_species arginfo_class_MyPHPExt_Human_getName
+
 
 ZEND_FUNCTION(hello_world);
 ZEND_FUNCTION(whoami);
@@ -62,6 +64,7 @@ ZEND_METHOD(MyPHPExt_Human, getName);
 ZEND_METHOD(MyPHPExt_Human, setAge);
 ZEND_METHOD(MyPHPExt_Human, getAge);
 ZEND_METHOD(MyPHPExt_Human, __toString);
+ZEND_METHOD(MyPHPExt_Human, species);
 
 
 static const zend_function_entry ext_functions[] = {
@@ -88,6 +91,7 @@ static const zend_function_entry class_MyPHPExt_Human_methods[] = {
 	ZEND_ME(MyPHPExt_Human, setAge, arginfo_class_MyPHPExt_Human_setAge, ZEND_ACC_PUBLIC)
 	ZEND_ME(MyPHPExt_Human, getAge, arginfo_class_MyPHPExt_Human_getAge, ZEND_ACC_PUBLIC)
 	ZEND_ME(MyPHPExt_Human, __toString, arginfo_class_MyPHPExt_Human___toString, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_Human, species, arginfo_class_MyPHPExt_Human_species, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
 

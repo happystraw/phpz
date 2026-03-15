@@ -16,7 +16,7 @@ const Human = extern struct {
         if (age.unwrap()) |zv| if (zv.is(.int)) self.safeSetAge(zv.asUnchecked(.int));
     }
 
-    pub fn getName(self: Human, ret: *phpz.Zval) void {
+    pub fn getName(self: *const Human, ret: *phpz.Zval) void {
         ret.set(.string, self.name[0 .. self.name_len - 1]);
     }
 
@@ -27,8 +27,8 @@ const Human = extern struct {
         self.name_len = name.len;
     }
 
-    pub fn getAge(self: Human) i64 {
-        return self.age;
+    pub fn getAge(self: *const Human, ret: *phpz.Zval) void {
+        ret.set(.int, self.age);
     }
 
     pub fn setAge(self: *Human, frame: *phpz.CallFrame) !void {
@@ -46,10 +46,14 @@ const Human = extern struct {
             @intCast(age);
     }
 
-    pub fn string(self: Human, ret: *phpz.Zval) !void {
+    pub fn toString(self: *const Human, ret: *phpz.Zval) !void {
         const result = try std.fmt.allocPrint(gpa, "I am {s}, {d} years old!", .{ self.name[0..self.name_len], self.age });
         defer gpa.free(result);
         ret.set(.string, result);
+    }
+
+    pub fn species(ret: *phpz.Zval) void {
+        ret.set(.string, "Homo sapiens");
     }
 };
 
@@ -61,7 +65,8 @@ comptime {
     Class.method("setName", .setName);
     Class.method("getAge", .getAge);
     Class.method("setAge", .setAge);
-    Class.method("__toString", .string);
+    Class.method("__toString", .toString);
+    Class.method("species", .species);
 }
 
 const std = @import("std");

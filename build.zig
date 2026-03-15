@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
 
     const mod = createPhpzModule(b, options);
 
-    addCheckStep(b, mod);
+    b.default_step = addCheckStep(b, mod);
     addGenerateDocsStep(b, mod);
     addTestStep(b, options);
 }
@@ -31,13 +31,14 @@ fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
     }).mod;
 }
 
-fn addCheckStep(b: *std.Build, mod: *std.Build.Module) void {
+fn addCheckStep(b: *std.Build, mod: *std.Build.Module) *std.Build.Step {
     const lib_check = b.addLibrary(.{
         .name = "phpz",
         .root_module = mod,
     });
     const check = b.step("check", "Check that phpz builds correctly");
     check.dependOn(&lib_check.step);
+    return check;
 }
 
 fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module) void {

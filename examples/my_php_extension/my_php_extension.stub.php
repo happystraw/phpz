@@ -10,11 +10,11 @@ namespace {
     {
     }
 
-    function whoami(string $name, int|string|null $age = NULL): string
+    function whoami(string $name, int|string|null $age = null): string
     {
     }
 
-    function human(string $name, int|null $age = null): MyPHPExt\Human
+    function human(string $name, int|null $age = NULL): MyPHPExt\Human
     {
     }
 }
@@ -62,6 +62,10 @@ namespace MyPHPExt{
         }
 
         public function __toString(): string
+        {
+        }
+
+        public static function species(): string
         {
         }
     }
