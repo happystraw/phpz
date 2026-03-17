@@ -10,8 +10,6 @@ fn shutdown() !void {
 }
 
 comptime {
-    phpz.resolveCircularTypes();
-
     phpz.module(.{
         .name = "pjs",
         .version = "0.1.0",

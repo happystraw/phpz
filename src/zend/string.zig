@@ -16,7 +16,7 @@ pub const String = opaque {
     pub fn init(str: []const u8) *String {
         if (str.len == 0) return empty();
         if (str.len == 1) return char(str[0]);
-        return @ptrCast(phpz.zig_zend_string_init(str.ptr, str.len, false));
+        return @ptrCast(c.zend_string_init(str.ptr, str.len, false));
     }
 
     /// Create a string from an existing zend_string pointer

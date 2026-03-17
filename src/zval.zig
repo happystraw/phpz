@@ -453,7 +453,7 @@ pub const Zval = opaque {
                 .float => zv.value.dval,
                 .string => blk: {
                     const zend_str = zv.value.str;
-                    break :blk @as([*]const u8, @ptrCast(&zend_str.*.val))[0..zend_str.*.len];
+                    break :blk @as([*]const u8, @ptrCast(zend_str.*.val()))[0..zend_str.*.len];
                 },
                 .bool => getType(zv) == c.IS_TRUE,
                 .array => zv.value.arr orelse unreachable,

@@ -109,6 +109,7 @@ pub fn createPhpExtModule(b: *Build, options: Options) *Build.Module {
             .c_source_file = options.c_source_file,
             .target = options.target,
             .optimize = options.optimize,
+            .strict_flex_arrays = .@"1",
         });
         // Add Zig's C include path (for stdint.h, stddef.h, etc.)
         if (b.graph.zig_lib_directory.path) |path| {

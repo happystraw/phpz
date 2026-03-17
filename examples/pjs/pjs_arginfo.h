@@ -80,7 +80,7 @@ static zend_class_entry *register_class_Pjs_Value(zend_class_entry *class_entry_
 
 	zval property_value_default_value;
 	ZVAL_UNDEF(&property_value_default_value);
-	zend_string *property_value_name = zig_zend_string_init("value", sizeof("value") - 1, 1);
+	zend_string *property_value_name = zend_string_init("value", sizeof("value") - 1, 1);
 	zend_declare_typed_property(class_entry, property_value_name, &property_value_default_value, ZEND_ACC_PUBLIC|ZEND_ACC_READONLY, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_ANY));
 	zend_string_release(property_value_name);
 

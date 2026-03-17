@@ -28,8 +28,6 @@ fn info(entry: *phpz.ModuleEntry) void {
 }
 
 comptime {
-    phpz.resolveCircularTypes();
-
     _ = @import("functions.zig");
 
     phpz.module(.{
