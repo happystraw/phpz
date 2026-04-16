@@ -2,7 +2,7 @@
     .name = .my_php_extension,
     .version = "0.0.0",
     .fingerprint = 0x8628f6becbe8e7c3,
-    .minimum_zig_version = "0.16.0-dev.2905+5d71e3051",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .phpz = .{
             .path = "../..",

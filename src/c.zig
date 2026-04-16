@@ -1,1 +1,1 @@
-pub const c = @import("php_ext");
+pub const c = @import("php_c");

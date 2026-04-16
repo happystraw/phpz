@@ -8,7 +8,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 
 ## Requirements
 
-- zig: 0.16.0-dev.2905+5d71e3051 or newer
+- zig: 0.16.0
 - php: 8.3, 8.4, 8.5 tested on linux/macos
 
 ## Usage
@@ -97,8 +97,3 @@ Then `zig build` !
 ## Examples
 
 Check out the [`examples/`](./examples/) directory for complete working examples:
-
-## TODO
-
-- [ ] Remove `ziglang/translate-c` dependency once Zig's builtin `translate-c` is updated
-- [ ] Set minimum Zig version to `0.16.0` when released

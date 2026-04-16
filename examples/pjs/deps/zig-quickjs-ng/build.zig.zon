@@ -2,7 +2,7 @@
     .name = .quickjs_ng,
     .version = "0.0.0",
     .fingerprint = 0xb2bca9fa0367c6d1,
-    .minimum_zig_version = "0.16.0-dev.2905+5d71e3051",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
@@ -13,11 +13,6 @@
         .quickjs = .{
             .url = "https://github.com/quickjs-ng/quickjs/archive/85640f81e04bc93940acc2756c792c66076dd768.tar.gz",
             .hash = "N-V-__8AAIZ_PAA7y10jIaLigzkK4qd5-jfKEoTOOfHCsIGM",
-        },
-        // TODO: remove it, use zig builtin translate c when 0.16.0 is released
-        .translate_c = .{
-            .url = "git+https://codeberg.org/ziglang/translate-c#5ac39f77661a216b75b195fe74ce7d0a04b33b7d",
-            .hash = "translate_c-0.0.0-Q_BUWiv0BgBv8CnrzepLsOm4a0h_Wc1VMfleHl8TfUJO",
         },
     },
 }
