@@ -5,8 +5,7 @@ const CallFrame = @import("call_frame.zig").CallFrame;
 const Zval = @import("zval.zig").Zval;
 const errors = @import("errors.zig");
 
-const PhpFn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
-const PhpFnKind = enum { function, method };
+const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 
 /// Register a Zig function as a PHP function.
 ///
@@ -56,10 +55,10 @@ const PhpFnKind = enum { function, method };
 /// ```
 pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        exportPhpFn(
+        exportFn(
             .function,
-            func_name,
-            makePhpFn(func_name ++ "()", func),
+            fnEntryName(func_name),
+            wrapFn(func_name ++ "()", func),
         );
     }
 }
@@ -70,10 +69,10 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
 /// Use `methodWithClass` if you need automatic static/object method detection.
 pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        exportPhpFn(
+        exportFn(
             .method,
-            makeMethodExportName(class_name, func_name),
-            makePhpFn(class_name ++ "::" ++ func_name ++ "()", func),
+            methodEntryName(class_name, func_name),
+            wrapFn(class_name ++ "::" ++ func_name ++ "()", func),
         );
     }
 }
@@ -84,15 +83,15 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
 /// detection of static vs object methods based on the function signature.
 pub fn methodWithClass(comptime Class: anytype, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        exportPhpFn(
+        exportFn(
             .method,
-            makeMethodExportName(Class.name, func_name),
-            makePhpMethod(Class, Class.name ++ "::" ++ func_name ++ "()", func),
+            methodEntryName(Class.name, func_name),
+            wrapMethod(Class, Class.name ++ "::" ++ func_name ++ "()", func),
         );
     }
 }
 
-fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
+fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
@@ -116,7 +115,7 @@ fn makePhpFn(comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
     }.@"fn";
 }
 
-fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) PhpFn {
+fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     const args_type_info = @typeInfo(Args).@"struct";
     const impl_type = @FieldType(Class, "impl");
@@ -156,15 +155,20 @@ fn makePhpMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptim
     }.@"fn";
 }
 
-fn exportPhpFn(comptime func_kind: PhpFnKind, comptime func_name: [:0]const u8, comptime func: PhpFn) void {
-    const full_name = switch (func_kind) {
-        .function => "zif_" ++ func_name,
-        .method => "zim_" ++ func_name,
-    };
-    @export(&func, .{ .name = full_name });
+fn exportFn(comptime kind: enum { function, method }, comptime func_name: [:0]const u8, comptime func: Fn) void {
+    const prefix = if (kind == .function) "zif_" else "zim_";
+    @export(&func, .{ .name = prefix ++ func_name });
 }
 
-fn makeMethodExportName(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8) [:0]const u8 {
+fn fnEntryName(comptime func_name: [:0]const u8) [:0]const u8 {
+    comptime {
+        var buffer: [func_name.len:0]u8 = undefined;
+        for (func_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;
+        return &buffer;
+    }
+}
+
+fn methodEntryName(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8) [:0]const u8 {
     comptime {
         var buffer: [class_name.len]u8 = undefined;
         for (class_name, 0..) |ch, i| buffer[i] = if (ch == '\\') '_' else ch;

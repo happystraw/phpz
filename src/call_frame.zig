@@ -30,7 +30,7 @@ pub const CallFrame = opaque {
         ParseFailure,
     };
 
-    /// Initialize an CallFrame from PHP execution data.
+    /// Initialize a CallFrame from PHP execution data.
     ///
     /// This is typically called automatically by the function/method wrapper.
     /// You don't need to call this manually in user code.
@@ -108,7 +108,7 @@ pub const CallFrame = opaque {
     /// // Parse string and optional integer: function(string $name, int $age = null)
     /// var name: []u8 = undefined;
     /// var age_opt: Zval.Optional = .init;
-    /// try frame.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.inner });
+    /// try frame.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
     /// if (age_opt.unwrap()) |age_zval| {
     ///     if (age_zval.is(.int)) {
     ///         const age = age_zval.asUnchecked(.int);

@@ -12,10 +12,10 @@ echo '---------- Functions ----------', PHP_EOL;
 hello();
 echo greet('Alice'), PHP_EOL;
 
-echo 'Create object human: ', human("Dave"), PHP_EOL;
-echo 'Create object human: ', human("Eve", 28), PHP_EOL;
+echo 'Create object human: ', \MyPHPExt\human("Dave"), PHP_EOL;
+echo 'Create object human: ', \MyPHPExt\human("Eve", 28), PHP_EOL;
 try {
-    human('Charlie', []);
+    \MyPHPExt\human('Charlie', []);
     exit(1); // unreachable
 } catch (\Throwable $e) {
     echo '[Error Test]: ', 'class: ', $e::class, ', error: ',  $e->getMessage(), PHP_EOL, $e->getTraceAsString(), PHP_EOL;

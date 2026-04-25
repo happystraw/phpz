@@ -41,5 +41,5 @@ fn human(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
-    phpz.function("human", human);
+    phpz.function("MyPHPExt\\human", human);
 }

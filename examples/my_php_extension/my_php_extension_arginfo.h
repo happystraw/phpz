@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 14b4a440956780f01788b1c29547a425e2e2c74e */
+ * Stub hash: d5ec8568b0e6e5931b93f994285c38ae45c02567 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -8,7 +8,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_greet, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_human, 0, 1, MyPHPExt\\Human, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_human, 0, 1, MyPHPExt\\MyPHPExt\\Human, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "NULL")
 ZEND_END_ARG_INFO()
@@ -52,7 +52,7 @@ ZEND_END_ARG_INFO()
 
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
-ZEND_FUNCTION(human);
+ZEND_FUNCTION(MyPHPExt_human);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, add);
 ZEND_METHOD(MyPHPExt_Counter, dec);
@@ -69,7 +69,7 @@ ZEND_METHOD(MyPHPExt_Human, species);
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
-	ZEND_FE(human, arginfo_human)
+	ZEND_NS_FALIAS("MyPHPExt", human, MyPHPExt_human, arginfo_MyPHPExt_human)
 	ZEND_FE_END
 };
 

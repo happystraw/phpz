@@ -13,13 +13,12 @@ namespace {
     function greet(string $name): string
     {
     }
-
-    function human(string $name, int|null $age = NULL): MyPHPExt\Human
-    {
-    }
 }
 
 namespace MyPHPExt{
+    function human(string $name, int|null $age = NULL): MyPHPExt\Human
+    {
+    }
     final class Counter
     {
         public function __construct(int $n)
