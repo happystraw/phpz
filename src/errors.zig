@@ -38,19 +38,19 @@ pub const Level = enum(c_int) {
 };
 
 /// Return an argument type error
-pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentTypeError} {
+pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentTypeError}!void {
     @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentTypeError;
 }
 
 /// Return an argument value error
-pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentValueError} {
+pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentValueError}!void {
     @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentValueError;
 }
 
 /// Return an argument count error
-pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) error{PhpArgumentCountError} {
+pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) error{PhpArgumentCountError}!void {
     @call(.auto, c.zend_argument_count_error, .{format.ptr} ++ args);
     return error.PhpArgumentCountError;
 }

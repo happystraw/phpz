@@ -262,6 +262,19 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             return .from(.std, init(entry) orelse @panic("Out of memory"));
         }
 
+        /// Calls a method on the object.
+        /// retval is optional, if not provided the return value will be discarded.
+        pub fn call(self: *Self, method_name: []const u8, params: []c.zval, retval: ?*c.zval) !void {
+            const obj: *zend.Object = .from(&self.std);
+            if (retval) |out| {
+                try obj.callMethodIfExists(method_name, out, params);
+            } else {
+                var discard: c.zval = undefined;
+                defer c.zval_ptr_dtor(&discard);
+                try obj.callMethodIfExists(method_name, &discard, params);
+            }
+        }
+
         /// Update object property value.
         pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) void {
             switch (zk) {

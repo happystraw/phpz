@@ -150,11 +150,11 @@ pub const Object = opaque {
         return c.instanceof_function(self.class(), ce) != 0;
     }
 
-    /// Call a method if it exists (returns false if method doesn't exist)
+    /// Call a method if it exists
     pub fn callMethodIfExists(
         self: *Object,
         method_name: []const u8,
-        retval: ?*c.zval,
+        retval: *c.zval,
         params: []c.zval,
     ) Error!void {
         const zstr = String.init(method_name);

@@ -6,11 +6,11 @@
  */
 
 namespace {
-    function hello_world(): void
+    function hello(): void
     {
     }
 
-    function whoami(string $name, int|string|null $age = null): string
+    function greet(string $name): string
     {
     }
 

@@ -1,12 +1,11 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: da8c5ec8a5488889c14a06a77118dbd140d85912 */
+ * Stub hash: 14b4a440956780f01788b1c29547a425e2e2c74e */
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello_world, 0, 0, IS_VOID, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_whoami, 0, 1, IS_STRING, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_greet, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_MASK(0, age, MAY_BE_LONG|MAY_BE_STRING|MAY_BE_NULL, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_human, 0, 1, MyPHPExt\\Human, 0)
@@ -51,8 +50,8 @@ ZEND_END_ARG_INFO()
 #define arginfo_class_MyPHPExt_Human_species arginfo_class_MyPHPExt_Human_getName
 
 
-ZEND_FUNCTION(hello_world);
-ZEND_FUNCTION(whoami);
+ZEND_FUNCTION(hello);
+ZEND_FUNCTION(greet);
 ZEND_FUNCTION(human);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, add);
@@ -68,8 +67,8 @@ ZEND_METHOD(MyPHPExt_Human, species);
 
 
 static const zend_function_entry ext_functions[] = {
-	ZEND_FE(hello_world, arginfo_hello_world)
-	ZEND_FE(whoami, arginfo_whoami)
+	ZEND_FE(hello, arginfo_hello)
+	ZEND_FE(greet, arginfo_greet)
 	ZEND_FE(human, arginfo_human)
 	ZEND_FE_END
 };

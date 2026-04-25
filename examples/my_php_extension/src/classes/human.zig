@@ -13,7 +13,10 @@ const Human = extern struct {
         try frame.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
         self.name = name.ptr;
         self.name_len = name.len;
-        if (age.unwrap()) |zv| if (zv.is(.int)) self.safeSetAge(zv.asUnchecked(.int));
+        if (age.unwrap()) |zv| if (zv.is(.int))
+            self.safeSetAge(zv.asUnchecked(.int))
+        else
+            try errors.argumentTypeError(2, "must be type int, %s given", .{@tagName(zv.kind()).ptr});
     }
 
     pub fn getName(self: *const Human, ret: *phpz.Zval) void {
@@ -73,5 +76,6 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 const c = phpz.c;
+const errors = phpz.errors;
 
 const gpa = @import("../allocator.zig").gpa;

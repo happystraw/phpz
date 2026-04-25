@@ -9,19 +9,17 @@ echo '---------- PHP ----------', PHP_EOL;
 echo 'PHP: ', PHP_VERSION, PHP_EOL;
 
 echo '---------- Functions ----------', PHP_EOL;
-hello_world();
-echo whoami('Alice', 25), PHP_EOL;
-echo whoami('Bob', '30'), PHP_EOL;
-echo whoami('Charlie'), PHP_EOL;
+hello();
+echo greet('Alice'), PHP_EOL;
+
+echo 'Create object human: ', human("Dave"), PHP_EOL;
+echo 'Create object human: ', human("Eve", 28), PHP_EOL;
 try {
-    whoami('Charlie', []);
+    human('Charlie', []);
     exit(1); // unreachable
 } catch (\Throwable $e) {
     echo '[Error Test]: ', 'class: ', $e::class, ', error: ',  $e->getMessage(), PHP_EOL, $e->getTraceAsString(), PHP_EOL;
 }
-
-echo 'Create object human: ', human("Dave"), PHP_EOL;
-echo 'Create object human: ', human("Eve", 28), PHP_EOL;
 
 echo '---------- Methods (' . Counter::class  . ') ----------', PHP_EOL;
 $obj = new Counter(10);
