@@ -67,9 +67,11 @@ pub fn createPhpCModule(b: *Build, options: Options) *Build.Module {
         .optimize = options.optimize,
         .strict_flex_arrays = .@"1",
     });
-    // Add Zig's C include path (for stdint.h, stddef.h, etc.)
-    if (b.graph.zig_lib_directory.path) |path| {
-        php_c.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
+    if (options.target.query.isNative() and options.target.result.os.tag == .linux) {
+        // Add Zig's C include path (for stdint.h, stddef.h, etc.)
+        if (b.graph.zig_lib_directory.path) |path| {
+            php_c.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
+        }
     }
     // phpz.h
     php_c.addIncludePath(b.path("build"));
