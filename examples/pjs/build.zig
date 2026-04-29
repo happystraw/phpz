@@ -20,8 +20,9 @@ pub fn build(b: *std.Build) void {
 
     const quickjs_dep = b.dependency("quickjs", .{ .target = target, .optimize = optimize });
 
+    const ext_name = "pjs";
     const ext_lib = b.addLibrary(.{
-        .name = "pjs",
+        .name = ext_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
             .target = target,
@@ -39,28 +40,34 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .macos) {
         ext_lib.linker_allow_shlib_undefined = true;
     }
+    // On Windows, the PHP extension DLL must be linked against php8.lib
+    // which lives in <prefix>/lib next to <prefix>/include in the PHP SDK.
+    if (target.result.os.tag == .windows) {
+        const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP library directory (Windows only)") orelse "";
+        if (php_lib_dir.len > 0) {
+            ext_lib.root_module.addLibraryPath(.{ .cwd_relative = php_lib_dir });
+        }
+        ext_lib.root_module.linkSystemLibrary("php8", .{});
+    }
+
+    const ext_filename = if (target.result.os.tag == .windows)
+        "php_" ++ ext_name ++ ".dll"
+    else
+        ext_name ++ ".so";
 
     // for zig build system
     const install_file = b.addInstallFileWithDir(
         ext_lib.getEmittedBin(),
         .{ .custom = "../modules" },
-        "pjs.so",
+        ext_filename,
     );
     install_file.step.dependOn(&ext_lib.step);
     b.getInstallStep().dependOn(&install_file.step);
 
+    const ext_arg = b.fmt("-dextension=./modules/{s}", .{ext_filename});
     const test_step = b.step("test-extension", "Test the PHP extension");
-    const test_cmd = b.addSystemCommand(&[_][]const u8{
-        "php",
-        "-dextension=./modules/pjs.so",
-        "test.php",
-    });
-    const test_info_cmd = b.addSystemCommand(&[_][]const u8{
-        "php",
-        "-dextension=./modules/pjs.so",
-        "--ri",
-        "pjs",
-    });
+    const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", ext_arg, "test.php" });
+    const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", ext_arg, "--ri", ext_name });
     test_cmd.step.dependOn(b.getInstallStep());
     test_info_cmd.step.dependOn(b.getInstallStep());
     test_step.dependOn(&test_cmd.step);

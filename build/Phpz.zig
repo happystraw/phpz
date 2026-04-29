@@ -82,9 +82,11 @@ pub fn createPhpCModule(b: *Build, options: Options) *Build.Module {
         php_c.addIncludePath(root.path(b, "main"));
         php_c.addIncludePath(root.path(b, "Zend"));
         php_c.addIncludePath(root.path(b, "TSRM"));
-        switch (options.target.result.os.tag) {
-            .windows => php_c.addIncludePath(root.path(b, "win32")),
-            else => {},
+        php_c.addIncludePath(root.path(b, "ext"));
+        if (options.target.result.os.tag == .windows) {
+            php_c.defineCMacro("ZEND_WIN32", "1");
+            php_c.defineCMacro("PHP_WIN32", "1");
+            php_c.defineCMacro("WINDOWS", "1");
         }
     }
     return php_c.mod;

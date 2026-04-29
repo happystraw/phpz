@@ -4,6 +4,7 @@ pub const Phpz = @import("./build/Phpz.zig");
 
 const BuildOptions = struct {
     php_include_root: []const u8,
+    php_lib_dir: ?[]const u8,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 };
@@ -11,6 +12,7 @@ const BuildOptions = struct {
 pub fn build(b: *std.Build) void {
     const options = BuildOptions{
         .php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php",
+        .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP library directory (Windows only)"),
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
     };
@@ -92,10 +94,18 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
         const test_cmd = b.addSystemCommand(&[_][]const u8{
             b.graph.zig_exe,
             "build",
-            "test-extension",
-            b.fmt("-Dphp-include-root={s}", .{options.php_include_root}),
-            b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}),
+            "test-extension"
         });
+        test_cmd.addArg(b.fmt("-Dphp-include-root={s}", .{options.php_include_root}));
+        test_cmd.addArg(b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}));
+        if (!options.target.query.isNativeTriple()) {
+            test_cmd.addArg(b.fmt("-Dtarget={s}", .{options.target.query.zigTriple(b.allocator) catch unreachable}));
+        }
+        if (options.target.result.os.tag == .windows) {
+            if (options.php_lib_dir) |lib_dir| {
+                test_cmd.addArg(b.fmt("-Dphp-lib-dir={s}", .{lib_dir}));
+            }
+        }
         test_cmd.setCwd(b.path("examples").join(b.allocator, test_example) catch unreachable);
         step.dependOn(&test_cmd.step);
     }

@@ -28,8 +28,8 @@
 #define __ARM_NEON_H
 #endif
 
+#include "php.h"
 #include "Zend/zend_API.h"
 #include "Zend/zend_exceptions.h"
-#include "php.h"
 
 #endif
