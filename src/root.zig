@@ -25,3 +25,19 @@ pub const errors = @import("errors.zig");
 pub fn printf(fmt: [:0]const u8, args: anytype) usize {
     return @call(.auto, c.php_printf, .{fmt.ptr} ++ args);
 }
+
+test {
+    _ = @import("call_frame.zig");
+    _ = @import("class.zig");
+    _ = @import("errors.zig");
+    _ = @import("function.zig");
+    _ = @import("heap.zig");
+    _ = @import("module.zig");
+    _ = @import("zend.zig");
+    _ = @import("zval.zig");
+    _ = @import("zend/array.zig");
+    _ = @import("zend/object.zig");
+    _ = @import("zend/string.zig");
+    _ = @import("zval/array.zig");
+    _ = @import("zval/object.zig");
+}

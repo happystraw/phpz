@@ -22,24 +22,6 @@ pub const Object = opaque {
         return @ptrCast(zv);
     }
 
-    /// Create an object with constructor
-    pub fn initClassWithConstructor(
-        zv: *c.zval,
-        class_type: *c.zend_class_entry,
-        params: []c.zval,
-        named_params: ?*c.zend_array,
-    ) Error!*Object {
-        const result = c.object_init_with_constructor(
-            zv,
-            class_type,
-            @intCast(params.len),
-            params.ptr,
-            named_params,
-        );
-        if (result != c.SUCCESS) return Error.InitFailed;
-        return @ptrCast(zv);
-    }
-
     /// Create an object with class and properties
     pub fn initClassWithProperties(
         zv: *c.zval,
@@ -77,7 +59,7 @@ pub const Object = opaque {
     pub fn className(self: *Object) []const u8 {
         const ce = self.class();
         const name = ce.*.name;
-        return @as([*]const u8, @ptrCast(&name.*.val))[0..name.*.len];
+        return name.*.val()[0..name.*.len];
     }
 
     /// Call a method on the object
@@ -113,3 +95,7 @@ pub const Object = opaque {
         }
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(Object);
+}

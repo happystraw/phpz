@@ -431,3 +431,7 @@ pub const ClassEntry = c.zend_class_entry;
 const function_helper = @import("function.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
+
+test {
+    std.testing.refAllDecls(@This());
+}

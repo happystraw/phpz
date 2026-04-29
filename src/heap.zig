@@ -101,3 +101,7 @@ const php_allocator_impl = struct {
         }
     }
 };
+
+test {
+    std.testing.refAllDecls(@This());
+}

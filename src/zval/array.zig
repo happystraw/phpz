@@ -16,8 +16,8 @@ pub const Array = opaque {
     }
 
     /// Create an array with initial capacity
-    pub fn init(zv: *c.zval, capacity: usize) *Array {
-        zv.value.arr = c.zend_new_array(@intCast(capacity));
+    pub fn init(zv: *c.zval, capacity: u32) *Array {
+        zv.value.arr = c.zend_new_array(capacity);
         zv.u1.type_info = c.IS_ARRAY_EX;
         return @ptrCast(zv);
     }
@@ -98,3 +98,7 @@ pub const Array = opaque {
         if (result != c.SUCCESS) return Error.AppendFailed;
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(Array);
+}

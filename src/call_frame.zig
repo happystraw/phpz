@@ -223,7 +223,7 @@ pub const CallFrame = opaque {
     /// Returns:
     ///   The zend_class_entry pointer, or null if not in a class context
     pub fn scope(self: *CallFrame) ?*c.zend_class_entry {
-        return @ptrCast(self.ptr().func.?.common.scope);
+        return @ptrCast(self.ptr().func.*.common.scope);
     }
 
     /// Get the called scope (class) for the current method call.
@@ -244,3 +244,7 @@ pub const CallFrame = opaque {
         return @ptrCast(c.zend_get_called_scope(self.ptr()));
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(CallFrame);
+}

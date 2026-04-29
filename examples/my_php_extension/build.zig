@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) void {
     install_file.step.dependOn(&ext_lib.step);
     b.getInstallStep().dependOn(&install_file.step);
 
-    const test_step = b.step("test", "Test the PHP extension");
+    const test_step = b.step("test-extension", "Test the PHP extension");
     const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", "-dextension=./modules/my_php_extension.so", "test.php" });
     const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", "-dextension=./modules/my_php_extension.so", "--ri", "my_php_extension" });
     test_cmd.step.dependOn(b.getInstallStep());

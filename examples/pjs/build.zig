@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     install_file.step.dependOn(&ext_lib.step);
     b.getInstallStep().dependOn(&install_file.step);
 
-    const test_step = b.step("test", "Test the PHP extension");
+    const test_step = b.step("test-extension", "Test the PHP extension");
     const test_cmd = b.addSystemCommand(&[_][]const u8{
         "php",
         "-dextension=./modules/pjs.so",

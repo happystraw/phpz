@@ -29,11 +29,15 @@ jobs:
         with:
           packages: php-dev
           version: 1.0
-      - name: Run tests
+      - name: Run unit tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test -Dphp-include-root="$PHP_INCLUDE_DIR"
-      - name: Run tests (ReleaseSafe)
+      - name: Run example tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
+          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR"
+      - name: Run example tests (ReleaseSafe)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe

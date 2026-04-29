@@ -31,7 +31,7 @@ pub const String = opaque {
 
     /// Get C string pointer (null-terminated)
     pub inline fn cstr(self: *String) [*:0]const u8 {
-        return @ptrCast(&self.ptr().val);
+        return @ptrCast(self.ptr().val());
     }
 
     /// Release the string
@@ -86,7 +86,7 @@ pub const String = opaque {
     }
 
     /// Compare two strings for equality
-    pub fn equals(self: *String, other: *const String) bool {
+    pub fn equals(self: *String, other: *String) bool {
         return c.zend_string_equal_val(self.ptr(), other.ptr());
     }
 
@@ -120,3 +120,7 @@ pub const String = opaque {
         return c.ZSTR_IS_INTERNED(self.ptr()) != 0;
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(String);
+}

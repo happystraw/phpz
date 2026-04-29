@@ -19,7 +19,8 @@ pub fn build(b: *std.Build) void {
 
     b.default_step = addCheckStep(b, mod);
     addGenerateDocsStep(b, mod);
-    addTestStep(b, options);
+    addTestExamplesStep(b, options);
+    addTestStep(b, mod);
 }
 
 fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
@@ -73,8 +74,16 @@ fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module) void {
     doc_step.dependOn(&install_build_docs.step);
 }
 
-fn addTestStep(b: *std.Build, options: BuildOptions) void {
-    const step = b.step("test", "Run tests for phpz");
+fn addTestStep(b: *std.Build, mod: *std.Build.Module) void {
+    const test_lib = b.addTest(.{
+        .root_module = mod,
+    });
+    const step = b.step("test", "Run unit tests");
+    step.dependOn(&test_lib.step);
+}
+
+fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
+    const step = b.step("test-examples", "Run example tests for phpz");
     const examples = [_][]const u8{
         "my_php_extension",
         "pjs",
@@ -83,7 +92,7 @@ fn addTestStep(b: *std.Build, options: BuildOptions) void {
         const test_cmd = b.addSystemCommand(&[_][]const u8{
             b.graph.zig_exe,
             "build",
-            "test",
+            "test-extension",
             b.fmt("-Dphp-include-root={s}", .{options.php_include_root}),
             b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}),
         });

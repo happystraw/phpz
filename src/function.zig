@@ -175,3 +175,7 @@ fn methodEntryName(comptime class_name: [:0]const u8, comptime func_name: [:0]co
         return &buffer ++ "_" ++ func_name;
     }
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

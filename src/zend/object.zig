@@ -58,7 +58,7 @@ pub const Object = opaque {
     pub fn className(self: *Object) []const u8 {
         const ce = self.class();
         const name = ce.name;
-        return @as([*]const u8, @ptrCast(&name.*.val))[0..name.*.len];
+        return name.*.val()[0..name.*.len];
     }
 
     /// Get object handle
@@ -88,7 +88,7 @@ pub const Object = opaque {
         defer zstr.deinit();
 
         var obj_ptr = self.ptr();
-        return c.zend_std_get_method(&obj_ptr, zstr.ptr(), null);
+        return c.zend_std_get_method(@ptrCast(&obj_ptr), zstr.ptr(), null);
     }
 
     /// Read a property value
@@ -147,7 +147,7 @@ pub const Object = opaque {
 
     /// Check if object is an instance of a class
     pub fn instanceof(self: *Object, ce: *c.zend_class_entry) bool {
-        return c.instanceof_function(self.class(), ce) != 0;
+        return c.instanceof_function(self.class(), ce);
     }
 
     /// Call a method if it exists
@@ -178,17 +178,6 @@ pub const Object = opaque {
         return @ptrCast(cloned);
     }
 
-    /// Clone the object with specific scope and properties
-    pub fn cloneWith(
-        self: *Object,
-        scope: *const c.zend_class_entry,
-        props: *const c.HashTable,
-    ) Error!*Object {
-        const cloned = c.zend_objects_clone_obj_with(self.ptr(), scope, props);
-        if (cloned == null) return Error.CloneFailed;
-        return @ptrCast(cloned);
-    }
-
     /// Get refcount
     pub inline fn refcount(self: *Object) u32 {
         return c.zend_gc_refcount(&self.ptr().gc);
@@ -199,3 +188,7 @@ pub const Object = opaque {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(Object);
+}

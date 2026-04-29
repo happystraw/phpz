@@ -138,3 +138,7 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
 
     return entry;
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

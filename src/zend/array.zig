@@ -11,7 +11,7 @@ pub const Array = opaque {
     }
 
     /// Create an array with initial capacity
-    pub fn init(capacity: usize) *Array {
+    pub fn init(capacity: u32) *Array {
         return @ptrCast(c.zend_new_array(capacity));
     }
 
@@ -125,7 +125,7 @@ pub const Array = opaque {
     }
 
     /// Compare two arrays
-    pub fn compare(self: *Array, other: *const Array, ordered: bool) c_int {
+    pub fn compare(self: *Array, other: *Array, ordered: bool) c_int {
         return c.zend_hash_compare(self.ptr(), other.ptr(), null, ordered);
     }
 
@@ -149,3 +149,7 @@ pub const Array = opaque {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(Array);
+}

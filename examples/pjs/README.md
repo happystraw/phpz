@@ -8,7 +8,7 @@ A PHP extension that embeds [QuickJS-ng](https://github.com/mitchellh/zig-quickj
 ## Run
 
 ```bash
-zig build test
+zig build test-extension
 ```
 
 This builds the extension and runs `test.php` against it.
@@ -16,7 +16,7 @@ This builds the extension and runs `test.php` against it.
 Custom PHP include path:
 
 ```bash
-zig build test -Dphp-include-root=/usr/include/php8.4
+zig build test-extension -Dphp-include-root=/usr/include/php8.4
 ```
 
 ## Manually
