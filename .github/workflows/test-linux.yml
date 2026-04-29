@@ -1,0 +1,54 @@
+name: Test (Linux)
+
+on:
+  push:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/workflows/test-linux.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/workflows/test-linux.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ["8.3", "8.4", "8.5"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+      - name: Setup PHP with dev headers
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: php-config
+      - name: Run unit tests
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR"
+      - name: Run example tests
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR"
+      - name: Run unit tests (native-native-gnu)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
+      - name: Run example tests (native-native-gnu)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
+      - name: Run example tests (ReleaseSafe)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe

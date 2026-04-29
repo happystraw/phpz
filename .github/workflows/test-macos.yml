@@ -1,4 +1,4 @@
-name: Test
+name: Test (macOS)
 
 on:
   push:
@@ -7,28 +7,31 @@ on:
       - "src/**"
       - "build.zig"
       - "build.zig.zon"
-      - ".github/workflows/test.yml"
+      - ".github/workflows/test-macos.yml"
   pull_request:
     branches: ["dev"]
     paths:
       - "src/**"
       - "build.zig"
       - "build.zig.zon"
-      - ".github/workflows/test.yml"
+      - ".github/workflows/test-macos.yml"
   workflow_dispatch:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        php: ["8.3", "8.4", "8.5"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
-      - name: Install PHP development headers
-        uses: awalsh128/cache-apt-pkgs-action@latest
+      - name: Setup PHP with dev headers
+        uses: shivammathur/setup-php@v2
         with:
-          packages: php-dev
-          version: 1.0
+          php-version: ${{ matrix.php }}
+          tools: php-config
       - name: Run unit tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
