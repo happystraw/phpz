@@ -16,7 +16,7 @@ namespace {
 }
 
 namespace MyPHPExt{
-    function human(string $name, int|null $age = NULL): MyPHPExt\Human
+    function human(string $name, int|null $age = NULL): \MyPHPExt\Human
     {
     }
     final class Counter
