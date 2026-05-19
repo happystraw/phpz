@@ -33,11 +33,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
-      - name: Setup PHP with dev headers
+      - name: Setup PHP with debugging symbols
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           tools: php-config
+        env:
+          debug: true
       - name: Run unit tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
