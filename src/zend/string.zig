@@ -90,11 +90,6 @@ pub const String = opaque {
         return c.zend_string_equal_val(self.ptr(), other.ptr());
     }
 
-    /// Check if string contains only ASCII alphanumeric characters
-    pub fn isAlphanumeric(self: *String) bool {
-        return c.zend_string_only_has_ascii_alphanumeric(self.ptr());
-    }
-
     /// Calculate string hash
     pub fn hash(self: *String) u64 {
         return c.zend_string_hash_func(self.ptr());
