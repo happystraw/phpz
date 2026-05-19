@@ -505,10 +505,12 @@ pub const Zval = opaque {
                     zv.value.ref = val;
                     zv.u1.type_info = c.IS_REFERENCE_EX;
                 },
-                .mixed => {
-                    @memcpy(@as([*]u8, @ptrCast(zv))[0..@sizeOf(c.zval)], @as([*]const u8, @ptrCast(val))[0..@sizeOf(c.zval)]);
-                },
+                .mixed => raw.zval(zv, val, true, false),
             }
+        }
+
+        pub inline fn zval(zv: *c.zval, src: *c.zval, comptime copy: bool, comptime dtor: bool) void {
+            c.phpz_zval_zval(zv, src, copy, dtor);
         }
 
         pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
