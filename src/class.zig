@@ -54,20 +54,20 @@
 ///         return impl(c.zend_ce_stringable); // Implement Stringable
 ///     }
 ///
-///     pub fn construct(self: *Student, frame: *CallFrame) !void {
+///     pub fn construct(self: *Student, ctx: Ctx) !void {
 ///         var name: []u8 = undefined;
-///         try frame.parse("s", .{ &name.ptr, &name.len });
+///         try ctx.call.parse("s", .{ &name.ptr, &name.len });
 ///         self.name = name.ptr;
 ///         self.name_len = name.len;
 ///     }
 ///
-///     pub fn getName(self: Student, ret: *Zval) void {
-///         ret.set(.string, self.name[0..self.name_len]);
+///     pub fn getName(self: Student, ctx: Ctx) void {
+///         ctx.ret.set(.string, self.name[0..self.name_len]);
 ///     }
 ///
-///     pub fn setAge(self: *Student, frame: *CallFrame) !void {
+///     pub fn setAge(self: *Student, ctx: Ctx) !void {
 ///         var age: i64 = undefined;
-///         try frame.parse("l", .{&age});
+///         try ctx.call.parse("l", .{&age});
 ///         self.age = @intCast(age);
 ///     }
 /// };
@@ -197,14 +197,10 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Supported method signatures (T is the impl type):
         ///   Object methods — first parameter is self (T, *T, or *const T):
-        ///   - `fn (T|*T|*const T, *CallFrame, *Zval) void|!void`
-        ///   - `fn (T|*T|*const T, *CallFrame) void|!void`
-        ///   - `fn (T|*T|*const T, *Zval) void|!void`
+        ///   - `fn (T|*T|*const T, Ctx) void|!void`
         ///   - `fn (T|*T|*const T) void|!void`
         ///   Static methods — first parameter is not self:
-        ///   - `fn (*CallFrame, *Zval) void|!void`
-        ///   - `fn (*CallFrame) void|!void`
-        ///   - `fn (*Zval) void|!void`
+        ///   - `fn (Ctx) void|!void`
         ///   - `fn () void|!void`
         ///
         /// Example:
@@ -213,19 +209,19 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///     name: []const u8,
         ///     age: u8,
         ///
-        ///     pub fn construct(self: *Student, frame: *CallFrame) !void {
+        ///     pub fn construct(self: *Student, ctx: Ctx) !void {
         ///         var name: []u8 = undefined;
-        ///         try frame.parse("s", .{ &name.ptr, &name.len });
+        ///         try ctx.call.parse("s", .{ &name.ptr, &name.len });
         ///         self.name = name;
         ///     }
         ///
-        ///     pub fn getName(self: Student, ret: *Zval) void {
-        ///         ret.set(.string, self.name);
+        ///     pub fn getName(self: Student, ctx: Ctx) void {
+        ///         ctx.ret.set(.string, self.name);
         ///     }
         ///
-        ///     pub fn setAge(self: *Student, frame: *CallFrame) !void {
+        ///     pub fn setAge(self: *Student, ctx: Ctx) !void {
         ///         var age: i64 = undefined;
-        ///         try frame.parse("l", .{&age});
+        ///         try ctx.call.parse("l", .{&age});
         ///         self.age = @intCast(age);
         ///     }
         /// };

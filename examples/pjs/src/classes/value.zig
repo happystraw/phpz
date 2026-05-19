@@ -15,10 +15,10 @@ pub const Value = extern struct {
         self.ctx.delref();
     }
 
-    pub fn construct(self: *Value, frame: *phpz.CallFrame) !void {
+    pub fn construct(self: *Value, ctx: phpz.Ctx) !void {
         var php_ctx_zv: *c.zval = undefined;
         var php_value: phpz.Zval.Optional = .init;
-        try frame.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
+        try ctx.call.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
         const php_ctx_obj: *phpz.Zval.Object = try .from(php_ctx_zv);
 
         self.ctx = .from(.std, php_ctx_obj.object());
@@ -91,17 +91,17 @@ pub const Value = extern struct {
         }
     }
 
-    pub fn toString(self: *Value, ret: *phpz.Zval) !void {
+    pub fn toString(self: *Value, ctx: phpz.Ctx) !void {
         var str_val = self.core.toStringValue(self.ctx.impl.core);
         defer str_val.deinit(self.ctx.impl.core);
 
         if (str_val.toZigSlice(self.ctx.impl.core)) |msg| {
             defer self.ctx.impl.core.freeCString(msg.ptr);
-            ret.set(.string, msg);
+            ctx.ret.set(.string, msg);
             return;
         }
 
-        ret.set(.string, "");
+        ctx.ret.set(.string, "");
     }
 };
 

@@ -1,36 +1,41 @@
 const c = @import("root.zig").c;
 const Zval = @import("zval.zig").Zval;
 
-/// Call Frame for PHP Functions and Methods
+/// PHP function/method call context.
 ///
-/// CallFrame provides access to the current PHP call frame, allowing
-/// you to parse function parameters, access the current object (in methods),
-/// and retrieve scope information.
+/// Provides access to the current call frame and return value.
+/// Passed as `Ctx` to user-defined PHP function/method bindings.
 ///
-/// This is a core type used in PHP function/method bindings to interact with
-/// the PHP runtime and extract parameters passed from PHP code.
+/// Fields:
+///   - `call`: parameter parsing, argument access, scope info
+///   - `ret`: set the PHP return value
 ///
 /// Example:
 /// ```zig
-/// fn myFunction(frame: *CallFrame, ret: *Zval) !void {
-///     var name: []u8 = undefined;
-///     var age: i64 = undefined;
-///     try frame.parse("sl", .{ &name.ptr, &name.len, &age });
-///
-///     const greeting = try std.fmt.allocPrint(allocator,
-///         "Hello {s}, you are {d} years old!", .{name, age});
-///     defer allocator.free(greeting);
-///     ret.set(.string, greeting);
+/// fn add(ctx: Ctx) !void {
+///     var a: i64 = undefined;
+///     var b: i64 = undefined;
+///     try ctx.call.parse("ll", .{ &a, &b });
+///     ctx.ret.set(.int, a + b);
 /// }
 /// ```
-pub const CallFrame = opaque {
+const Ctx = @This();
+
+call: *Call,
+ret: *Zval,
+
+/// Parameter parsing and call frame access.
+///
+/// Wraps `zend_execute_data` to provide type-safe parameter parsing
+/// via `parse()`, argument counting, and scope/object introspection.
+pub const Call = opaque {
     /// Errors that can occur during parameter parsing
     pub const Error = error{
         /// Parameter parsing failed (wrong type, missing required param, etc.)
         ParseFailure,
     };
 
-    /// Initialize a CallFrame from PHP execution data.
+    /// Initialize a Call from PHP execution data.
     ///
     /// This is typically called automatically by the function/method wrapper.
     /// You don't need to call this manually in user code.
@@ -39,13 +44,13 @@ pub const CallFrame = opaque {
     ///   - execute_data: The PHP execution data pointer
     ///
     /// Returns:
-    ///   An initialized CallFrame
-    pub inline fn from(execute_data: *c.zend_execute_data) *CallFrame {
+    ///   An initialized Call
+    pub inline fn from(execute_data: *c.zend_execute_data) *Call {
         return @ptrCast(execute_data);
     }
 
     /// Get the underlying zend_execute_data pointer
-    pub inline fn ptr(self: *CallFrame) *c.zend_execute_data {
+    pub inline fn ptr(self: *Call) *c.zend_execute_data {
         return @ptrCast(@alignCast(self));
     }
 
@@ -53,7 +58,7 @@ pub const CallFrame = opaque {
     ///
     /// Returns:
     ///   The argument count
-    pub inline fn argCount(self: *CallFrame) u32 {
+    pub inline fn argCount(self: *Call) u32 {
         return self.ptr().This.u2.num_args;
     }
 
@@ -103,12 +108,12 @@ pub const CallFrame = opaque {
     /// // Parse two integers: function(int $a, int $b)
     /// var a: i64 = undefined;
     /// var b: i64 = undefined;
-    /// try frame.parse("ll", .{ &a, &b });
+    /// try ctx.call.parse("ll", .{ &a, &b });
     ///
     /// // Parse string and optional integer: function(string $name, int $age = null)
     /// var name: []u8 = undefined;
     /// var age_opt: Zval.Optional = .init;
-    /// try frame.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
+    /// try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
     /// if (age_opt.unwrap()) |age_zval| {
     ///     if (age_zval.is(.int)) {
     ///         const age = age_zval.asUnchecked(.int);
@@ -117,9 +122,9 @@ pub const CallFrame = opaque {
     ///
     /// // Parse string only: function(string $message)
     /// var message: []u8 = undefined;
-    /// try frame.parse("s", .{ &message.ptr, &message.len });
+    /// try ctx.call.parse("s", .{ &message.ptr, &message.len });
     /// ```
-    pub fn parse(self: *CallFrame, comptime type_spec: [:0]const u8, args: anytype) Error!void {
+    pub fn parse(self: *Call, comptime type_spec: [:0]const u8, args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
             @compileError("parse: args must be a tuple (use .{} syntax)");
         }
@@ -142,12 +147,12 @@ pub const CallFrame = opaque {
     ///
     /// Example:
     /// ```zig
-    /// fn helloWorld(frame: *CallFrame, ret: *Zval) !void {
-    ///     try frame.parseNone();
-    ///     ret.set(.string, "Hello, World!");
+    /// fn helloWorld(ctx: Ctx) !void {
+    ///     try ctx.call.parseNone();
+    ///     ctx.ret.set(.string, "Hello, World!");
     /// }
     /// ```
-    pub fn parseNone(self: *CallFrame) Error!void {
+    pub fn parseNone(self: *Call) Error!void {
         if (self.argCount() != 0) {
             c.zend_wrong_parameters_none_error();
             return Error.ParseFailure;
@@ -168,7 +173,7 @@ pub const CallFrame = opaque {
     ///
     /// Returns:
     ///   Error.ParseFailure if parsing fails
-    pub fn parseMethod(self: *CallFrame, comptime type_spec: [:0]const u8, args: anytype) Error!void {
+    pub fn parseMethod(self: *Call, comptime type_spec: [:0]const u8, args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
             @compileError("parseMethod: args must be a tuple (use .{} syntax)");
         }
@@ -188,7 +193,7 @@ pub const CallFrame = opaque {
     ///
     /// Returns:
     ///   The $this zval pointer, or null if not in an object context
-    pub fn this(self: *CallFrame) ?*c.zval {
+    pub fn this(self: *Call) ?*c.zval {
         const this_zval = &self.ptr().This;
         if (Zval.raw.getType(this_zval) == c.IS_OBJECT) {
             return this_zval;
@@ -206,12 +211,12 @@ pub const CallFrame = opaque {
     ///
     /// Example:
     /// ```zig
-    /// fn myMethod(self: *MyClass, frame: *CallFrame, ret: *Zval) !void {
+    /// fn myMethod(self: *MyClass, ctx: Ctx) !void {
     ///     // The wrapper already extracts 'self', but if you need raw access:
-    ///     const obj = frame.thisObject();
+    ///     const obj = ctx.call.thisObject();
     /// }
     /// ```
-    pub fn thisObject(self: *CallFrame) ?*c.zend_object {
+    pub fn thisObject(self: *Call) ?*c.zend_object {
         return c.zend_get_this_object(self.ptr());
     }
 
@@ -222,7 +227,7 @@ pub const CallFrame = opaque {
     ///
     /// Returns:
     ///   The zend_class_entry pointer, or null if not in a class context
-    pub fn scope(self: *CallFrame) ?*c.zend_class_entry {
+    pub fn scope(self: *Call) ?*c.zend_class_entry {
         return @ptrCast(self.ptr().func.*.common.scope);
     }
 
@@ -240,11 +245,12 @@ pub const CallFrame = opaque {
     ///
     /// Returns:
     ///   The zend_class_entry pointer of the called class
-    pub fn calledScope(self: *CallFrame) ?*c.zend_class_entry {
+    pub fn calledScope(self: *Call) ?*c.zend_class_entry {
         return @ptrCast(c.zend_get_called_scope(self.ptr()));
     }
 };
 
 test {
-    @import("std").testing.refAllDecls(CallFrame);
+    @import("std").testing.refAllDecls(Ctx);
+    @import("std").testing.refAllDecls(Call);
 }

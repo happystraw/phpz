@@ -10,21 +10,21 @@ fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
 }
 
-fn greet(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
+fn greet(ctx: phpz.Ctx) !void {
     var name: []u8 = undefined;
-    try frame.parse("s", .{ &name.ptr, &name.len });
+    try ctx.call.parse("s", .{ &name.ptr, &name.len });
 
     var buffer: [4096]u8 = undefined;
     const result: []const u8 = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
 
-    ret.set(.string, result);
+    ctx.ret.set(.string, result);
 }
 
-fn human(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
+fn human(ctx: phpz.Ctx) !void {
     var name_zv: *c.zval = undefined;
     var age_zv: ?*c.zval = null;
 
-    try frame.parse("z|z!", .{ &name_zv, &age_zv });
+    try ctx.call.parse("z|z!", .{ &name_zv, &age_zv });
 
     const human_obj: *HumanClass = .new();
     var call_params = [_]c.zval{
@@ -35,7 +35,7 @@ fn human(frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
     defer c.zval_ptr_dtor(&zval);
     try human_obj.call("__construct", &call_params, &zval);
 
-    ret.set(.object, &human_obj.std);
+    ctx.ret.set(.object, &human_obj.std);
 }
 
 comptime {

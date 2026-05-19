@@ -17,7 +17,7 @@ const function_helper = @import("function.zig");
 pub const function = function_helper.function;
 pub const method = function_helper.method;
 
-pub const CallFrame = @import("call_frame.zig").CallFrame;
+pub const Ctx = @import("Ctx.zig");
 pub const Zval = @import("zval.zig").Zval;
 pub const zend = @import("zend.zig");
 pub const errors = @import("errors.zig");
@@ -27,7 +27,7 @@ pub fn printf(fmt: [:0]const u8, args: anytype) usize {
 }
 
 test {
-    _ = @import("call_frame.zig");
+    _ = @import("Ctx.zig");
     _ = @import("class.zig");
     _ = @import("errors.zig");
     _ = @import("function.zig");

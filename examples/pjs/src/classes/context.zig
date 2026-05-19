@@ -7,9 +7,9 @@ pub const Context = extern struct {
         self.rt.delref();
     }
 
-    pub fn construct(self: *Context, frame: *phpz.CallFrame) !void {
+    pub fn construct(self: *Context, ctx: phpz.Ctx) !void {
         var php_rt_zv: *c.zval = undefined;
-        try frame.parse("O", .{ &php_rt_zv, runtime.Class.entry });
+        try ctx.call.parse("O", .{ &php_rt_zv, runtime.Class.entry });
         const php_rt: *phpz.Zval = .from(php_rt_zv);
 
         self.rt = .from(.std, try php_rt.as(.object));
@@ -18,9 +18,9 @@ pub const Context = extern struct {
         self.core = try .init(self.rt.impl.core);
     }
 
-    pub fn eval(self: *Context, frame: *phpz.CallFrame, ret: *phpz.Zval) !void {
+    pub fn eval(self: *Context, ctx: phpz.Ctx) !void {
         var code: []u8 = undefined;
-        try frame.parse("s", .{ &code.ptr, &code.len });
+        try ctx.call.parse("s", .{ &code.ptr, &code.len });
         if (code.len == 0) return error.NoJavaScriptCode;
 
         const core = self.core;
@@ -46,7 +46,7 @@ pub const Context = extern struct {
         try val.impl.updateValueFromJsValue(result);
         ctx_obj.addref();
 
-        ret.set(.object, &val.std);
+        ctx.ret.set(.object, &val.std);
     }
 };
 

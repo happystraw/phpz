@@ -7,10 +7,10 @@ const Human = extern struct {
         return impl(c.zend_ce_stringable);
     }
 
-    pub fn construct(self: *Human, frame: *phpz.CallFrame) !void {
+    pub fn construct(self: *Human, ctx: phpz.Ctx) !void {
         var name: []u8 = undefined;
         var age: phpz.Zval.Optional = .init;
-        try frame.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
+        try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
         self.name = name.ptr;
         self.name_len = name.len;
         if (age.unwrap()) |zv| if (zv.is(.int))
@@ -19,24 +19,24 @@ const Human = extern struct {
             try errors.argumentTypeError(2, "must be type int, %s given", .{@tagName(zv.kind()).ptr});
     }
 
-    pub fn getName(self: *const Human, ret: *phpz.Zval) void {
-        ret.set(.string, self.name[0 .. self.name_len - 1]);
+    pub fn getName(self: *const Human, ctx: phpz.Ctx) void {
+        ctx.ret.set(.string, self.name[0 .. self.name_len - 1]);
     }
 
-    pub fn setName(self: *Human, frame: *phpz.CallFrame) !void {
+    pub fn setName(self: *Human, ctx: phpz.Ctx) !void {
         var name: []u8 = undefined;
-        try frame.parse("s", .{ &name.ptr, &name.len });
+        try ctx.call.parse("s", .{ &name.ptr, &name.len });
         self.name = name.ptr;
         self.name_len = name.len;
     }
 
-    pub fn getAge(self: *const Human, ret: *phpz.Zval) void {
-        ret.set(.int, self.age);
+    pub fn getAge(self: *const Human, ctx: phpz.Ctx) void {
+        ctx.ret.set(.int, self.age);
     }
 
-    pub fn setAge(self: *Human, frame: *phpz.CallFrame) !void {
+    pub fn setAge(self: *Human, ctx: phpz.Ctx) !void {
         var age: i64 = undefined;
-        try frame.parse("l", .{&age});
+        try ctx.call.parse("l", .{&age});
         self.safeSetAge(age);
     }
 
@@ -49,14 +49,14 @@ const Human = extern struct {
             @intCast(age);
     }
 
-    pub fn toString(self: *const Human, ret: *phpz.Zval) !void {
+    pub fn toString(self: *const Human, ctx: phpz.Ctx) !void {
         const result = try std.fmt.allocPrint(gpa, "I am {s}, {d} years old!", .{ self.name[0..self.name_len], self.age });
         defer gpa.free(result);
-        ret.set(.string, result);
+        ctx.ret.set(.string, result);
     }
 
-    pub fn species(ret: *phpz.Zval) void {
-        ret.set(.string, "Homo sapiens");
+    pub fn species(ctx: phpz.Ctx) void {
+        ctx.ret.set(.string, "Homo sapiens");
     }
 };
 

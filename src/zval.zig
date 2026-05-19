@@ -13,12 +13,12 @@ const zend = @import("zend.zig");
 ///
 /// Reading values from PHP:
 /// ```zig
-/// fn readValue(frame: *CallFrame, ret: *Zval) !void {
+/// fn readValue(ctx: Ctx) !void {
 ///     var input: i64 = undefined;
-///     try frame.parse("l", .{&input});
+///     try ctx.call.parse("l", .{&input});
 ///
 ///     // Return a value to PHP
-///     ret.set(.int, input * 2);
+///     ctx.ret.set(.int, input * 2);
 /// }
 /// ```
 ///
@@ -264,21 +264,21 @@ pub const Zval = opaque {
     ///
     /// Example:
     /// ```zig
-    /// fn myFunction(frame: *CallFrame, ret: *Zval) !void {
+    /// fn myFunction(ctx: Ctx) !void {
     ///     // Return an integer
-    ///     ret.set(.int, 42);
+    ///     ctx.ret.set(.int, 42);
     ///
     ///     // Return a string
-    ///     ret.set(.string, "Hello, PHP!");
+    ///     ctx.ret.set(.string, "Hello, PHP!");
     ///
     ///     // Return a boolean
-    ///     ret.set(.bool, true);
+    ///     ctx.ret.set(.bool, true);
     ///
     ///     // Return null
-    ///     ret.set(.null, {});
+    ///     ctx.ret.set(.null, {});
     ///
     ///     // Return a float
-    ///     ret.set(.float, 3.14);
+    ///     ctx.ret.set(.float, 3.14);
     /// }
     /// ```
     ///
@@ -298,12 +298,12 @@ pub const Zval = opaque {
     ///
     /// Usage pattern:
     /// ```zig
-    /// fn myFunction(frame: *CallFrame, ret: *Zval) !void {
+    /// fn myFunction(ctx: Ctx) !void {
     ///     var required_name: []u8 = undefined;
     ///     var optional_age: Zval.Optional = .init;
     ///
     ///     // 's' = required string, '|' = following params optional, 'z!' = nullable zval
-    ///     try frame.parse("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
+    ///     try ctx.call.parse("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
     ///
     ///     // Check if the optional parameter was provided
     ///     if (optional_age.unwrap()) |age_zval| {
@@ -376,7 +376,7 @@ pub const Zval = opaque {
     /// Example:
     /// ```zig
     /// var raw: *c.zval = undefined;
-    /// try frame.parse("z", .{&raw});
+    /// try ctx.call.parse("z", .{&raw});
     ///
     /// if (Zval.raw.is(raw, .int)) {
     ///     const n = Zval.raw.asUnchecked(raw, .int);

@@ -1,9 +1,8 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
-const CallFrame = @import("call_frame.zig").CallFrame;
-const Zval = @import("zval.zig").Zval;
 const errors = @import("errors.zig");
+const Ctx = @import("Ctx.zig");
 
 const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 
@@ -14,10 +13,8 @@ const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 /// adapted to match PHP's calling convention.
 ///
 /// Supported function signatures:
-///   - `fn (*CallFrame, *Zval) void|!void` - Access parameters and set return value
-///   - `fn (*CallFrame) void|!void`        - Access parameters only
-///   - `fn (*Zval) void|!void`             - Set return value only
-///   - `fn () void|!void`                  - No parameters or return value
+///   - `fn (Ctx) void|!void` - Access parameters and set return value via ctx
+///   - `fn () void|!void`     - No parameters or return value
 ///
 /// When the function takes no parameters, PHP will reject calls with extra arguments.
 ///
@@ -31,19 +28,19 @@ const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 ///     _ = phpz.printf("Hello from ZIG!\n", .{});
 /// }
 ///
-/// fn add(frame: *CallFrame, ret: *Zval) !void {
+/// fn add(ctx: Ctx) !void {
 ///     var a: i64 = undefined;
 ///     var b: i64 = undefined;
-///     try frame.parse("ll", .{ &a, &b });
-///     ret.set(.int, a + b);
+///     try ctx.call.parse("ll", .{ &a, &b });
+///     ctx.ret.set(.int, a + b);
 /// }
 ///
-/// fn greet(frame: *CallFrame, ret: *Zval) !void {
+/// fn greet(ctx: Ctx) !void {
 ///     var name: []u8 = undefined;
-///     try frame.parse("s", .{ &name.ptr, &name.len });
+///     try ctx.call.parse("s", .{ &name.ptr, &name.len });
 ///     const greeting = try std.fmt.allocPrint(allocator, "Hello, {s}!", .{name});
 ///     defer allocator.free(greeting);
-///     ret.set(.string, greeting);
+///     ctx.ret.set(.string, greeting);
 /// }
 ///
 /// // In your module initialization:
@@ -95,16 +92,14 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            const frame = CallFrame.from(execute_data.?);
+            var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args = switch (Args) {
-                @Tuple(&.{ *CallFrame, *Zval }) => .{ frame, Zval.from(return_value.?) },
-                @Tuple(&.{*CallFrame}) => .{frame},
-                @Tuple(&.{*Zval}) => .{Zval.from(return_value.?)},
+                @Tuple(&.{Ctx}) => .{ctx},
                 @Tuple(&.{}) => blk: {
-                    frame.parseNone() catch return;
+                    ctx.call.parseNone() catch return;
                     break :blk .{};
                 },
-                else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: {any}", .{ func_desc, Args })),
+                else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: expected fn(Ctx) or fn()", .{func_desc})),
             };
             _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
                 if (c.EG("exception") == null) {
@@ -126,21 +121,19 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
     const impl_offset = comptime @intFromBool(kind == .object);
     return struct {
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
-            const frame = CallFrame.from(execute_data.?);
+            var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args: Args = (if (kind == .object) blk: {
-                const obj: *Class = .from(.std, frame.thisObject().?);
+                const obj: *Class = .from(.std, ctx.call.thisObject().?);
                 break :blk if (impl_type == args_type_info.fields[0].type) .{obj.impl} else .{&obj.impl};
             } else .{}) ++ rest: {
                 const rest_count = args_type_info.fields.len - impl_offset;
-                break :rest if (rest_count == 2)
-                    .{ frame, Zval.from(return_value.?) }
-                else if (rest_count == 1)
-                    if (comptime args_type_info.fields[impl_offset].type == *CallFrame)
-                        .{frame}
+                break :rest if (rest_count == 1)
+                    if (comptime args_type_info.fields[impl_offset].type == Ctx)
+                        .{ctx}
                     else
-                        .{Zval.from(return_value.?)}
+                        @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: expected Ctx", .{func_desc}))
                 else if (rest_count == 0) blk: {
-                    frame.parseNone() catch return;
+                    ctx.call.parseNone() catch return;
                     break :blk .{};
                 } else {
                     @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: {any}", .{ func_desc, Args }));
