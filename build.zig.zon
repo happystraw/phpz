@@ -2,11 +2,11 @@
     .name = .phpz,
     .version = "0.0.0",
     .fingerprint = 0x935004cc3861700f,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0-dev.305+bdfbf432d",
     .dependencies = .{
         .translate_c = .{
-            .url = "git+https://codeberg.org/ziglang/translate-c#7a1a9fdc4ab00835748a6657ecbb835e3d5d45f7",
-            .hash = "translate_c-0.0.0-Q_BUWvP1BgCjAk6PWv5286tOlvzD9-X-NkuTzh0KxY0Q",
+            .url = "git+https://codeberg.org/ziglang/translate-c#96b77748777270ad9956fce243c7367d0eedfd27",
+            .hash = "translate_c-0.0.0-Q_BUWrf2BgA6wgOPfnltvJRLordmJoko-OqevXQkHtva",
         },
     },
     .paths = .{

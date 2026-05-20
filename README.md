@@ -6,7 +6,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 
 ## Requirements
 
-- zig: 0.16.0
+- zig: 0.17.0
 - php: 8.2-8.5 (tested on linux/macos)
 
 ## Features
@@ -21,6 +21,8 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Error Handling** — PHP error triggers, exception throwing, argument validation errors
 - **Memory** — Zig `Allocator` backed by PHP's `emalloc`, with DWARF leak tracing for debug builds
 - **Auto-Registration** — stub-file-driven: functions (`ext_functions`) and constants (`const` in stub → `register_{name}_symbols`) are automatically registered at module startup; classes require an explicit `Class.register()` call in `module_startup_fn`
+
+A `zig-0.16` branch is available for zig 0.16 users.
 
 ## Usage
 
