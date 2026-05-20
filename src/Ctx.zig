@@ -1,8 +1,7 @@
+//! PHP function/method call context.
 const c = @import("root.zig").c;
 const Zval = @import("zval.zig").Zval;
 
-/// PHP function/method call context.
-///
 /// Provides access to the current call frame and return value.
 /// Passed as `Ctx` to user-defined PHP function/method bindings.
 ///
@@ -72,17 +71,17 @@ pub const Call = opaque {
     ///   The type_spec string uses single characters to indicate expected types:
     ///
     ///   Basic Types:
-    ///     - 'l' (long)    -> i64: PHP integer
-    ///     - 'd' (double)  -> f64: PHP float
+    ///     - 'l' (long)    -> i64: PHP integer (requires 1 arg: &val)
+    ///     - 'd' (double)  -> f64: PHP float (requires 1 arg: &val)
     ///     - 's' (string)  -> [*]u8 + size_t: PHP string (requires 2 args: &ptr, &len)
-    ///     - 'b' (bool)    -> bool: PHP boolean
-    ///     - 'z' (zval)    -> *c.zval: Raw PHP value (any type)
+    ///     - 'b' (bool)    -> bool: PHP boolean (requires 1 arg: &val)
+    ///     - 'z' (zval)    -> *c.zval: Raw PHP value, any type (requires 1 arg: &ptr)
     ///
     ///   Array and Object:
-    ///     - 'a' (array)   -> *c.zend_array: PHP array
-    ///     - 'h' (hashtable) -> *c.HashTable: PHP array/hashtable
-    ///     - 'o' (object)  -> *c.zval: PHP object
-    ///     - 'O' (typed object) -> *c.zval: Object of specific class
+    ///     - 'a' (array)   -> *c.zend_array: PHP array (requires 1 arg: &ptr)
+    ///     - 'h' (hashtable) -> *c.HashTable: PHP array/hashtable (requires 1 arg: &ptr)
+    ///     - 'o' (object)  -> *c.zval: PHP object (requires 1 arg: &ptr)
+    ///     - 'O' (typed object) -> *c.zval: Object of specific class (requires 2 args: &ptr, class_entry)
     ///
     ///   Optional Parameters:
     ///     - '|' : All parameters after this are optional
@@ -105,24 +104,79 @@ pub const Call = opaque {
     ///
     /// Example:
     /// ```zig
-    /// // Parse two integers: function(int $a, int $b)
-    /// var a: i64 = undefined;
-    /// var b: i64 = undefined;
-    /// try ctx.call.parse("ll", .{ &a, &b });
+    /// // --- Basic scalar types ---
     ///
-    /// // Parse string and optional integer: function(string $name, int $age = null)
+    /// // 'l': function(int $n)
+    /// var n: i64 = undefined;
+    /// try ctx.call.parse("l", .{&n});
+    ///
+    /// // 'd': function(float $x)
+    /// var x: f64 = undefined;
+    /// try ctx.call.parse("d", .{&x});
+    ///
+    /// // 'b': function(bool $flag)
+    /// var flag: bool = undefined;
+    /// try ctx.call.parse("b", .{&flag});
+    ///
+    /// // 's': function(string $msg)  -- requires 2 args: &ptr, &len
+    /// var msg: []u8 = undefined;
+    /// try ctx.call.parse("s", .{ &msg.ptr, &msg.len });
+    ///
+    /// // --- Raw zval (any type) ---
+    ///
+    /// // 'z': function(mixed $val)
+    /// var raw: *c.zval = undefined;
+    /// try ctx.call.parse("z", .{&raw});
+    /// const val = Zval.from(raw);
+    /// if (val.is(.int)) {
+    ///     const num = val.asUnchecked(.int);
+    ///     _ = num;
+    /// }
+    ///
+    /// // --- Array and Hashtable ---
+    ///
+    /// // 'a': function(array $arr)
+    /// var arr: *c.zend_array = undefined;
+    /// try ctx.call.parse("a", .{&arr});
+    ///
+    /// // 'h': function(array $map)  -- receives HashTable* directly
+    /// var ht: *c.HashTable = undefined;
+    /// try ctx.call.parse("h", .{&ht});
+    ///
+    /// // --- Object ---
+    ///
+    /// // 'o': function(object $obj)  -- any object
+    /// var obj: *c.zval = undefined;
+    /// try ctx.call.parse("o", .{&obj});
+    ///
+    /// // 'O': function(MyClass $obj)  -- specific class, requires 2 args: &ptr, class_entry
+    /// var typed_obj: *c.zval = undefined;
+    /// try ctx.call.parse("O", .{ &typed_obj, my_class_entry });
+    ///
+    /// // --- Mixed types ---
+    ///
+    /// // 'sl': function(string $name, int $count)
     /// var name: []u8 = undefined;
+    /// var count: i64 = undefined;
+    /// try ctx.call.parse("sl", .{ &name.ptr, &name.len, &count });
+    ///
+    /// // --- Optional and nullable ---
+    ///
+    /// // 's|l': function(string $key, int $ttl = 0)  -- caller sets default
+    /// var key: []u8 = undefined;
+    /// var ttl: i64 = 0;
+    /// try ctx.call.parse("s|l", .{ &key.ptr, &key.len, &ttl });
+    ///
+    /// // 's|z!': function(string $name, ?int $age = null)
+    /// var person_name: []u8 = undefined;
     /// var age_opt: Zval.Optional = .init;
-    /// try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age_opt.ptr });
+    /// try ctx.call.parse("s|z!", .{ &person_name.ptr, &person_name.len, &age_opt.ptr });
     /// if (age_opt.unwrap()) |age_zval| {
     ///     if (age_zval.is(.int)) {
     ///         const age = age_zval.asUnchecked(.int);
+    ///         _ = age;
     ///     }
     /// }
-    ///
-    /// // Parse string only: function(string $message)
-    /// var message: []u8 = undefined;
-    /// try ctx.call.parse("s", .{ &message.ptr, &message.len });
     /// ```
     pub fn parse(self: *Call, comptime type_spec: [:0]const u8, args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
