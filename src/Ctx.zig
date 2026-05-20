@@ -57,8 +57,28 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The argument count
-    pub inline fn argCount(self: *Call) u32 {
+    pub inline fn numArgs(self: *Call) u32 {
         return self.ptr().This.u2.num_args;
+    }
+
+    /// Get the Nth argument (1-indexed) as a raw zval pointer.
+    ///
+    /// Parameters:
+    ///   - n: Argument number (1-based)
+    ///
+    /// Returns:
+    ///   Pointer to the zval at position n
+    pub inline fn arg(self: *Call, n: u32) *c.zval {
+        const base: [*]c.zval = @ptrCast(self.ptr());
+        return &base[c.ZEND_CALL_FRAME_SLOT + n - 1];
+    }
+
+    /// Get all arguments as a slice of zvals.
+    pub inline fn args(self: *Call) []c.zval {
+        const count = self.numArgs();
+        if (count == 0) return &[_]c.zval{};
+        const base: [*]c.zval = @ptrCast(self.ptr());
+        return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
     }
 
     /// Parse function parameters according to a type specification.
@@ -78,7 +98,7 @@ pub const Call = opaque {
     ///     - 'z' (zval)    -> *c.zval: Raw PHP value, any type (requires 1 arg: &ptr)
     ///
     ///   Array and Object:
-    ///     - 'a' (array)   -> *c.zend_array: PHP array (requires 1 arg: &ptr)
+    ///     - 'a' (array)   -> *c.zval: PHP array zval (requires 1 arg: &ptr)
     ///     - 'h' (hashtable) -> *c.HashTable: PHP array/hashtable (requires 1 arg: &ptr)
     ///     - 'o' (object)  -> *c.zval: PHP object (requires 1 arg: &ptr)
     ///     - 'O' (typed object) -> *c.zval: Object of specific class (requires 2 args: &ptr, class_entry)
@@ -136,8 +156,9 @@ pub const Call = opaque {
     /// // --- Array and Hashtable ---
     ///
     /// // 'a': function(array $arr)
-    /// var arr: *c.zend_array = undefined;
-    /// try ctx.call.parse("a", .{&arr});
+    /// var arr_zv: *c.zval = undefined;
+    /// try ctx.call.parse("a", .{&arr_zv});
+    /// const arr = arr_zv.value.arr; // extract zend_array*
     ///
     /// // 'h': function(array $map)  -- receives HashTable* directly
     /// var ht: *c.HashTable = undefined;
@@ -178,14 +199,14 @@ pub const Call = opaque {
     ///     }
     /// }
     /// ```
-    pub fn parse(self: *Call, comptime type_spec: [:0]const u8, args: anytype) Error!void {
-        if (@typeInfo(@TypeOf(args)) != .@"struct") {
+    pub fn parse(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) Error!void {
+        if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
             @compileError("parse: args must be a tuple (use .{} syntax)");
         }
         const result = @call(
             .auto,
             c.zend_parse_parameters,
-            .{ self.argCount(), type_spec.ptr } ++ args,
+            .{ self.numArgs(), type_spec.ptr } ++ type_args,
         );
         if (result == c.FAILURE) return Error.ParseFailure;
     }
@@ -207,7 +228,7 @@ pub const Call = opaque {
     /// }
     /// ```
     pub fn parseNone(self: *Call) Error!void {
-        if (self.argCount() != 0) {
+        if (self.numArgs() != 0) {
             c.zend_wrong_parameters_none_error();
             return Error.ParseFailure;
         }
@@ -227,7 +248,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   Error.ParseFailure if parsing fails
-    pub fn parseMethod(self: *Call, comptime type_spec: [:0]const u8, args: anytype) Error!void {
+    pub fn parseMethod(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) Error!void {
         if (@typeInfo(@TypeOf(args)) != .@"struct") {
             @compileError("parseMethod: args must be a tuple (use .{} syntax)");
         }
@@ -235,7 +256,7 @@ pub const Call = opaque {
         const result = @call(
             .auto,
             c.zend_parse_method_parameters,
-            .{ self.argCount(), self.this(), type_spec.ptr, &this_ptr } ++ args,
+            .{ self.numArgs(), self.this(), type_spec.ptr, &this_ptr } ++ type_args,
         );
         if (result == c.FAILURE) return Error.ParseFailure;
     }
