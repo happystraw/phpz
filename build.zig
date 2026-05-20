@@ -91,11 +91,7 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
         "pjs",
     };
     inline for (examples) |test_example| {
-        const test_cmd = b.addSystemCommand(&[_][]const u8{
-            b.graph.zig_exe,
-            "build",
-            "test-extension"
-        });
+        const test_cmd = b.addSystemCommand(&[_][]const u8{ b.graph.zig_exe, "build", "test-extension" });
         test_cmd.addArg(b.fmt("-Dphp-include-root={s}", .{options.php_include_root}));
         test_cmd.addArg(b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}));
         if (!options.target.query.isNativeTriple()) {

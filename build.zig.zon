@@ -13,6 +13,7 @@
         "build",
         "build.zig",
         "build.zig.zon",
+        "examples",
         "src",
         "LICENSE",
         "README.md",
