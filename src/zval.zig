@@ -68,7 +68,12 @@ pub const Zval = opaque {
         resource,
         /// PHP reference (indirect zval pointer)
         reference,
-        /// Mixed type (union or anytype, represents any PHP value)
+        /// IS_INDIRECT (internal, object property placeholder)
+        indirect,
+        /// IS_PTR (internal, pointer storage)
+        ptr,
+
+        /// Mixed type, fallback to raw zval access (use with caution)
         mixed,
     };
 
@@ -104,6 +109,8 @@ pub const Zval = opaque {
             .object => *c.zend_object,
             .resource => *c.zend_resource,
             .reference => *c.zend_reference,
+            .indirect => *c.zval,
+            .ptr => ?*anyopaque,
             .mixed => *c.zval,
         };
     }
@@ -151,7 +158,9 @@ pub const Zval = opaque {
             c.IS_OBJECT => .object,
             c.IS_RESOURCE => .resource,
             c.IS_REFERENCE => .reference,
-            else => .mixed, // fallback for unknown types
+            c.IS_INDIRECT => .indirect,
+            c.IS_PTR => .ptr,
+            else => .mixed,
         };
     }
 
@@ -449,6 +458,8 @@ pub const Zval = opaque {
                 .object => t == c.IS_OBJECT,
                 .resource => t == c.IS_RESOURCE,
                 .reference => t == c.IS_REFERENCE,
+                .indirect => t == c.IS_INDIRECT,
+                .ptr => t == c.IS_PTR,
                 .mixed => t != c.IS_UNDEF,
             };
         }
@@ -477,6 +488,8 @@ pub const Zval = opaque {
                 .object => zv.value.obj orelse unreachable,
                 .resource => zv.value.res orelse unreachable,
                 .reference => zv.value.ref orelse unreachable,
+                .indirect => zv.value.zv,
+                .ptr => zv.value.ptr,
                 .mixed => zv,
             };
         }
@@ -523,6 +536,8 @@ pub const Zval = opaque {
                     zv.u1.type_info = c.IS_REFERENCE_EX;
                 },
                 .mixed => native.setZval(zv, val, true, false),
+                .indirect => @compileError("IS_INDIRECT is an internal type, cannot be set directly"),
+                .ptr => @compileError("IS_PTR is an internal type, cannot be set directly"),
             }
         }
 
