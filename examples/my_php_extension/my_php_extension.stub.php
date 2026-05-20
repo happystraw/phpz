@@ -16,9 +16,16 @@ namespace {
 }
 
 namespace MyPHPExt{
-    function human(string $name, int|null $age = NULL): \MyPHPExt\Human
+    function human(string $name, int|null $age = null): \MyPHPExt\Human
     {
     }
+
+    class Dumper {
+        public static function dump(mixed... $value): void
+        {
+        }
+    }
+
     final class Counter
     {
         public function __construct(int $n)
@@ -40,7 +47,7 @@ namespace MyPHPExt{
 
     final class Human implements \Stringable
     {
-        public function __construct(string $name, int|null $age = NULL)
+        public function __construct(string $name, int|null $age = null)
         {
         }
 

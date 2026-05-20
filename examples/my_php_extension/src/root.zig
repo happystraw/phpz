@@ -10,6 +10,7 @@ const classes = @import("classes.zig");
 fn startup() !void {
     classes.counter.Class.register();
     classes.human.Class.register();
+    classes.dumper.Class.register();
 }
 
 fn shutdown() !void {

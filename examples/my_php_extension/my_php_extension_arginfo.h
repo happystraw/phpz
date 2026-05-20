@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: fb1e92b8d4854def97e9c4de412a45b1fbef03aa */
+ * Stub hash: 37ee3141af11c0b12063892c9de4c30cd03aad4e */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -10,7 +10,11 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_human, 0, 1, MyPHPExt\\Human, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "NULL")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Dumper_dump, 0, 0, IS_VOID, 0)
+	ZEND_ARG_VARIADIC_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Counter___construct, 0, 0, 1)
@@ -28,7 +32,7 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Human___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "NULL")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Human_setName, 0, 1, IS_VOID, 0)
@@ -53,6 +57,7 @@ ZEND_END_ARG_INFO()
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
 ZEND_FUNCTION(MyPHPExt_human);
+ZEND_METHOD(MyPHPExt_Dumper, dump);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, add);
 ZEND_METHOD(MyPHPExt_Counter, dec);
@@ -70,6 +75,12 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
 	ZEND_NS_FALIAS("MyPHPExt", human, MyPHPExt_human, arginfo_MyPHPExt_human)
+	ZEND_FE_END
+};
+
+
+static const zend_function_entry class_MyPHPExt_Dumper_methods[] = {
+	ZEND_ME(MyPHPExt_Dumper, dump, arginfo_class_MyPHPExt_Dumper_dump, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
 
@@ -93,6 +104,16 @@ static const zend_function_entry class_MyPHPExt_Human_methods[] = {
 	ZEND_ME(MyPHPExt_Human, species, arginfo_class_MyPHPExt_Human_species, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
+
+static zend_class_entry *register_class_MyPHPExt_Dumper(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Dumper", class_MyPHPExt_Dumper_methods);
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+
+	return class_entry;
+}
 
 static zend_class_entry *register_class_MyPHPExt_Counter(void)
 {
