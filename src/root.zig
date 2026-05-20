@@ -36,6 +36,7 @@ test {
     _ = @import("zend.zig");
     _ = @import("zval.zig");
     _ = @import("zend/array.zig");
+    _ = @import("zend/function.zig");
     _ = @import("zend/object.zig");
     _ = @import("zend/string.zig");
     _ = @import("zval/array.zig");
