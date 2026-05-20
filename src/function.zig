@@ -102,7 +102,7 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
                 else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: expected fn(Ctx) or fn()", .{func_desc})),
             };
             _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
-                if (c.EG("exception") == null) {
+                if (c.executor_globals.exception == null) {
                     errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
                 }
             };
@@ -140,7 +140,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
                 };
             };
             _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
-                if (c.EG("exception") == null) {
+                if (c.executor_globals.exception == null) {
                     errors.throwError(null, "%s at %s", .{ @errorName(err).ptr, func_desc.ptr });
                 }
             };
