@@ -45,14 +45,14 @@ pub const Object = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Get the underlying zend_object pointer
-    pub fn object(self: *Object) *c.zend_object {
-        return self.ptr().value.obj;
+    /// Get the underlying zend.Object pointer
+    pub fn object(self: *Object) *zend.Object {
+        return .from(self.ptr().value.obj);
     }
 
     /// Get the class entry
     pub fn class(self: *Object) *c.zend_class_entry {
-        return self.object().*.ce;
+        return self.object().ptr().*.ce;
     }
 
     /// Get the class name
@@ -60,22 +60,6 @@ pub const Object = opaque {
         const ce = self.class();
         const name = ce.*.name;
         return name.*.val()[0..name.*.len];
-    }
-
-    /// Call a method on the object
-    pub fn call(self: *Object, method: []const u8, args: []c.zval, retval: *c.zval) Error!void {
-        const method_str: *zend.String = zend.String.init(method);
-        const result = c.zend_call_method_if_exists(
-            self.object(),
-            method_str.ptr(),
-            retval,
-            @intCast(args.len),
-            if (args.len > 0) args.ptr else null,
-        );
-        if (result != c.SUCCESS) {
-            c.zend_throw_error(null, "Call to undefined method %s::%s()", self.className().ptr, method_str.cstr());
-            return Error.CallFailed;
-        }
     }
 
     /// Set a property value

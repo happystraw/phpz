@@ -1,4 +1,5 @@
 const c = @import("../root.zig").c;
+const zend = @import("../zend.zig");
 const Zval = @import("../zval.zig").Zval;
 
 pub const Array = opaque {
@@ -34,9 +35,9 @@ pub const Array = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Get the underlying zend_array pointer
-    pub fn array(self: *Array) *c.zend_array {
-        return self.ptr().value.arr;
+    /// Get the underlying zend.Array pointer
+    pub fn array(self: *Array) *zend.Array {
+        return .from(self.ptr().value.arr);
     }
 
     /// Get the number of elements
