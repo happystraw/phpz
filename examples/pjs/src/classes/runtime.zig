@@ -1,12 +1,12 @@
 pub const Runtime = extern struct {
-    core: *quickjs.Runtime,
+    inner: *quickjs.Runtime,
 
     pub fn init(self: *Runtime) void {
-        self.core = quickjs.Runtime.init() catch unreachable;
+        self.inner = quickjs.Runtime.init() catch unreachable;
     }
 
     pub fn deinit(self: *Runtime) void {
-        self.core.deinit();
+        self.inner.deinit();
     }
 };
 

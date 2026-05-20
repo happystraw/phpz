@@ -21,17 +21,13 @@ fn greet(ctx: phpz.Ctx) !void {
 }
 
 fn human(ctx: phpz.Ctx) !void {
-    var name_zv: *c.zval = undefined;
-    var age_zv: ?*c.zval = null;
+    var name: *c.zval = undefined;
+    var age: ?*c.zval = null;
 
-    try ctx.call.parse("z|z!", .{ &name_zv, &age_zv });
+    try ctx.call.parse("z|z!", .{ &name, &age });
 
     const human_obj: *HumanClass = .new();
-    var call_params = [_]c.zval{
-        name_zv.*,
-        if (age_zv) |age| age.* else phpz.Zval.native.init(.null, {}),
-    };
-    try human_obj.call("__construct", &call_params, null);
+    try human_obj.construct(.{ name.*, if (age) |a| a.* else phpz.Zval.native.nil });
 
     ctx.ret.set(.object, &human_obj.std);
 }

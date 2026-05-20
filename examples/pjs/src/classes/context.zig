@@ -1,9 +1,9 @@
 pub const Context = extern struct {
     rt: *runtime.Class,
-    core: *quickjs.Context,
+    inner: *quickjs.Context,
 
     pub fn deinit(self: *Context) void {
-        self.core.deinit();
+        self.inner.deinit();
         self.rt.delref();
     }
 
@@ -15,7 +15,7 @@ pub const Context = extern struct {
         self.rt = .from(.std, try php_rt.as(.object));
         self.rt.addref();
 
-        self.core = try .init(self.rt.impl.core);
+        self.inner = try .init(self.rt.impl.inner);
     }
 
     pub fn eval(self: *Context, ctx: phpz.Ctx) !void {
@@ -23,15 +23,15 @@ pub const Context = extern struct {
         try ctx.call.parse("s", .{ &code.ptr, &code.len });
         if (code.len == 0) return error.NoJavaScriptCode;
 
-        const core = self.core;
-        var result = core.eval(code, "<main>", .{});
-        errdefer result.deinit(core);
+        const inner = self.inner;
+        var result = inner.eval(code, "<main>", .{});
+        errdefer result.deinit(inner);
 
         if (result.isException()) {
-            const exc = self.core.getException();
-            defer exc.deinit(self.core);
-            if (exc.toZigSlice(self.core)) |msg| {
-                defer self.core.freeCString(msg.ptr);
+            const exc = self.inner.getException();
+            defer exc.deinit(self.inner);
+            if (exc.toZigSlice(self.inner)) |msg| {
+                defer self.inner.freeCString(msg.ptr);
                 exception.throw(msg);
             } else {
                 exception.throw("unknown error");
@@ -42,7 +42,7 @@ pub const Context = extern struct {
         const ctx_obj: *Class = .from(.impl, self);
         const val: *value.Class = .new();
         val.impl.ctx = ctx_obj;
-        val.impl.core = result;
+        val.impl.inner = result;
         try val.impl.updateValueFromJsValue(result);
         ctx_obj.addref();
 

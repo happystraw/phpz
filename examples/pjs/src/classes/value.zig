@@ -1,30 +1,29 @@
 pub const Value = extern struct {
     ctx: *context.Class,
-    core: quickjs.Value,
+    inner: quickjs.Value,
 
     pub fn register(impl: anytype) *phpz.ClassEntry {
         return impl(c.zend_ce_stringable);
     }
 
     pub fn init(self: *Value) void {
-        self.core = .undefined;
+        self.inner = .undefined;
     }
 
     pub fn deinit(self: *Value) void {
-        self.core.deinit(self.ctx.impl.core);
+        self.inner.deinit(self.ctx.impl.inner);
         self.ctx.delref();
     }
 
     pub fn construct(self: *Value, ctx: phpz.Ctx) !void {
-        var php_ctx_zv: *c.zval = undefined;
-        var php_value: phpz.Zval.Optional = .init;
-        try ctx.call.parse("O|z", .{ &php_ctx_zv, context.Class.entry, &php_value.ptr });
-        const php_ctx_obj: *phpz.Zval.Object = try .from(php_ctx_zv);
+        var ctx_zv: *c.zval = undefined;
+        var value_zv: phpz.Zval.Optional = .init;
+        try ctx.call.parse("O|z", .{ &ctx_zv, context.Class.entry, &value_zv.ptr });
 
-        self.ctx = .from(.std, php_ctx_obj.object());
+        self.ctx = try .fromZval(ctx_zv);
         self.ctx.addref();
 
-        if (php_value.unwrap()) |value| {
+        if (value_zv.unwrap()) |value| {
             self.updateValue(value) catch return errors.argumentTypeError(
                 2,
                 "must be int|float|string|bool|null, unsupported value type '%s'",
@@ -33,7 +32,7 @@ pub const Value = extern struct {
         } else {
             const php_obj: *Class = .from(.impl, self);
             php_obj.updateProperty(.null, "value", {});
-            self.core = .null;
+            self.inner = .null;
         }
     }
 
@@ -42,23 +41,23 @@ pub const Value = extern struct {
         switch (zv.kind()) {
             .null => {
                 php_obj.updateProperty(.null, "value", {});
-                self.core = .null;
+                self.inner = .null;
             },
             .bool => {
                 php_obj.updateProperty(.bool, "value", zv.asUnchecked(.bool));
-                self.core = .initBool(zv.asUnchecked(.bool));
+                self.inner = .initBool(zv.asUnchecked(.bool));
             },
             .int => {
                 php_obj.updateProperty(.int, "value", zv.asUnchecked(.int));
-                self.core = .initInt64(zv.asUnchecked(.int));
+                self.inner = .initInt64(zv.asUnchecked(.int));
             },
             .float => {
                 php_obj.updateProperty(.float, "value", zv.asUnchecked(.float));
-                self.core = .initFloat64(zv.asUnchecked(.float));
+                self.inner = .initFloat64(zv.asUnchecked(.float));
             },
             .string => {
                 php_obj.updateProperty(.string, "value", zv.asUnchecked(.string));
-                self.core = .initStringLen(self.ctx.impl.core, zv.asUnchecked(.string));
+                self.inner = .initStringLen(self.ctx.impl.inner, zv.asUnchecked(.string));
             },
             // TODO: more types
             else => return error.Unsupported,
@@ -72,31 +71,31 @@ pub const Value = extern struct {
             return;
         }
         if (js_value.isNumber()) {
-            php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.ctx.impl.core));
+            php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.ctx.impl.inner));
             return;
         }
 
         if (js_value.isBool()) {
-            php_obj.updateProperty(.bool, "value", try js_value.toBool(self.ctx.impl.core));
+            php_obj.updateProperty(.bool, "value", try js_value.toBool(self.ctx.impl.inner));
             return;
         }
 
         // fallback to string
         // TODO: more type...
-        var str_val = js_value.toStringValue(self.ctx.impl.core);
-        defer str_val.deinit(self.ctx.impl.core);
-        if (str_val.toZigSlice(self.ctx.impl.core)) |msg| {
-            defer self.ctx.impl.core.freeCString(msg.ptr);
+        var str_val = js_value.toStringValue(self.ctx.impl.inner);
+        defer str_val.deinit(self.ctx.impl.inner);
+        if (str_val.toZigSlice(self.ctx.impl.inner)) |msg| {
+            defer self.ctx.impl.inner.freeCString(msg.ptr);
             php_obj.updateProperty(.string, "value", msg);
         }
     }
 
     pub fn toString(self: *Value, ctx: phpz.Ctx) !void {
-        var str_val = self.core.toStringValue(self.ctx.impl.core);
-        defer str_val.deinit(self.ctx.impl.core);
+        var str_val = self.inner.toStringValue(self.ctx.impl.inner);
+        defer str_val.deinit(self.ctx.impl.inner);
 
-        if (str_val.toZigSlice(self.ctx.impl.core)) |msg| {
-            defer self.ctx.impl.core.freeCString(msg.ptr);
+        if (str_val.toZigSlice(self.ctx.impl.inner)) |msg| {
+            defer self.ctx.impl.inner.freeCString(msg.ptr);
             ctx.ret.set(.string, msg);
             return;
         }
