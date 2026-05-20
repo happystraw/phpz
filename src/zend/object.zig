@@ -1,4 +1,5 @@
 const c = @import("../root.zig").c;
+const Array = @import("array.zig").Array;
 const String = @import("string.zig").String;
 const Function = @import("function.zig").Function;
 
@@ -68,15 +69,15 @@ pub const Object = opaque {
         return self.ptr().handle;
     }
 
-    /// Get object properties as HashTable
-    pub inline fn properties(self: *Object) *c.HashTable {
-        return c.zend_std_get_properties(self.ptr());
+    /// Get object properties
+    pub inline fn properties(self: *Object) ?*Array {
+        const prop_ptr: ?*c.HashTable = c.zend_std_get_properties(self.ptr());
+        return if (prop_ptr) |p| .from(p) else null;
     }
 
     /// Get property count
     pub fn propertyCount(self: *Object) usize {
-        const props = self.properties();
-        return @intCast(props.nNumOfElements);
+        return if (self.properties()) |props| props.len() else 0;
     }
 
     /// Look up the constructor via PHP's standard handler.
