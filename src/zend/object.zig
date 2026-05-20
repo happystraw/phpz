@@ -1,11 +1,13 @@
 const c = @import("../root.zig").c;
 const String = @import("string.zig").String;
+const Function = @import("function.zig").Function;
 
 pub const Object = opaque {
     pub const Error = error{
         InitFailed,
         CloneFailed,
         MethodCallFailed,
+        AccessDenied,
     };
 
     /// Create a standard object (stdClass)
@@ -77,18 +79,49 @@ pub const Object = opaque {
         return @intCast(props.nNumOfElements);
     }
 
-    /// Get the constructor function
-    pub fn constructor(self: *Object) ?*c.zend_function {
-        return c.zend_std_get_constructor(self.ptr());
+    /// Look up the constructor via PHP's standard handler.
+    ///
+    /// Returns `null` if the class defines no constructor. Returns
+    /// `error.AccessDenied` if the constructor exists but is inaccessible
+    /// (private/protected) — in that case a PHP exception is also pending.
+    pub fn constructor(self: *Object) Error!?*Function {
+        const fn_ptr = c.zend_std_get_constructor(self.ptr());
+        return if (fn_ptr) |fp|
+            Function.from(fp)
+        else if (c.executor_globals.exception != null) Error.AccessDenied else null;
     }
 
-    /// Get a method by name
-    pub fn getMethod(self: *Object, method_name: []const u8) ?*c.zend_function {
+    /// Resolve a method via PHP's OOP dispatch.
+    ///
+    /// Goes through the full method resolution chain: handles visibility
+    /// (private/protected), triggers `__call` when the method is absent,
+    /// and respects inheritance. Use `findMethod` for a direct table lookup.
+    pub fn resolveMethod(self: *Object, method_name: []const u8) ?*Function {
         const zstr = String.init(method_name);
         defer zstr.deinit();
 
         var obj_ptr = self.ptr();
-        return c.zend_std_get_method(@ptrCast(&obj_ptr), zstr.ptr(), null);
+        const fn_ptr = c.zend_std_get_method(@ptrCast(&obj_ptr), zstr.ptr(), null);
+        return if (fn_ptr != null) .from(@ptrCast(fn_ptr)) else null;
+    }
+
+    /// Look up a method directly from the class function table.
+    ///
+    /// Unlike `resolveMethod`, this bypasses OOP dispatch (`__call`, visibility checks)
+    /// and queries the flattened function table directly. The returned pointer can
+    /// be cached and passed to `zend_call_known_instance_method` for repeated calls.
+    ///
+    /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
+    ///
+    /// Returns:
+    ///   The function pointer, or null if the method is not in the table
+    pub fn findMethod(self: *Object, method_name: []const u8) ?*Function {
+        const fn_ptr = c.zend_hash_str_find_ptr(
+            &self.ptr().ce.*.function_table,
+            method_name.ptr,
+            method_name.len,
+        );
+        return if (fn_ptr != null) .from(@ptrCast(@alignCast(fn_ptr))) else null;
     }
 
     /// Read a property value
@@ -150,8 +183,47 @@ pub const Object = opaque {
         return c.instanceof_function(self.class(), ce);
     }
 
-    /// Call a method if it exists
-    pub fn callMethodIfExists(
+    /// Call a known method by name.
+    ///
+    /// Resolves the method from the class's function table,
+    /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    ///
+    /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
+    ///
+    /// Returns:
+    ///   Error.MethodCallFailed if the method is not found in the class
+    pub fn call(
+        self: *Object,
+        method_name: []const u8,
+        retval: *c.zval,
+        params: anytype,
+    ) Error!void {
+        const method = self.findMethod(method_name) orelse return Error.MethodCallFailed;
+        method.callMethod(self.ptr(), retval, params);
+    }
+
+    /// Call a known static method by name.
+    ///
+    /// Resolves the method from the class's function table,
+    /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    ///
+    /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
+    ///
+    /// Returns:
+    ///   Error.MethodCallFailed if the method is not found in the class
+    pub fn callStatic(
+        self: *Object,
+        method_name: []const u8,
+        ce: *c.zend_class_entry,
+        retval: *c.zval,
+        params: anytype,
+    ) Error!void {
+        const method = self.findMethod(method_name) orelse return Error.MethodCallFailed;
+        method.callStatic(ce, retval, params);
+    }
+
+    /// Call a method by name, succeeding only if the method exists.
+    pub fn callIfExists(
         self: *Object,
         method_name: []const u8,
         retval: *c.zval,
