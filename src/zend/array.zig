@@ -61,13 +61,13 @@ pub const Array = opaque {
     }
 
     /// Add or update a value by index
-    pub fn updateIndex(self: *Array, index: usize, value: *c.zval) ?*c.zval {
-        return c.zend_hash_index_update(self.ptr(), @intCast(index), value);
+    pub fn updateIndex(self: *Array, index: isize, value: *c.zval) ?*c.zval {
+        return c.zend_hash_index_update(self.ptr(), @bitCast(index), value);
     }
 
     /// Add a new value by index (fails if index exists)
-    pub fn addIndex(self: *Array, index: usize, value: *c.zval) ?*c.zval {
-        return c.zend_hash_index_add(self.ptr(), @intCast(index), value);
+    pub fn addIndex(self: *Array, index: isize, value: *c.zval) ?*c.zval {
+        return c.zend_hash_index_add(self.ptr(), @bitCast(index), value);
     }
 
     /// Append a value to the array (next index)
@@ -81,8 +81,8 @@ pub const Array = opaque {
     }
 
     /// Find a value by index
-    pub fn findIndex(self: *Array, index: usize) ?*c.zval {
-        return c.zend_hash_index_find(self.ptr(), @intCast(index));
+    pub fn findIndex(self: *Array, index: isize) ?*c.zval {
+        return c.zend_hash_index_find(self.ptr(), @bitCast(index));
     }
 
     /// Check if a string key exists
@@ -91,7 +91,7 @@ pub const Array = opaque {
     }
 
     /// Check if an index exists
-    pub fn hasIndex(self: *Array, index: usize) bool {
+    pub fn hasIndex(self: *Array, index: isize) bool {
         return self.findIndex(index) != null;
     }
 
@@ -103,8 +103,8 @@ pub const Array = opaque {
     }
 
     /// Delete a value by index
-    pub fn deleteIndex(self: *Array, index: usize) Error!void {
-        if (c.zend_hash_index_del(self.ptr(), @intCast(index)) != c.SUCCESS) {
+    pub fn deleteIndex(self: *Array, index: isize) Error!void {
+        if (c.zend_hash_index_del(self.ptr(), @bitCast(index)) != c.SUCCESS) {
             return Error.NotFound;
         }
     }
@@ -148,8 +148,114 @@ pub const Array = opaque {
     pub inline fn isImmutable(self: *Array) bool {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
+
+    pub const Key = union(enum) {
+        int: isize,
+        string: []const u8,
+    };
+
+    pub const Entry = struct {
+        key: Key,
+        value: *c.zval,
+    };
+
+    pub const Iterator = struct {
+        ht: *c.HashTable,
+        pos: c.HashPosition,
+
+        pub fn init(array: *Array) Iterator {
+            var self = Iterator{
+                .ht = array.ptr(),
+                .pos = 0,
+            };
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            return self;
+        }
+
+        pub fn next(self: *Iterator) ?Entry {
+            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+
+            const val = c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+
+            var str_key: ?*c.zend_string = null;
+            var num_key: c.zend_ulong = undefined;
+            const key_type = c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos);
+            const key: Key = switch (key_type) {
+                c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
+                c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
+                else => unreachable,
+            };
+
+            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            return .{ .key = key, .value = val };
+        }
+    };
+
+    pub const KeyIterator = struct {
+        ht: *c.HashTable,
+        pos: c.HashPosition,
+
+        pub fn init(array: *Array) KeyIterator {
+            var self = KeyIterator{
+                .ht = array.ptr(),
+                .pos = 0,
+            };
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            return self;
+        }
+
+        pub fn next(self: *KeyIterator) ?Key {
+            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+
+            var str_key: ?*c.zend_string = null;
+            var num_key: c.zend_ulong = undefined;
+            const key_type = c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos);
+            const key: Key = switch (key_type) {
+                @as(c.zend_hash_key_type, c.HASH_KEY_IS_STRING) => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
+                @as(c.zend_hash_key_type, c.HASH_KEY_IS_LONG) => .{ .int = @bitCast(num_key) },
+                else => unreachable,
+            };
+
+            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            return key;
+        }
+    };
+
+    pub const ValueIterator = struct {
+        ht: *c.HashTable,
+        pos: c.HashPosition,
+
+        pub fn init(array: *Array) ValueIterator {
+            var self = ValueIterator{
+                .ht = array.ptr(),
+                .pos = 0,
+            };
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            return self;
+        }
+
+        pub fn next(self: *ValueIterator) ?*c.zval {
+            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+            const zv = c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            return zv;
+        }
+    };
+
+    pub fn iterator(self: *Array) Iterator {
+        return Iterator.init(self);
+    }
+
+    pub fn keyIterator(self: *Array) KeyIterator {
+        return KeyIterator.init(self);
+    }
+
+    pub fn valueIterator(self: *Array) ValueIterator {
+        return ValueIterator.init(self);
+    }
 };
 
 test {
     @import("std").testing.refAllDecls(Array);
+    @import("std").testing.refAllDecls(Array.Iterator);
 }

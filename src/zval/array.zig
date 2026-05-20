@@ -63,19 +63,20 @@ pub const Array = opaque {
     }
 
     /// Set a value by index
-    pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: usize, val: Zval.Type(zk)) Error!void {
+    pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: isize, val: Zval.Type(zk)) Error!void {
+        const idx: c.zend_ulong = @bitCast(index);
         switch (zk) {
-            .null => c.add_index_null(self.ptr(), @intCast(index)),
-            .int => c.add_index_long(self.ptr(), @intCast(index), @intCast(val)),
-            .float => c.add_index_double(self.ptr(), @intCast(index), val),
-            .string => c.add_index_stringl(self.ptr(), @intCast(index), val.ptr, val.len),
-            .bool => c.add_index_bool(self.ptr(), @intCast(index), val),
-            .array => c.add_index_array(self.ptr(), @intCast(index), val),
-            .object => c.add_index_object(self.ptr(), @intCast(index), val),
-            .resource => c.add_index_resource(self.ptr(), @intCast(index), val),
-            .reference => c.add_index_reference(self.ptr(), @intCast(index), val),
+            .null => c.add_index_null(self.ptr(), idx),
+            .int => c.add_index_long(self.ptr(), idx, @intCast(val)),
+            .float => c.add_index_double(self.ptr(), idx, val),
+            .string => c.add_index_stringl(self.ptr(), idx, val.ptr, val.len),
+            .bool => c.add_index_bool(self.ptr(), idx, val),
+            .array => c.add_index_array(self.ptr(), idx, val),
+            .object => c.add_index_object(self.ptr(), idx, val),
+            .resource => c.add_index_resource(self.ptr(), idx, val),
+            .reference => c.add_index_reference(self.ptr(), idx, val),
             .mixed => {
-                if (c.add_index_zval(self.ptr(), @intCast(index), val) != c.SUCCESS) return Error.SetIndexFailed;
+                if (c.add_index_zval(self.ptr(), idx, val) != c.SUCCESS) return Error.SetIndexFailed;
             },
             .undef => @compileError("'undef' represents an uninitialized value and cannot be set as array element"),
         }
