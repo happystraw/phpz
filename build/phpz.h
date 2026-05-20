@@ -32,8 +32,8 @@
 #include "Zend/zend_API.h"
 #include "Zend/zend_exceptions.h"
 
-static zend_always_inline void phpz_zval_zval(zval *z, zval *zv, bool copy, bool dtor) {
-    ZVAL_ZVAL(z, zv, copy, dtor);
+static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, bool dtor_src) {
+    ZVAL_ZVAL(z, src, copy, dtor_src);
 }
 
 #endif

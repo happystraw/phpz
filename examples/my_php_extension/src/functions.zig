@@ -29,11 +29,9 @@ fn human(ctx: phpz.Ctx) !void {
     const human_obj: *HumanClass = .new();
     var call_params = [_]c.zval{
         name_zv.*,
-        if (age_zv) |age| age.* else phpz.Zval.raw.init(.null, {}),
+        if (age_zv) |age| age.* else phpz.Zval.native.init(.null, {}),
     };
-    var zval: c.zval = undefined;
-    defer c.zval_ptr_dtor(&zval);
-    try human_obj.call("__construct", &call_params, &zval);
+    try human_obj.call("__construct", &call_params, null);
 
     ctx.ret.set(.object, &human_obj.std);
 }

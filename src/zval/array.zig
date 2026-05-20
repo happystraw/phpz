@@ -24,7 +24,7 @@ pub const Array = opaque {
 
     /// Create from an existing zval pointer (must be array type)
     pub fn from(zv: *c.zval) Error!*Array {
-        if (Zval.raw.getType(zv) != c.IS_ARRAY) return Error.TypeMismatch;
+        if (Zval.native.getType(zv) != c.IS_ARRAY) return Error.TypeMismatch;
         if (zv.value.arr == null) return Error.NullPointer;
         return @ptrCast(zv);
     }

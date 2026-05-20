@@ -35,7 +35,7 @@ pub const Object = opaque {
 
     /// Create from an existing zval pointer (must be object type)
     pub fn from(zv: *c.zval) Error!*Object {
-        if (Zval.raw.getType(zv) != c.IS_OBJECT) return Error.TypeMismatch;
+        if (Zval.native.getType(zv) != c.IS_OBJECT) return Error.TypeMismatch;
         if (zv.value.obj == null) return Error.NullPointer;
         return @ptrCast(zv);
     }

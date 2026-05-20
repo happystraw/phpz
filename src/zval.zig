@@ -140,7 +140,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn kind(self: *Zval) Kind {
-        return switch (raw.getType(self.ptr())) {
+        return switch (native.getType(self.ptr())) {
             c.IS_UNDEF => .undef,
             c.IS_NULL => .null,
             c.IS_LONG => .int,
@@ -178,7 +178,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn is(self: *Zval, comptime zk: Kind) bool {
-        return raw.is(self.ptr(), zk);
+        return native.is(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value with type checking.
@@ -201,7 +201,7 @@ pub const Zval = opaque {
     /// };
     /// ```
     pub fn as(self: *Zval, comptime zt: Kind) Error!Type(zt) {
-        return raw.as(self.ptr(), zt);
+        return native.as(self.ptr(), zt);
     }
 
     /// Convert this zval to a Zig value without type checking.
@@ -227,7 +227,7 @@ pub const Zval = opaque {
     /// const num = zval.asUnchecked(.int); // Undefined behavior if not an int!
     /// ```
     pub fn asUnchecked(self: *Zval, comptime zk: Kind) Type(zk) {
-        return raw.asUnchecked(self.ptr(), zk);
+        return native.asUnchecked(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value, or return a default value on type mismatch.
@@ -287,7 +287,11 @@ pub const Zval = opaque {
     ///   - For .undef and .null: The val parameter should be {} (void value)
     ///   - For .array, .object, .resource: Pass the appropriate pointer type
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
-        raw.set(self.ptr(), zk, val);
+        native.set(self.ptr(), zk, val);
+    }
+
+    pub fn dtor(self: *Zval) void {
+        native.dtor(self.ptr());
     }
 
     /// Optional zval wrapper for handling nullable PHP parameters.
@@ -378,12 +382,25 @@ pub const Zval = opaque {
     /// var raw: *c.zval = undefined;
     /// try ctx.call.parse("z", .{&raw});
     ///
-    /// if (Zval.raw.is(raw, .int)) {
-    ///     const n = Zval.raw.asUnchecked(raw, .int);
+    /// if (Zval.native.is(raw, .int)) {
+    ///     const n = Zval.native.asUnchecked(raw, .int);
     /// }
-    /// Zval.raw.set(raw, .null, {});
+    /// Zval.native.set(raw, .null, {});
     /// ```
-    pub const raw = struct {
+    pub const native = struct {
+        pub const undef: c.zval = init(.undef, {});
+        pub const nil: c.zval = init(.null, {});
+
+        pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
+            var z: c.zval = undefined;
+            native.set(&z, zk, val);
+            return z;
+        }
+
+        pub fn dtor(zv: *c.zval) void {
+            c.zval_ptr_dtor(zv);
+        }
+
         /// Get the PHP type ID of a raw zval.
         ///
         /// Returns the internal PHP type constant (IS_LONG, IS_STRING, etc.).
@@ -411,7 +428,7 @@ pub const Zval = opaque {
         ///
         /// Example:
         /// ```zig
-        /// const type_name = Zval.raw.getTypeName(zv);
+        /// const type_name = Zval.native.getTypeName(zv);
         /// std.debug.print("Got type: {s}\n", .{type_name});
         /// ```
         pub fn getTypeName(zv: *c.zval) [*:0]const u8 {
@@ -438,15 +455,15 @@ pub const Zval = opaque {
 
         /// Convert a raw zval to a Zig value with type checking.
         pub fn as(zv: *c.zval, comptime zt: Kind) Error!Type(zt) {
-            if (!raw.is(zv, zt)) return Error.TypeMismatch;
-            return raw.asUnchecked(zv, zt);
+            if (!native.is(zv, zt)) return Error.TypeMismatch;
+            return native.asUnchecked(zv, zt);
         }
 
         /// Convert a raw zval to a Zig value without type checking.
         pub fn asUnchecked(zv: *c.zval, comptime zk: Kind) Type(zk) {
             return switch (zk) {
                 .undef, .null => @compileError(std.fmt.comptimePrint(
-                    "'{s}' has no value to convert - use 'Zval.is/Zval.raw.is(.{s})' to check the type instead",
+                    "'{s}' has no value to convert - use 'Zval.is/Zval.native.is(.{s})' to check the type instead",
                     .{ @tagName(zk), @tagName(zk) },
                 )),
                 .int => zv.value.lval,
@@ -505,24 +522,16 @@ pub const Zval = opaque {
                     zv.value.ref = val;
                     zv.u1.type_info = c.IS_REFERENCE_EX;
                 },
-                .mixed => raw.zval(zv, val, true, false),
+                .mixed => native.setZval(zv, val, true, false),
             }
         }
 
-        pub inline fn zval(zv: *c.zval, src: *c.zval, comptime copy: bool, comptime dtor: bool) void {
-            c.phpz_zval_zval(zv, src, copy, dtor);
-        }
-
-        pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
-            var z: c.zval = undefined;
-            raw.set(&z, zk, val);
-            return z;
-        }
+        pub const setZval = c.phpz_zval_zval;
     };
 };
 
 test {
     std.testing.refAllDecls(Zval);
     std.testing.refAllDecls(Zval.Optional);
-    std.testing.refAllDecls(Zval.raw);
+    std.testing.refAllDecls(Zval.native);
 }

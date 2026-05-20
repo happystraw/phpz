@@ -195,7 +195,7 @@ pub const Call = opaque {
     ///   The $this zval pointer, or null if not in an object context
     pub fn this(self: *Call) ?*c.zval {
         const this_zval = &self.ptr().This;
-        if (Zval.raw.getType(this_zval) == c.IS_OBJECT) {
+        if (Zval.native.getType(this_zval) == c.IS_OBJECT) {
             return this_zval;
         }
         return null;

@@ -265,8 +265,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             if (retval) |out| {
                 try obj.callMethodIfExists(method_name, out, params);
             } else {
-                var discard: c.zval = undefined;
-                defer c.zval_ptr_dtor(&discard);
+                var discard = Zval.native.undef;
+                defer Zval.native.dtor(&discard);
                 try obj.callMethodIfExists(method_name, &discard, params);
             }
         }
