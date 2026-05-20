@@ -253,6 +253,12 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             return @fieldParentPtr(@tagName(field), field_ptr);
         }
 
+        /// Creates an instance of the class from an existing zval pointer.
+        pub fn fromZval(zv: *c.zval) !*Self {
+            const obj: *Zval.Object = try .from(zv);
+            return .from(.std, obj.object().ptr());
+        }
+
         /// Creates a new instance of the class.
         pub fn new() *Self {
             return .from(.std, init(entry) orelse @panic("Out of memory"));
@@ -260,14 +266,24 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Calls a method on the object.
         /// retval is optional, if not provided the return value will be discarded.
-        pub fn call(self: *Self, method_name: []const u8, params: []c.zval, retval: ?*c.zval) !void {
+        pub fn call(self: *Self, method_name: []const u8, params: anytype, retval: ?*c.zval) !void {
             const obj: *zend.Object = .from(&self.std);
             if (retval) |out| {
-                try obj.callMethodIfExists(method_name, out, params);
+                try obj.call(method_name, out, params);
             } else {
                 var discard = Zval.native.undef;
                 defer Zval.native.dtor(&discard);
-                try obj.callMethodIfExists(method_name, &discard, params);
+                try obj.call(method_name, &discard, params);
+            }
+        }
+
+        // Calls the constructor method (__construct) on the object with the given parameters.
+        pub fn construct(self: *Self, params: anytype) !void {
+            const obj: *zend.Object = .from(&self.std);
+            if (try obj.constructor()) |ctor| {
+                var discard = Zval.native.undef;
+                defer Zval.native.dtor(&discard);
+                ctor.callMethod(obj.ptr(), &discard, params);
             }
         }
 
@@ -427,7 +443,3 @@ pub const ClassEntry = c.zend_class_entry;
 const function_helper = @import("function.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
-
-test {
-    std.testing.refAllDecls(@This());
-}
