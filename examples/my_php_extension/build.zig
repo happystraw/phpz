@@ -1,69 +1,63 @@
 const std = @import("std");
 
+// Import the Phpz build system module
 const Phpz = @import("phpz").Phpz;
 
 pub fn build(b: *std.Build) void {
+    // Standard Zig build options: target platform and optimization mode
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php";
+    // Directory containing PHP header files (main/, Zend/, TSRM/, ext/)
+    const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php";
+    // Windows only: PHP SDK lib directory containing php8.lib
+    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8.lib)");
 
+    // Fetch the phpz dependency declared in build.zig.zon
     const phpz_dep = b.dependency("phpz", .{});
-    const phpz: Phpz = .init(phpz_dep, .{
+    // Initialize Phpz: translates PHP C headers into Zig bindings
+    const phpz = Phpz.init(phpz_dep, .{
         .c_source_file = b.path("my_php_extension.h"),
         .target = target,
         .optimize = optimize,
-        .php_include_root = .{
-            .cwd_relative = php_include_root,
-        },
+        .php_include_dir = .{ .cwd_relative = php_include_dir },
+        .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
     });
 
-    const ext_name = "my_php_extension";
-    const ext_lib = b.addLibrary(.{
-        .name = ext_name,
+    // Create the PHP extension as a dynamic library (.so / .dll / .dylib)
+    const php_ext_name = "my_php_extension";
+    const php_ext_lib = b.addLibrary(.{
+        .name = php_ext_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{ .name = "phpz", .module = phpz.mod },
-            },
         }),
         .linkage = .dynamic,
     });
 
-    // On macos, allow undefined symbols to be resolved at runtime by PHP
-    if (target.result.os.tag == .macos) {
-        ext_lib.linker_allow_shlib_undefined = true;
-    }
-    // On Windows, the PHP extension DLL must be linked against php8.lib
-    // which lives in <prefix>/lib next to <prefix>/include in the PHP SDK.
-    if (target.result.os.tag == .windows) {
-        const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP library directory (Windows only)") orelse "";
-        if (php_lib_dir.len > 0) {
-            ext_lib.root_module.addLibraryPath(.{ .cwd_relative = php_lib_dir });
-        }
-        ext_lib.root_module.linkSystemLibrary("php8", .{});
-    }
+    // Import the phpz module into your extension library
+    php_ext_lib.root_module.addImport("phpz", phpz.mod);
 
-    const ext_filename = if (target.result.os.tag == .windows)
-        "php_" ++ ext_name ++ ".dll"
+    // Apply OS-specific linker settings (macOS undefined symbols, Windows php8.lib)
+    phpz.apply(php_ext_lib);
+
+    // PHP expects extensions at a specific naming convention
+    const php_ext_filename = if (target.result.os.tag == .windows)
+        "php_" ++ php_ext_name ++ ".dll"
     else
-        ext_name ++ ".so";
+        php_ext_name ++ ".so";
 
-    // for zig build system
-    const install_file = b.addInstallFileWithDir(
-        ext_lib.getEmittedBin(),
-        .{ .custom = "../modules" },
-        ext_filename,
-    );
-    install_file.step.dependOn(&ext_lib.step);
-    b.getInstallStep().dependOn(&install_file.step);
+    // Copy the built extension to <project>/modules/
+    const php_ext_file = std.Build.Step.UpdateSourceFiles.create(b);
+    php_ext_file.addCopyFileToSource(php_ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{php_ext_filename}));
+    b.getInstallStep().dependOn(&php_ext_file.step);
 
-    const ext_arg = b.fmt("-dextension=./modules/{s}", .{ext_filename});
-    const test_step = b.step("test-extension", "Test the PHP extension");
-    const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", ext_arg, "test.php" });
-    const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", ext_arg, "--ri", ext_name });
+    // Test step: runs `php -dextension=./modules/<ext> test.php` and `--ri <ext>`
+    const php_ext_cfg = b.fmt("-dextension=./modules/{s}", .{php_ext_filename});
+    const test_step = b.step("test", "Test the PHP extension");
+    const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", php_ext_cfg, "test.php" });
+    const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", php_ext_cfg, "--ri", php_ext_name });
     test_cmd.step.dependOn(b.getInstallStep());
     test_info_cmd.step.dependOn(b.getInstallStep());
     test_step.dependOn(&test_cmd.step);
