@@ -7,6 +7,8 @@ const Phpz = @This();
 /// The compiled Phpz module with PHP extension support
 mod: *Build.Module,
 
+options: Options,
+
 /// Configuration options for building PHP extensions with Zig
 pub const Options = struct {
     /// Path to the C header file that includes PHP headers.
@@ -20,16 +22,16 @@ pub const Options = struct {
     /// Optimization mode (Debug, ReleaseSafe, ReleaseFast, ReleaseSmall)
     optimize: std.builtin.OptimizeMode,
 
-    /// Root directory containing PHP headers.
-    /// Typically /usr/include/php on Linux.
-    /// The build system will automatically append subdirectories:
-    ///   - main/
-    ///   - Zend/
-    ///   - TSRM/
-    ///   - win32/ (windows only)
-    php_include_root: ?Build.LazyPath = null,
+    /// Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
+    ///   Linux:   /usr/include/php
+    ///   macOS:   /usr/local/php/include
+    ///   Windows: C:\php-sdk\php-8.5.6-devel-vs17-x64\include
+    php_include_dir: ?Build.LazyPath = null,
 
-    /// Build as a shared library (.so/.dll/.dylib) for PHP to load dynamically.
+    /// Windows only: directory containing php8.lib (usually <sdk>/lib).
+    php_lib_dir: ?Build.LazyPath = null,
+
+    /// Build as a shared library for PHP to load dynamically.
     /// Set to false for static linking (less common for PHP extensions).
     shared: bool = true,
 };
@@ -55,10 +57,26 @@ pub fn initInner(b: *Build, options: Options) Phpz {
     mod_opts.addOption(bool, "shared", options.shared);
     mod.addOptions("phpz_options", mod_opts);
 
-    return .{ .mod = mod };
+    return .{ .mod = mod, .options = options };
 }
 
-pub fn createPhpCModule(b: *Build, options: Options) *Build.Module {
+/// Apply OS-specific linker settings to a PHP extension shared library.
+pub fn apply(self: Phpz, lib: *Build.Step.Compile) void {
+    switch (self.options.target.result.os.tag) {
+        // macOS: allows undefined symbols to be resolved at runtime by PHP
+        .macos => lib.linker_allow_shlib_undefined = true,
+        // Windows: links against php8.lib in the PHP SDK
+        .windows => {
+            if (self.options.php_lib_dir) |dir| {
+                lib.root_module.addLibraryPath(dir);
+            }
+            lib.root_module.linkSystemLibrary("php8", .{});
+        },
+        else => {},
+    }
+}
+
+fn createPhpCModule(b: *Build, options: Options) *Build.Module {
     // This method uses an external dependency for C translation.
     const translate_c_dep = b.dependency("translate_c", .{});
     const php_c: Translator = .init(translate_c_dep, .{
@@ -77,7 +95,7 @@ pub fn createPhpCModule(b: *Build, options: Options) *Build.Module {
     php_c.addIncludePath(b.path("build"));
 
     // Configure PHP include paths for the C preprocessor
-    if (options.php_include_root) |root| {
+    if (options.php_include_dir) |root| {
         php_c.addIncludePath(root);
         php_c.addIncludePath(root.path(b, "main"));
         php_c.addIncludePath(root.path(b, "Zend"));
