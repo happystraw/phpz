@@ -3,7 +3,7 @@ const std = @import("std");
 pub const Phpz = @import("./build/Phpz.zig");
 
 const BuildOptions = struct {
-    php_include_root: []const u8,
+    php_include_dir: []const u8,
     php_lib_dir: ?[]const u8,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
@@ -11,8 +11,8 @@ const BuildOptions = struct {
 
 pub fn build(b: *std.Build) void {
     const options = BuildOptions{
-        .php_include_root = b.option([]const u8, "php-include-root", "PHP root include directory path") orelse "/usr/include/php",
-        .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP library directory (Windows only)"),
+        .php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php",
+        .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8.lib)"),
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
     };
@@ -27,10 +27,11 @@ pub fn build(b: *std.Build) void {
 
 fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
     return Phpz.initInner(b, .{
-        .php_include_root = .{ .cwd_relative = options.php_include_root },
+        .php_include_dir = .{ .cwd_relative = options.php_include_dir },
         .c_source_file = b.path("build/phpz.h"),
         .target = options.target,
         .optimize = options.optimize,
+        .php_lib_dir = if (options.php_lib_dir) |d| .{ .cwd_relative = d } else null,
     }).mod;
 }
 
@@ -91,8 +92,8 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
         "pjs",
     };
     inline for (examples) |test_example| {
-        const test_cmd = b.addSystemCommand(&[_][]const u8{ b.graph.zig_exe, "build", "test-extension" });
-        test_cmd.addArg(b.fmt("-Dphp-include-root={s}", .{options.php_include_root}));
+        const test_cmd = b.addSystemCommand(&[_][]const u8{ b.graph.zig_exe, "build", "test" });
+        test_cmd.addArg(b.fmt("-Dphp-include-dir={s}", .{options.php_include_dir}));
         test_cmd.addArg(b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}));
         if (!options.target.query.isNativeTriple()) {
             test_cmd.addArg(b.fmt("-Dtarget={s}", .{options.target.query.zigTriple(b.allocator) catch unreachable}));

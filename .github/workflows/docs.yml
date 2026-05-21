@@ -46,7 +46,7 @@ jobs:
       - name: Generate docs
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build docs -Dphp-include-root="$PHP_INCLUDE_DIR"
+          zig build docs -Dphp-include-dir="$PHP_INCLUDE_DIR"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

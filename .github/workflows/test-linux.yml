@@ -43,20 +43,20 @@ jobs:
       - name: Run unit tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR"
+          zig build test -Dphp-include-dir="$PHP_INCLUDE_DIR"
       - name: Run example tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR"
+          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR"
       - name: Run unit tests (native-native-gnu)
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test -Dphp-include-root="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
+          zig build test -Dphp-include-dir="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
       - name: Run example tests (native-native-gnu)
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
+          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Dtarget=native-native-gnu
       - name: Run example tests (ReleaseSafe)
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-root="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
+          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe

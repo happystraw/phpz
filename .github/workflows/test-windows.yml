@@ -59,20 +59,20 @@ jobs:
         run: |
           zig build test \
             -Dtarget=native-native-msvc \
-            -Dphp-include-root="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
             -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
       - name: Run example tests
         shell: bash
         run: |
           zig build test-examples \
             -Dtarget=native-native-msvc \
-            -Dphp-include-root="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
             -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
       - name: Run example tests (ReleaseSafe)
         shell: bash
         run: |
           zig build test-examples \
             -Dtarget=native-native-msvc \
-            -Dphp-include-root="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
             -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
             -Doptimize=ReleaseSafe
