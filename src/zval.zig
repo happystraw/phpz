@@ -299,8 +299,16 @@ pub const Zval = opaque {
         native.set(self.ptr(), zk, val);
     }
 
-    pub fn dtor(self: *Zval) void {
+    pub inline fn addref(self: *Zval) void {
+        native.addref(self.ptr());
+    }
+
+    pub inline fn dtor(self: *Zval) void {
         native.dtor(self.ptr());
+    }
+
+    pub inline fn refcount(self: *Zval) u32 {
+        return native.refcount(self.ptr());
     }
 
     /// Optional zval wrapper for handling nullable PHP parameters.
@@ -404,10 +412,6 @@ pub const Zval = opaque {
             var z: c.zval = undefined;
             native.set(&z, zk, val);
             return z;
-        }
-
-        pub fn dtor(zv: *c.zval) void {
-            c.zval_ptr_dtor(zv);
         }
 
         /// Get the PHP type ID of a raw zval.
@@ -542,6 +546,9 @@ pub const Zval = opaque {
         }
 
         pub const setZval = c.phpz_zval_zval;
+        pub const addref = c.zval_add_ref;
+        pub const dtor = c.zval_ptr_dtor;
+        pub const refcount = c.zval_refcount_p;
     };
 };
 
