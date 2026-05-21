@@ -10,7 +10,7 @@ pub const ModuleEntry = mod_helper.ModuleEntry;
 
 const class_helper = @import("class.zig");
 pub const Class = class_helper.Class;
-pub const DerivedClass = class_helper.DerivedClass;
+pub const SimpleClass = class_helper.SimpleClass;
 pub const ClassEntry = class_helper.ClassEntry;
 
 const function_helper = @import("function.zig");

@@ -3,7 +3,7 @@
 //! This module provides utilities for creating PHP classes from Zig types:
 //!
 //! - `Class`: Full-featured class wrapper with Zig data binding and lifecycle management
-//! - `DerivedClass`: Lightweight class registration for derived classes without custom data
+//! - `SimpleClass`: Lightweight class registration without Zig data binding
 //!
 //! Both functions generate class wrappers that integrate with PHP's object system,
 //! handling registration through auto-generated `register_class_*` functions from
@@ -345,7 +345,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     };
 }
 
-/// Create a derived PHP class without Zig data binding.
+/// Create a simple PHP class without Zig data binding.
 ///
 /// This function creates a lightweight PHP class wrapper that only handles
 /// class registration. Unlike `Class`, it does not manage object lifecycle
@@ -354,8 +354,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 ///
 /// Use cases:
 ///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
-///   - Simple derived classes that only need inheritance without custom data
-///   - Classes where internal implementation is handled elsewhere
+///   - Interfaces (e.g., Tester extends Stringable)
+///   - Classes where internal implementation is handled by PHP runtime
 ///
 /// Parameters:
 ///   - class_name: PHP class name (supports namespaces with backslash)
@@ -367,7 +367,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// Example:
 /// ```zig
 /// // Create a custom exception class
-/// pub const MyException = phpz.DerivedClass("MyExt\\MyException", struct {
+/// pub const MyException = phpz.SimpleClass("MyExt\\MyException", struct {
 ///     pub fn register(impl: anytype) *phpz.ClassEntry {
 ///         return impl(c.spl_ce_RuntimeException);
 ///     }
@@ -383,7 +383,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 ///     MyException.register();
 /// }
 /// ```
-pub fn DerivedClass(comptime class_name: [:0]const u8, comptime T: type) type {
+pub fn SimpleClass(comptime class_name: [:0]const u8, comptime T: type) type {
     return struct {
         /// The PHP class name
         pub const name = class_name;
