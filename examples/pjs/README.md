@@ -1,22 +1,24 @@
 # pjs
 
-A PHP extension that embeds [QuickJS-ng](https://github.com/mitchellh/zig-quickjs-ng) to run JavaScript from PHP.
+Embed [QuickJS-ng](https://github.com/mitchellh/zig-quickjs-ng) in PHP to run JavaScript.
 
-- **Classes**: `Pjs\Runtime`, `Pjs\Context`, `Pjs\Value`, `Pjs\Exception`
-- Eval JavaScript, catch JS exceptions as PHP exceptions
+- `Pjs\Runtime` — JS runtime environment
+- `Pjs\Context` — evaluate JS code (`$ctx->eval("1+1")`)
+- `Pjs\Value` — wraps JS return values, implements `Stringable`
+- `Pjs\Exception` — JS exceptions thrown as PHP exceptions
 
 ## Run
 
 ```bash
-zig build test-extension
+zig build test
 ```
 
-This builds the extension and runs `test.php` against it.
+Builds the extension and runs `test.php` which evals JS expressions, loads a JS file, and tests error handling.
 
 Custom PHP include path:
 
 ```bash
-zig build test-extension -Dphp-include-root=/usr/include/php8.4
+zig build test -Dphp-include-dir=/usr/include/php8.4
 ```
 
 ## Manually

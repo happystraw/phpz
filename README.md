@@ -67,29 +67,26 @@ Create a C header file (e.g., `my_php_extension.h`):
 Configure your `build.zig`:
 
 ```zig
+// Import the Phpz build system module
 const Phpz = @import("phpz").Phpz;
 
+// Fetch the phpz dependency declared in build.zig.zon
 const phpz_dep = b.dependency("phpz", .{});
-const phpz: Phpz = .init(phpz_dep, .{
-    .c_source_file = b.path("my_php_extension.h"),
+// Initialize Phpz: translates PHP C headers into Zig bindings
+const phpz = Phpz.init(phpz_dep, .{
     .target = target,
     .optimize = optimize,
-    .php_include_root = .{ .cwd_relative = "/usr/include/php" },
-    .shared = true,
+    // C header for translate-c
+    .c_source_file = b.path("my_php_extension.h"),
+    // Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
+    .php_include_dir = .{ .cwd_relative = "/usr/include/php" },
 });
 
-const ext_lib = b.addLibrary(.{
-    .name = "my_php_extension",
-    .root_module = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .imports = &.{
-            .{ .name = "phpz", .module = phpz.mod },
-        },
-    }),
-    .linkage = .dynamic,
-});
+// Import the phpz module into your extension library
+lib.root_module.addImport("phpz", phpz.mod);
 
-b.installArtifact(ext_lib);
+// Apply OS-specific linker settings (macOS undefined symbols, Windows php8.lib)
+phpz.apply(lib);
 ```
 
 Then `zig build` !

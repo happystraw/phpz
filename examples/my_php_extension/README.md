@@ -2,22 +2,23 @@
 
 A basic PHP extension demonstrating core phpz features:
 
-- **Functions**: `hello_world()`, `whoami()`, `human()`
-- **Classes**: `MyPHPExt\Counter`, `MyPHPExt\Human`
+- **Functions**: `hello()`, `greet(string $name): string`
+- **Namespaced functions**: `MyPHPExt\human(string $name, int|null $age = null): Human`
+- **Classes**: `MyPHPExt\Counter`, `MyPHPExt\Human`, `MyPHPExt\Dumper`
 - **Error handling**: type errors, value errors
 
 ## Run
 
 ```bash
-zig build test-extension
+zig build test
 ```
 
-This builds the extension and runs `test.php` against it.
+Builds the extension and runs `test.php` which covers functions, classes, methods, and error handling.
 
 Custom PHP include path:
 
 ```bash
-zig build test-extension -Dphp-include-root=/usr/include/php8.4
+zig build test -Dphp-include-dir=/usr/include/php8.4
 ```
 
 ## Manually
