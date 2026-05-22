@@ -61,6 +61,38 @@ pub const Dumper = extern struct {
             },
             .object => {
                 const obj = phpz.zend.Object.from(val.asUnchecked(.object));
+                indent(depth);
+
+                // Check if this is an enum
+                if (obj.isEnum()) {
+                    const case_name = obj.enumCaseName();
+                    switch (obj.enumBackingType()) {
+                        .int => {
+                            const v = phpz.Zval.native.asUnchecked(obj.enumCaseValue().?, .int);
+                            _ = phpz.printf("enum %.*s { %.*s = %ld }\n", .{
+                                obj.className().len, obj.className().ptr,
+                                case_name.len,       case_name.ptr,
+                                v,
+                            });
+                        },
+                        .string => {
+                            const v = phpz.Zval.native.asUnchecked(obj.enumCaseValue().?, .string);
+                            _ = phpz.printf("enum %.*s { %.*s = \"%.*s\" }\n", .{
+                                obj.className().len, obj.className().ptr,
+                                case_name.len,       case_name.ptr,
+                                v.len,               v.ptr,
+                            });
+                        },
+                        else => {
+                            _ = phpz.printf("enum %.*s { %.*s }\n", .{
+                                obj.className().len, obj.className().ptr,
+                                case_name.len,       case_name.ptr,
+                            });
+                        },
+                    }
+                    return;
+                }
+
                 const class_name = obj.className();
                 const prop_count = obj.propertyCount();
                 indent(depth);

@@ -53,13 +53,9 @@ pub fn build(b: *std.Build) void {
     php_ext_file.addCopyFileToSource(php_ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{php_ext_filename}));
     b.getInstallStep().dependOn(&php_ext_file.step);
 
-    // Test step: runs `php -dextension=./modules/<ext> test.php` and `--ri <ext>`
-    const php_ext_cfg = b.fmt("-dextension=./modules/{s}", .{php_ext_filename});
-    const test_step = b.step("test", "Test the PHP extension");
-    const test_cmd = b.addSystemCommand(&[_][]const u8{ "php", php_ext_cfg, "test.php" });
-    const test_info_cmd = b.addSystemCommand(&[_][]const u8{ "php", php_ext_cfg, "--ri", php_ext_name });
-    test_cmd.step.dependOn(b.getInstallStep());
-    test_info_cmd.step.dependOn(b.getInstallStep());
-    test_step.dependOn(&test_cmd.step);
-    test_step.dependOn(&test_info_cmd.step);
+    // Test step: runs PHPT tests
+    const test_step = b.step("test", "Run PHPT tests");
+    const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{ "php", "run-tests.php" });
+    test_phpt_cmd.step.dependOn(b.getInstallStep());
+    test_step.dependOn(&test_phpt_cmd.step);
 }

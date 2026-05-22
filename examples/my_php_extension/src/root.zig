@@ -8,8 +8,13 @@ const allocator = @import("allocator.zig");
 const classes = @import("classes.zig");
 
 fn startup() !void {
+    classes.identifiable.Interface.register();
+    classes.status.Enum.register();
+    classes.role.Enum.register();
+    classes.my_error.Class.register();
+    classes.abstract_entity.Class.register();
+    classes.user.Class.register();
     classes.counter.Class.register();
-    classes.human.Class.register();
     classes.dumper.Class.register();
 }
 
@@ -34,8 +39,8 @@ comptime {
     phpz.module(.{
         .name = "my_php_extension",
         .version = "0.1.0",
-        .startup_fn = startup,
-        .shutdown_fn = shutdown,
+        .module_startup_fn = startup,
+        .module_shutdown_fn = shutdown,
         // .request_startup_fn = active,
         // .request_shutdown_fn = deactivate,
         .info_fn = info,

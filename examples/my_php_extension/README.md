@@ -2,23 +2,32 @@
 
 A basic PHP extension demonstrating core phpz features:
 
-- **Functions**: `hello()`, `greet(string $name): string`
-- **Namespaced functions**: `MyPHPExt\human(string $name, int|null $age = null): Human`
-- **Classes**: `MyPHPExt\Counter`, `MyPHPExt\Human`, `MyPHPExt\Dumper`
-- **Error handling**: type errors, value errors
+- **Constants**: `MY_EXT_VERSION`, `MyPHPExt\VERSION`, `User::MIN_AGE`
+- **Global functions**: `hello()`, `greet(string $name): string`
+- **Namespaced functions**: `MyPHPExt\increment(int &$value)`, `MyPHPExt\findById(string|int $id): ?User`, `MyPHPExt\getDefaultUser(): User`, `MyPHPExt\listStatuses(): array`
+- **Interface**: `MyPHPExt\Identifiable`
+- **Enums**: `MyPHPExt\Status` (int backed), `MyPHPExt\Role` (string backed)
+- **Classes**: `MyPHPExt\User`, `MyPHPExt\Counter`, `MyPHPExt\Dumper`, `MyPHPExt\MyError`, `MyPHPExt\AbstractEntity`
 
 ## Run
 
 ```bash
+# Build and run tests
 zig build test
 ```
-
-Builds the extension and runs `test.php` which covers functions, classes, methods, and error handling.
 
 Custom PHP include path:
 
 ```bash
 zig build test -Dphp-include-dir=/usr/include/php8.4
+```
+
+## Tests
+
+PHPT tests are located in `tests/`. Run with:
+
+```bash
+php run-tests.php
 ```
 
 ## Manually
@@ -27,8 +36,8 @@ zig build test -Dphp-include-dir=/usr/include/php8.4
 # Build
 zig build
 
-# Run test script
-php -dextension=./modules/my_php_extension.so test.php
+# Run specific PHP code with the extension loaded
+php -dextension=./modules/my_php_extension.so -r 'hello();'
 
 # Check extension info
 php -dextension=./modules/my_php_extension.so --ri my_php_extension
