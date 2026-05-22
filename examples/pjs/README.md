@@ -13,12 +13,18 @@ Embed [QuickJS-ng](https://github.com/mitchellh/zig-quickjs-ng) in PHP to run Ja
 zig build test
 ```
 
-Builds the extension and runs `test.php` which evals JS expressions, loads a JS file, and tests error handling.
-
 Custom PHP include path:
 
 ```bash
 zig build test -Dphp-include-dir=/usr/include/php8.4
+```
+
+## Tests
+
+PHPT tests are located in `tests/`. Run with:
+
+```bash
+php run-tests.php
 ```
 
 ## Manually
@@ -27,9 +33,10 @@ zig build test -Dphp-include-dir=/usr/include/php8.4
 # Build
 zig build
 
-# Run test script
-php -dextension=./modules/pjs.so test.php
-
-# Check extension info
-php -dextension=./modules/pjs.so --ri pjs
+# Run JS evaluation
+php -dextension=./modules/pjs.so -r '
+$rt = new Pjs\Runtime();
+$ctx = new Pjs\Context($rt);
+var_dump($ctx->eval("1+1"));
+'
 ```
