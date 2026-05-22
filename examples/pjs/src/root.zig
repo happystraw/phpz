@@ -13,8 +13,8 @@ comptime {
     phpz.module(.{
         .name = "pjs",
         .version = "0.1.0",
-        .startup_fn = startup,
-        .shutdown_fn = shutdown,
+        .module_startup_fn = startup,
+        .module_shutdown_fn = shutdown,
     });
 }
 
