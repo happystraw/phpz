@@ -58,7 +58,7 @@ pub const Array = opaque {
             .resource => c.add_assoc_resource_ex(self.ptr(), key.ptr, key.len, val),
             .reference => c.add_assoc_reference_ex(self.ptr(), key.ptr, key.len, val),
             .mixed => c.add_assoc_zval_ex(self.ptr(), key.ptr, key.len, val),
-            .undef => @compileError("'undef' represents an uninitialized value and cannot be set as array value"),
+            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array value"),
         }
     }
 
@@ -78,7 +78,7 @@ pub const Array = opaque {
             .mixed => {
                 if (c.add_index_zval(self.ptr(), idx, val) != c.SUCCESS) return Error.SetIndexFailed;
             },
-            .undef => @compileError("'undef' represents an uninitialized value and cannot be set as array element"),
+            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array element"),
         }
     }
 
@@ -95,7 +95,7 @@ pub const Array = opaque {
             .resource => c.add_next_index_resource(self.ptr(), val),
             .reference => c.add_next_index_reference(self.ptr(), val),
             .mixed => c.add_next_index_zval(self.ptr(), val),
-            .undef => @compileError("'undef' represents an uninitialized value and cannot be appended"),
+            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be appended to array"),
         };
         if (result != c.SUCCESS) return Error.AppendFailed;
     }

@@ -1,7 +1,8 @@
 const c = @import("../root.zig").c;
+const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
-const String = @import("string.zig").String;
 const Function = @import("function.zig").Function;
+const String = @import("string.zig").String;
 
 pub const Object = opaque {
     pub const Error = error{
@@ -133,12 +134,13 @@ pub const Object = opaque {
         const zstr = String.init(name);
         defer zstr.deinit();
 
+        var rv: c.zval = undefined;
         return c.zend_std_read_property(
             self.ptr(),
             zstr.ptr(),
             c.BP_VAR_R,
             null,
-            null,
+            &rv,
         );
     }
 
@@ -260,7 +262,44 @@ pub const Object = opaque {
     pub inline fn isImmutable(self: *Object) bool {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
+
+    /// Get an enum case by name from a class entry.
+    pub fn getEnumCase(ce: *c.zend_class_entry, case_name: []const u8) ?*Object {
+        const case_obj = c.zend_enum_get_case_cstr(ce, case_name.ptr);
+        return if (case_obj) |obj| .from(obj) else null;
+    }
+
+    /// Check if this object is an enum case
+    pub inline fn isEnum(self: *Object) bool {
+        return (self.class().ce_flags & c.ZEND_ACC_ENUM) != 0;
+    }
+
+    /// Enum backing type
+    pub const EnumBackingType = enum(u32) {
+        undef = c.IS_UNDEF,
+        int = c.IS_LONG,
+        string = c.IS_STRING,
+        _,
+    };
+
+    /// Get the backing type of this enum
+    pub inline fn enumBackingType(self: *Object) EnumBackingType {
+        return @enumFromInt(self.class().enum_backing_type);
+    }
+
+    /// Get the case name from an enum case object
+    pub fn enumCaseName(self: *Object) []const u8 {
+        const zv = c.zend_enum_fetch_case_name(self.ptr());
+        return Zval.native.asUnchecked(zv, .string);
+    }
+
+    /// Get the backing value from a backed enum case, or null if pure enum
+    pub fn enumCaseValue(self: *Object) ?*c.zval {
+        if (self.class().enum_backing_type == c.IS_UNDEF) return null;
+        return c.zend_enum_fetch_case_value(self.ptr());
+    }
 };
+
 
 test {
     @import("std").testing.refAllDecls(Object);

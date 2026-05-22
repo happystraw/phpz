@@ -355,6 +355,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// Use cases:
 ///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
 ///   - Interfaces (e.g., Tester extends Stringable)
+///   - PHP enums (e.g., `SimpleClass("MyExt\\Status", void)`). Use `zend.Object.isEnum()`,
+///     `zend.Object.enumCaseName()`, `zend.Object.enumCaseValue()` for runtime enum inspection.
 ///   - Classes where internal implementation is handled by PHP runtime
 ///
 /// Parameters:
@@ -429,10 +431,13 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
 
 fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *ClassEntry {
     const register_class_fn = @field(c, getRegisterClassFnName(class_name));
-    return if (@hasDecl(T, "register"))
-        @call(.auto, T.register, .{register_class_fn})
-    else
-        @call(.auto, register_class_fn, .{});
+    return switch (T) {
+        void => @call(.auto, register_class_fn, .{}),
+        else => if (@hasDecl(T, "register"))
+            @call(.auto, T.register, .{register_class_fn})
+        else
+            @call(.auto, register_class_fn, .{}),
+    };
 }
 
 const std = @import("std");
