@@ -1,11 +1,9 @@
-const std = @import("std");
-
 const phpz = @import("phpz");
 const c = phpz.c;
 
 const allocator = @import("allocator.zig");
-
 const classes = @import("classes.zig");
+const ini_config = @import("ini.zig");
 
 fn startup() !void {
     classes.identifiable.Interface.register();
@@ -44,5 +42,6 @@ comptime {
         // .request_startup_fn = active,
         // .request_shutdown_fn = deactivate,
         .info_fn = info,
+        .ini_entries = &ini_config.entries,
     });
 }

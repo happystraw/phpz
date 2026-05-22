@@ -8,6 +8,7 @@ A basic PHP extension demonstrating core phpz features:
 - **Interface**: `MyPHPExt\Identifiable`
 - **Enums**: `MyPHPExt\Status` (int backed), `MyPHPExt\Role` (string backed)
 - **Classes**: `MyPHPExt\User`, `MyPHPExt\Counter`, `MyPHPExt\Dumper`, `MyPHPExt\MyError`, `MyPHPExt\AbstractEntity`
+- **INI directives**: `my_php_extension.greeting` (string, all), `my_php_extension.max_users` (int, system), `my_php_extension.debug` (bool, user)
 
 ## Run
 
@@ -39,6 +40,6 @@ zig build
 # Run specific PHP code with the extension loaded
 php -dextension=./modules/my_php_extension.so -r 'hello();'
 
-# Check extension info
-php -dextension=./modules/my_php_extension.so --ri my_php_extension
+# Test INI directive
+php -dextension=./modules/my_php_extension.so -dmy_php_extension.greeting="Hi" -r 'echo ini_get("my_php_extension.greeting");'
 ```
