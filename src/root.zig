@@ -3,6 +3,7 @@ const std = @import("std");
 pub const c = @import("c.zig").c;
 
 pub const heap = @import("heap.zig");
+pub const ini = @import("ini.zig");
 
 const mod_helper = @import("module.zig");
 pub const module = mod_helper.module;

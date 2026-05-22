@@ -4,8 +4,9 @@ const phpz_options = @import("phpz_options");
 
 const c = @import("root.zig").c;
 pub const ModuleEntry = c.zend_module_entry;
-const function_helper = @import("function.zig");
 const errors = @import("errors.zig");
+const function_helper = @import("function.zig");
+const ini = @import("ini.zig");
 
 /// Configuration for creating a PHP extension module.
 ///
@@ -49,6 +50,10 @@ pub const Config = struct {
     /// Use this to display custom information about your extension.
     /// Example: configuration settings, compile-time options, credits.
     info_fn: ?PhpInfoFn = null,
+
+    /// INI entry definitions for custom php.ini directives.
+    /// Use `phpz.ini.Entry` to define entries. Registered during module startup.
+    ini_entries: ?[]const ini.Entry = null,
 };
 
 pub const PhpInfoFn = fn (*ModuleEntry) void;
@@ -93,16 +98,19 @@ fn makePhpHookFn(comptime hook_fn: PhpHookFn) *const fn (c_int, c_int) callconv(
     }.@"fn";
 }
 
-fn makePhpModuleStartupFn(comptime symbols_fn_name: [:0]const u8, comptime hook_fn: ?PhpHookFn) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
+fn makePhpModuleStartupFn(comptime symbols_fn_name: [:0]const u8, comptime hook_fn: ?PhpHookFn, comptime ini_entries: ?[]const ini.Entry) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
     const has_symbols = comptime @hasDecl(c, symbols_fn_name);
-    if (!has_symbols and hook_fn == null) return null;
+    if (!has_symbols and hook_fn == null and ini_entries == null) return null;
     return struct {
         fn @"fn"(_: c_int, module_number: c_int) callconv(.c) c.zend_result {
             if (comptime has_symbols) {
                 @field(c, symbols_fn_name)(module_number);
             }
-            if (comptime hook_fn != null) {
-                hook_fn.?() catch |err| {
+            if (comptime ini_entries) |entries| {
+                _ = c.zend_register_ini_entries(&ini.entries(entries)[0], module_number);
+            }
+            if (comptime hook_fn) |f| {
+                f() catch |err| {
                     errors.err(.err, "Module startup function failed: %s", .{@errorName(err).ptr});
                     return c.FAILURE;
                 };
@@ -134,7 +142,7 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
     // EXTENSION SETUP
     entry.name = cfg.name;
     entry.functions = if (@hasDecl(c, "ext_functions")) &c.ext_functions else null;
-    entry.module_startup_func = makePhpModuleStartupFn("register_" ++ cfg.name ++ "_symbols", cfg.module_startup_fn);
+    entry.module_startup_func = makePhpModuleStartupFn("register_" ++ cfg.name ++ "_symbols", cfg.module_startup_fn, cfg.ini_entries);
     entry.module_shutdown_func = if (cfg.module_shutdown_fn) |f| makePhpHookFn(f) else null;
     entry.request_startup_func = if (cfg.request_startup_fn) |f| makePhpHookFn(f) else null;
     entry.request_shutdown_func = if (cfg.request_shutdown_fn) |f| makePhpHookFn(f) else null;
