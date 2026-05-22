@@ -32,8 +32,20 @@ const User = extern struct {
     }
 
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
-        _ = self;
-        _ = ctx;
+        var zv: *c.zval = undefined;
+        try ctx.call.parse("z", .{&zv});
+
+        var buf: [256]u8 = undefined;
+        if (phpz.Zval.native.is(zv, .int)) {
+            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({d})\n", .{ self.name[0..self.name_len], self.age, phpz.Zval.native.asUnchecked(zv, .int) });
+            buf[result.len] = 0;
+            _ = phpz.printf(buf[0..result.len :0], .{});
+        } else if (phpz.Zval.native.is(zv, .string)) {
+            const s = phpz.Zval.native.asUnchecked(zv, .string);
+            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({s})\n", .{ self.name[0..self.name_len], self.age, s });
+            buf[result.len] = 0;
+            _ = phpz.printf(buf[0..result.len :0], .{});
+        }
     }
 
     pub fn getId(self: *const User, ctx: phpz.Ctx) void {

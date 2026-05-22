@@ -29,8 +29,8 @@ findById: NULL
 getDefaultUser: AbstractEntity::onLoad: getId() = 9527
 User(Default)
 listStatuses: array(2) {
-  [0]=>
-  string(6) "active"
-  [1]=>
-  string(8) "inactive"
+  ["Active"]=>
+  int(1)
+  ["Inactive"]=>
+  int(0)
 }

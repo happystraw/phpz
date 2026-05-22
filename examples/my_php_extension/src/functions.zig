@@ -5,6 +5,7 @@ const c = phpz.c;
 const Zval = phpz.Zval;
 
 const UserClass = @import("classes.zig").user.Class;
+const StatusEnum = @import("classes.zig").status.Enum;
 
 fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
@@ -40,7 +41,7 @@ fn findById(ctx: phpz.Ctx) !void {
 fn getDefaultUser(ctx: phpz.Ctx) !void {
     var name_zv = Zval.native.init(.string, "Default");
     defer Zval.native.dtor(&name_zv);
-    const age_zv = Zval.native.init(.int, @as(i64, 25));
+    const age_zv = Zval.native.init(.int, 25);
 
     const user: *UserClass = .new();
     try user.construct(.{ name_zv, age_zv });
@@ -48,9 +49,22 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
 }
 
 fn listStatuses(ctx: phpz.Ctx) !void {
-    var arr = phpz.Zval.Array.empty(ctx.ret.ptr());
-    try arr.append(.string, "active");
-    try arr.append(.string, "inactive");
+    const case_obj = phpz.zend.Object.getEnumCase(StatusEnum.entry, "Active").?;
+    const cases_fn = case_obj.resolveMethod("cases").?;
+
+    var cases_zv: c.zval = undefined;
+    cases_fn.callStatic(StatusEnum.entry, &cases_zv, .{});
+    defer phpz.Zval.native.dtor(&cases_zv);
+
+    var ret = phpz.Zval.Array.empty(ctx.ret.ptr());
+    var cases = phpz.zend.Array.from(phpz.Zval.native.asUnchecked(&cases_zv, .array));
+    var it = cases.iterator();
+    while (it.next()) |entry| {
+        const entry_obj = phpz.zend.Object.from(phpz.Zval.native.asUnchecked(entry.value, .object));
+        const name = entry_obj.enumCaseName();
+        const value = phpz.Zval.native.asUnchecked(entry_obj.enumCaseValue().?, .int);
+        ret.set(.int, name, value);
+    }
 }
 
 comptime {
