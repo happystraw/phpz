@@ -138,11 +138,6 @@ foreach ($test_files as $phpt_file) {
     // Execute test
     $cmd = build_php_cmd($php_executable, $extension_file, $ini_directives, $file_code);
     $actual = run_php($cmd);
-
-    // Normalize: strip PHP log/error header lines
-    $actual = preg_replace('/^(?:PHP )?Warning:.*$/m', '', $actual);
-    $actual = preg_replace('/^\[\w+ \w+ \d+ \d+:\d+:\d+ \d+\]\s+.*$/m', '', $actual);
-    $actual = preg_replace("/\n{3,}/", "\n\n", $actual);
     $actual = trim($actual);
 
     // Compare
