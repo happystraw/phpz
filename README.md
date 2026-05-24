@@ -2,14 +2,23 @@
 
 A Zig framework for building PHP extensions with PHP C API bindings.
 
-> **⚠️ Warning**: This is a toy project created to solve my own needs. The API changes frequently based on my needs, and force pushes are common. Like Zig itself, expect instability! 😄
->
-> Feel free to use it, but pin to a specific commit if you need stability.
+> **ℹ️ Note**: This is a personal experimental project — functionality works well for its intended use cases, but expect API changes as it evolves. Pin to a specific commit if you need stability.
 
 ## Requirements
 
 - zig: 0.16.0
-- php: 8.2, 8.3, 8.4, 8.5 tested on linux/macos
+- php: 8.2-8.5 tested on linux/macos
+
+## Features
+
+- **Module Lifecycle** — `module_startup`, `module_shutdown`, `request_startup`, `request_shutdown`, `info` (`phpinfo()`)
+- **Function Registration** — `phpz.function()` with type-safe parameter parsing (optional, nullable, typed specifiers)
+- **Class & OOP** — `phpz.Class` (struct with `init`/`deinit`), `phpz.SimpleClass` (interfaces, enums, exceptions), static/instance methods, properties, inheritance
+- **Type-safe Zval** — checked type conversions, `Zval.Array` / `Zval.Object` builders
+- **Zend APIs** — `zend.Array` (HashTable), `zend.String`, `zend.Object`, `zend.Function`, `zend.ClassEntry`, `zend.Property`
+- **INI Settings** — `php.ini` directives with on-update callbacks
+- **Error Handling** — PHP error triggers, argument errors, exception throwing
+- **PHP Memory Allocator** — `heap.php_allocator` wrapping `emalloc` as a Zig `Allocator`
 
 ## Usage
 
@@ -93,4 +102,41 @@ Then `zig build` !
 
 ## Examples
 
-Check out the [`examples/`](./examples/) directory for complete working examples:
+Check out the [`examples/`](./examples/) directory for complete working examples.
+
+## How It Works
+
+```
+  Build-time                      Compile-time            Runtime
+  ──────────                      ────────────            ───────
+
+  stub.php                        Zig source
+     │                               │
+     │ php-src/build/gen_stub.php    │
+     ▼                               │
+  arginfo.h                          │
+  [ext_functions]                    │
+  [register_class_*]                 │
+  [register_{name}_symbols]          │
+     │                               │
+     │ translate-c (zig build)       │
+     ▼                               ▼
+  PHP C bindings ─────────────► phpz comptime:
+  (php_c module)                ├─ phpz.function() → zif_* export
+                                ├─ Class.method()  → zim_* export
+                                ├─ phpz.Class(T)   → wrapper type
+                                └─ phpz.module()   → get_module() export
+                                                             │
+                                                             ├─── PHP loads .so
+                                                             │
+                                                             ▼
+                                                        module_startup
+                                                        ├─ register_{name}_symbols   (constants)
+                                                        ├─ register_class_*          (classes)
+                                                        ├─ ini_entries
+                                                        └─ user hook
+```
+
+1. **Build-time** — `gen_stub.php` generates `arginfo.h` from `.stub.php`, containing function metadata and `register_*` symbols. `translate-c` converts PHP C headers into Zig bindings.
+2. **Compile-time** — `phpz.function()` exports `zif_*` wrappers, `phpz.Class()` creates wrapper types, `phpz.module()` exports `get_module()` for the dynamic loader.
+3. **Runtime** — PHP loads `.so` → `get_module()` → `module_startup` calls `register_{name}_symbols` (constants) and `register_class_*` (classes), then INI entries and user hook.
