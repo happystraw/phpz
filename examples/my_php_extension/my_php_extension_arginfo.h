@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 5169d405dbbb9b62d81f97e81e1f3f86a5ab2473 */
+ * Stub hash: 73d8a3a174cc958009aa9eef397ff0a0777bef18 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -20,6 +20,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_getDefaultUser, 0, 0, My
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_listStatuses, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_map, 0, 2, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, arr, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, cb, IS_CALLABLE, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
@@ -66,6 +71,7 @@ ZEND_FUNCTION(MyPHPExt_increment);
 ZEND_FUNCTION(MyPHPExt_findById);
 ZEND_FUNCTION(MyPHPExt_getDefaultUser);
 ZEND_FUNCTION(MyPHPExt_listStatuses);
+ZEND_FUNCTION(MyPHPExt_map);
 ZEND_METHOD(MyPHPExt_AbstractEntity, onLoad);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, getId);
@@ -85,6 +91,7 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_NS_FALIAS("MyPHPExt", findById, MyPHPExt_findById, arginfo_MyPHPExt_findById)
 	ZEND_NS_FALIAS("MyPHPExt", getDefaultUser, MyPHPExt_getDefaultUser, arginfo_MyPHPExt_getDefaultUser)
 	ZEND_NS_FALIAS("MyPHPExt", listStatuses, MyPHPExt_listStatuses, arginfo_MyPHPExt_listStatuses)
+	ZEND_NS_FALIAS("MyPHPExt", map, MyPHPExt_map, arginfo_MyPHPExt_map)
 	ZEND_FE_END
 };
 

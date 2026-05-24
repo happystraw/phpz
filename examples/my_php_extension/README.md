@@ -4,7 +4,7 @@ A basic PHP extension demonstrating core phpz features:
 
 - **Constants**: `MY_EXT_VERSION`, `MyPHPExt\VERSION`, `User::MIN_AGE`
 - **Global functions**: `hello()`, `greet(string $name): string`
-- **Namespaced functions**: `MyPHPExt\increment(int &$value)`, `MyPHPExt\findById(string|int $id): ?User`, `MyPHPExt\getDefaultUser(): User`, `MyPHPExt\listStatuses(): array`
+- **Namespaced functions**: `MyPHPExt\increment(int &$value)`, `MyPHPExt\findById(string|int $id): ?User`, `MyPHPExt\getDefaultUser(): User`, `MyPHPExt\listStatuses(): array`, `MyPHPExt\map(array $arr, callable $cb): array`
 - **Interface**: `MyPHPExt\Identifiable`
 - **Enums**: `MyPHPExt\Status` (int backed), `MyPHPExt\Role` (string backed)
 - **Classes**: `MyPHPExt\User`, `MyPHPExt\Counter`, `MyPHPExt\Dumper`, `MyPHPExt\MyError`, `MyPHPExt\AbstractEntity`

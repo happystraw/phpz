@@ -66,6 +66,25 @@ fn listStatuses(ctx: phpz.Ctx) !void {
     }
 }
 
+fn map(ctx: phpz.Ctx) !void {
+    var arr_zv: *c.zval = undefined;
+    var cb: phpz.zend.Callable = undefined;
+    try ctx.call.parse("af", .{ &arr_zv, &cb.fci, &cb.fcc });
+
+    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    const ht = Zval.native.asUnchecked(arr_zv, .array);
+    var it = phpz.zend.Array.from(ht).iterator();
+    while (it.next()) |entry| {
+        var rv = Zval.native.undef;
+        try cb.withRetval(&rv).call(.{ entry.value.* });
+
+        switch (entry.key) {
+            .string => |s| result.set(.mixed, s, &rv),
+            .int => |i| try result.setAt(.mixed, i, &rv),
+        }
+    }
+}
+
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
@@ -73,4 +92,5 @@ comptime {
     phpz.function("MyPHPExt\\findById", findById);
     phpz.function("MyPHPExt\\getDefaultUser", getDefaultUser);
     phpz.function("MyPHPExt\\listStatuses", listStatuses);
+    phpz.function("MyPHPExt\\map", map);
 }

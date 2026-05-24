@@ -549,6 +549,14 @@ pub const Zval = opaque {
         pub const addref = c.zval_add_ref;
         pub const dtor = c.zval_ptr_dtor;
         pub const refcount = c.zval_refcount_p;
+        pub inline fn tryAddref(z: *c.zval) void {
+            // if Z_REFCOUNTED_P
+            if (z.u1.v.type_flags != 0) _ = c.zval_addref_p(z);
+        }
+        pub inline fn tryDelref(z: *c.zval) void {
+            // if Z_REFCOUNTED_P
+            if (z.u1.v.type_flags != 0) _ = c.zval_delref_p(z);
+        }
     };
 };
 

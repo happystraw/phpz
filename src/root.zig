@@ -38,6 +38,7 @@ test {
     _ = @import("zend.zig");
     _ = @import("zval.zig");
     _ = @import("zend/array.zig");
+    _ = @import("zend/callable.zig");
     _ = @import("zend/class_entry.zig");
     _ = @import("zend/function.zig");
     _ = @import("zend/object.zig");

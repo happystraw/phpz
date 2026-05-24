@@ -42,6 +42,10 @@ namespace MyPHPExt {
     {
     }
 
+    function map(array $arr, callable $cb): array
+    {
+    }
+
     interface Identifiable
     {
         public function getId(): int;

@@ -15,8 +15,8 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Function Registration** — `phpz.function()` with type-safe parameter parsing (optional, nullable, typed specifiers)
 - **Class & OOP** — `phpz.Class` (struct with `init`/`deinit`), `phpz.SimpleClass` (interfaces, enums, exceptions), static/instance methods, properties, inheritance
 - **Type-safe Zval** — checked type conversions, `Zval.Array` / `Zval.Object` builders
-- **Zend APIs** — `zend.Array` (HashTable), `zend.String`, `zend.Object`, `zend.Function`, `zend.ClassEntry`, `zend.Property`
-- **INI Settings** — `php.ini` directives with on-update callbacks
+- **Zend APIs** — `zend.Array` (HashTable), `zend.String`, `zend.Object`, `zend.Function`, `zend.ClassEntry`, `zend.Property`, `zend.Callable`
+- **INI Settings** — `php.ini` directives with on-update callbacks (`string`, `long`, `double`, `bool`)
 - **Error Handling** — PHP error triggers, argument errors, exception throwing
 - **PHP Memory Allocator** — `heap.php_allocator` wrapping `emalloc` as a Zig `Allocator`
 
