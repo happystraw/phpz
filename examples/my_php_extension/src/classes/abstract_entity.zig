@@ -6,7 +6,7 @@ const AbstractEntity = extern struct {
     pub fn onLoad(ctx: phpz.Ctx) !void {
         const this = phpz.zend.Object.from(ctx.call.thisObject().?);
 
-        var ret: c.zval = undefined;
+        var ret = phpz.Zval.native.undef;
         defer phpz.Zval.native.dtor(&ret);
         try this.call("getid", &ret, .{});
 

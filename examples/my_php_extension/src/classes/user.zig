@@ -24,7 +24,7 @@ const User = extern struct {
             self.has_age = true;
             wrapper.updateProperty(.int, "age", self.age);
         }
-        try wrapper.call("onload", .{}, null);
+        try wrapper.call("onload", null, .{});
     }
 
     pub fn deinit(self: *User) void {
