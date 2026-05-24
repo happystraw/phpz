@@ -91,30 +91,56 @@ pub const Call = opaque {
     /// Type Specification Format:
     ///   The type_spec string uses single characters to indicate expected types:
     ///
-    ///   Basic Types:
-    ///     - 'l' (long)    -> i64: PHP integer (requires 1 arg: &val)
-    ///     - 'd' (double)  -> f64: PHP float (requires 1 arg: &val)
-    ///     - 's' (string)  -> [*]u8 + size_t: PHP string (requires 2 args: &ptr, &len)
-    ///     - 'b' (bool)    -> bool: PHP boolean (requires 1 arg: &val)
-    ///     - 'z' (zval)    -> *c.zval: Raw PHP value, any type (requires 1 arg: &ptr)
+    ///   Scalar Types:
+    ///     - 'l'  (long)         -> i64 (1 arg: &val)
+    ///     - 'd'  (double)       -> f64 (1 arg: &val)
+    ///     - 'b'  (bool)         -> bool (1 arg: &val)
     ///
-    ///   Array and Object:
-    ///     - 'a' (array)   -> *c.zval: PHP array zval (requires 1 arg: &ptr)
-    ///     - 'h' (hashtable) -> *c.HashTable: PHP array/hashtable (requires 1 arg: &ptr)
-    ///     - 'o' (object)  -> *c.zval: PHP object (requires 1 arg: &ptr)
-    ///     - 'O' (typed object) -> *c.zval: Object of specific class (requires 2 args: &ptr, class_entry)
+    ///   String Types:
+    ///     - 's'  (string)       -> [*]u8 + size_t (2 args: &ptr, &len)
+    ///     - 'S'  (zend_string)  -> *c.zend_string (1 arg: &ptr)
+    ///     - 'p'  (path)         -> [*]u8 + size_t, rejects strings containing null bytes (2 args: &ptr, &len)
+    ///     - 'P'  (path zstring) -> *c.zend_string, rejects strings containing null bytes (1 arg: &ptr)
     ///
-    ///   Optional Parameters:
-    ///     - '|' : All parameters after this are optional
-    ///     - '!' : The preceding parameter can be null
+    ///   Array / Hashtable:
+    ///     - 'a'  (array)        -> *c.zval (1 arg: &ptr)
+    ///     - 'A'  (array, deref) -> *c.zval (1 arg: &ptr; like 'a', already dereferenced)
+    ///     - 'h'  (hashtable)    -> *c.HashTable (1 arg: &ptr)
+    ///     - 'H'  (hashtable, deref) -> *c.HashTable (1 arg: &ptr; like 'h', already dereferenced)
     ///
-    ///   Examples:
+    ///   Object / Class:
+    ///     - 'o'  (object)       -> *c.zval (1 arg: &ptr)
+    ///     - 'O'  (typed object) -> *c.zval + *c.zend_class_entry (2 args: &ptr, class_entry)
+    ///     - 'C'  (class entry)  -> *c.zend_class_entry (1 arg: &ptr)
+    ///
+    ///   Callable:
+    ///     - 'f'  (callable)     -> *c.zend_fcall_info + *c.zend_fcall_info_cache (2 args: &fci, &fcc)
+    ///
+    ///   Resource:
+    ///     - 'r'  (resource)     -> *c.zval (1 arg: &ptr)
+    ///
+    ///   Mixed / Any:
+    ///     - 'z'  (zval)         -> *c.zval, any type (1 arg: &ptr)
+    ///     - 'n'  (zval, nullable) -> *c.zval, any type, allows null (1 arg: &ptr) (PHP 8.1+)
+    ///
+    ///   Modifiers:
+    ///     - '!'  (nullable)     : Permits null for the preceding specifier
+    ///     - '/'  (separate)     : Calls SEPARATE_ZVAL on the preceding specifier (copy-on-write safety)
+    ///
+    ///   Separators:
+    ///     - '|'  (optional)     : All specifiers after this are optional
+    ///     - '*'  (variadic 0+)  : Variable number of arguments (0 or more) -> *c.zval + *u32 (2 args: &arr, &count)
+    ///     - '+'  (variadic 1+)  : Variable number of arguments (1 or more) -> *c.zval + *u32 (2 args: &arr, &count)
+    ///
+    ///   Quick Reference:
     ///     - "ll"      : Two required integers
     ///     - "s"       : One required string (needs &ptr, &len)
     ///     - "sl"      : One string and one integer
     ///     - "l|s"     : One required integer, one optional string
     ///     - "z!"      : One nullable zval
     ///     - "s|l"     : One required string, one optional integer
+    ///     - "s/"      : One string (will be separated for CoW safety)
+    ///     - "z*"      : Any zval + variadic zvals + count (3 args: &ptr, &arr, &count)
     ///
     /// Parameters:
     ///   - type_spec: Type specification string (null-terminated)
@@ -125,7 +151,7 @@ pub const Call = opaque {
     ///
     /// Example:
     /// ```zig
-    /// // --- Basic scalar types ---
+    /// // --- Scalar types ---
     ///
     /// // 'l': function(int $n)
     /// var n: i64 = undefined;
@@ -139,9 +165,24 @@ pub const Call = opaque {
     /// var flag: bool = undefined;
     /// try ctx.call.parse("b", .{&flag});
     ///
+    /// // --- String types ---
+    ///
     /// // 's': function(string $msg)  -- requires 2 args: &ptr, &len
     /// var msg: []u8 = undefined;
     /// try ctx.call.parse("s", .{ &msg.ptr, &msg.len });
+    ///
+    /// // 'S': function(string $msg)  -- receives zend_string* directly (1 arg)
+    /// var zs: *c.zend_string = undefined;
+    /// try ctx.call.parse("S", .{&zs});
+    /// const s = zs.val()[0..zs.len];
+    ///
+    /// // 'p': function(string $path)  -- like 's' but rejects null bytes
+    /// var path: []u8 = undefined;
+    /// try ctx.call.parse("p", .{ &path.ptr, &path.len });
+    ///
+    /// // 'P': function(string $path)  -- like 'S' but rejects null bytes
+    /// var zp: *c.zend_string = undefined;
+    /// try ctx.call.parse("P", .{&zp});
     ///
     /// // --- Raw zval (any type) ---
     ///
@@ -154,6 +195,10 @@ pub const Call = opaque {
     ///     _ = num;
     /// }
     ///
+    /// // 'n': function(mixed $val = null)  -- allows null (PHP 8.1+)
+    /// var nraw: *c.zval = undefined;
+    /// try ctx.call.parse("n", .{&nraw});
+    ///
     /// // --- Array and Hashtable ---
     ///
     /// // 'a': function(array $arr)
@@ -161,11 +206,19 @@ pub const Call = opaque {
     /// try ctx.call.parse("a", .{&arr_zv});
     /// const arr = arr_zv.value.arr; // extract zend_array*
     ///
+    /// // 'A': function(array $arr)  -- like 'a', already dereferenced
+    /// var arr_zv2: *c.zval = undefined;
+    /// try ctx.call.parse("A", .{&arr_zv2});
+    ///
     /// // 'h': function(array $map)  -- receives HashTable* directly
     /// var ht: *c.HashTable = undefined;
     /// try ctx.call.parse("h", .{&ht});
     ///
-    /// // --- Object ---
+    /// // 'H': function(array $map)  -- like 'h', already dereferenced
+    /// var ht2: *c.HashTable = undefined;
+    /// try ctx.call.parse("H", .{&ht2});
+    ///
+    /// // --- Object / Class ---
     ///
     /// // 'o': function(object $obj)  -- any object
     /// var obj: *c.zval = undefined;
@@ -174,6 +227,23 @@ pub const Call = opaque {
     /// // 'O': function(MyClass $obj)  -- specific class, requires 2 args: &ptr, class_entry
     /// var typed_obj: *c.zval = undefined;
     /// try ctx.call.parse("O", .{ &typed_obj, my_class_entry });
+    ///
+    /// // 'C': function(string $class)  -- receives zend_class_entry* directly
+    /// var ce: *c.zend_class_entry = undefined;
+    /// try ctx.call.parse("C", .{&ce});
+    ///
+    /// // --- Callable ---
+    ///
+    /// // 'f': function(callable $cb)  -- requires 2 args
+    /// var fci: c.zend_fcall_info = undefined;
+    /// var fcc: c.zend_fcall_info_cache = undefined;
+    /// try ctx.call.parse("f", .{ &fci, &fcc });
+    ///
+    /// // --- Resource ---
+    ///
+    /// // 'r': function(resource $handle)
+    /// var res: *c.zval = undefined;
+    /// try ctx.call.parse("r", .{&res});
     ///
     /// // --- Mixed types ---
     ///
@@ -199,6 +269,25 @@ pub const Call = opaque {
     ///         _ = age;
     ///     }
     /// }
+    ///
+    /// // --- SEPARATE_ZVAL (CoW safety) ---
+    ///
+    /// // 's/': function(string $msg)  -- string will be separated
+    /// var cow_msg: []u8 = undefined;
+    /// try ctx.call.parse("s/", .{ &cow_msg.ptr, &cow_msg.len });
+    ///
+    /// // --- Variadic ---
+    ///
+    /// // 'z*': function(mixed ...$args)  -- 0 or more variadic arguments
+    /// var first: *c.zval = undefined;
+    /// var rest: [*]c.zval = undefined;
+    /// var rest_count: u32 = undefined;
+    /// try ctx.call.parse("z*", .{ &first, &rest, &rest_count });
+    ///
+    /// // '+': function(mixed $first, mixed ...$args)  -- 1 or more variadic arguments
+    /// var fst: [*]c.zval = undefined;
+    /// var rst_count: u32 = undefined;
+    /// try ctx.call.parse("+", .{ &fst, &rst_count });
     /// ```
     pub fn parse(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) Error!void {
         if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
