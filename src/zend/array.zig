@@ -242,6 +242,35 @@ pub const Array = opaque {
         }
     };
 
+    pub fn PtrValueIterator(comptime T: type) type {
+        return struct {
+            ht: *c.HashTable,
+            pos: c.HashPosition,
+
+            const Self = @This();
+
+            /// Create an iterator over the HashTable.
+            ///
+            /// Returns typed pointers to HashTable elements of type T, cast from raw data pointers.
+            pub fn init(array: *Array) Self {
+                var self = Self{
+                    .ht = array.ptr(),
+                    .pos = 0,
+                };
+                c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+                return self;
+            }
+
+            /// Return the next element as a typed pointer, or null when iteration is complete.
+            pub fn next(self: *Self) ?*T {
+                if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+                const info = c.zend_hash_get_current_data_ptr_ex(self.ht, &self.pos).?;
+                _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+                return @ptrCast(@alignCast(info));
+            }
+        };
+    }
+
     pub fn iterator(self: *Array) Iterator {
         return Iterator.init(self);
     }
