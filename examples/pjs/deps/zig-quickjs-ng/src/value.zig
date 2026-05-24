@@ -1921,8 +1921,8 @@ test "constants match JavaScript values" {
     const js_null = ctx.eval("null", "<test>", .{});
     defer js_null.deinit(ctx);
     try testing.expect(js_null.isNull());
-    try testing.expect(Value.@"null".isNull());
-    try testing.expect(js_null.isStrictEqual(ctx, Value.@"null"));
+    try testing.expect(Value.null.isNull());
+    try testing.expect(js_null.isStrictEqual(ctx, Value.null));
 
     // Test undefined
     const js_undefined = ctx.eval("undefined", "<test>", .{});

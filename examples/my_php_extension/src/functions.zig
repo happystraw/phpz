@@ -49,8 +49,7 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
 }
 
 fn listStatuses(ctx: phpz.Ctx) !void {
-    const case_obj = phpz.zend.Object.getEnumCase(StatusEnum.entry, "Active").?;
-    const cases_fn = case_obj.resolveMethod("cases").?;
+    const cases_fn = StatusEnum.entry.findMethod("cases").?;
 
     var cases_zv: c.zval = undefined;
     cases_fn.callStatic(StatusEnum.entry, &cases_zv, .{});

@@ -5,7 +5,7 @@ const User = extern struct {
     has_age: bool = false,
 
     pub fn register(impl: anytype) *phpz.ClassEntry {
-        return impl(AbstractEntity.entry, c.zend_ce_stringable);
+        return .from(impl(AbstractEntity.entry.ptr(), c.zend_ce_stringable));
     }
 
     pub fn construct(self: *User, ctx: phpz.Ctx) !void {

@@ -64,36 +64,36 @@ pub const Dumper = extern struct {
                 indent(depth);
 
                 // Check if this is an enum
-                if (obj.isEnum()) {
+                if (obj.class().isEnum()) {
                     const case_name = obj.enumCaseName();
-                    switch (obj.enumBackingType()) {
+                    switch (obj.class().enumBackingType()) {
                         .int => {
                             const v = phpz.Zval.native.asUnchecked(obj.enumCaseValue().?, .int);
                             _ = phpz.printf("enum %.*s { %.*s = %ld }\n", .{
-                                obj.className().len, obj.className().ptr,
-                                case_name.len,       case_name.ptr,
+                                obj.class().name().len, obj.class().name().ptr,
+                                case_name.len,          case_name.ptr,
                                 v,
                             });
                         },
                         .string => {
                             const v = phpz.Zval.native.asUnchecked(obj.enumCaseValue().?, .string);
                             _ = phpz.printf("enum %.*s { %.*s = \"%.*s\" }\n", .{
-                                obj.className().len, obj.className().ptr,
-                                case_name.len,       case_name.ptr,
-                                v.len,               v.ptr,
+                                obj.class().name().len, obj.class().name().ptr,
+                                case_name.len,          case_name.ptr,
+                                v.len,                  v.ptr,
                             });
                         },
                         else => {
                             _ = phpz.printf("enum %.*s { %.*s }\n", .{
-                                obj.className().len, obj.className().ptr,
-                                case_name.len,       case_name.ptr,
+                                obj.class().name().len, obj.class().name().ptr,
+                                case_name.len,          case_name.ptr,
                             });
                         },
                     }
                     return;
                 }
 
-                const class_name = obj.className();
+                const class_name = obj.class().name();
                 const prop_count = obj.propertyCount();
                 indent(depth);
                 _ = phpz.printf("class %.*s#%d (%d) {\n", .{ class_name.len, class_name.ptr, obj.handle(), prop_count });

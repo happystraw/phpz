@@ -1,6 +1,6 @@
 const AbstractEntity = extern struct {
     pub fn register(impl: anytype) *phpz.ClassEntry {
-        return impl(Identifiable.entry);
+        return .from(impl(Identifiable.entry.ptr()));
     }
 
     pub fn onLoad(ctx: phpz.Ctx) !void {

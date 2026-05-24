@@ -3,7 +3,7 @@ pub const Value = extern struct {
     inner: quickjs.Value,
 
     pub fn register(impl: anytype) *phpz.ClassEntry {
-        return impl(c.zend_ce_stringable);
+        return .from(impl(c.zend_ce_stringable));
     }
 
     pub fn init(self: *Value) void {
@@ -18,7 +18,7 @@ pub const Value = extern struct {
     pub fn construct(self: *Value, ctx: phpz.Ctx) !void {
         var ctx_zv: *c.zval = undefined;
         var value_zv: phpz.Zval.Optional = .init;
-        try ctx.call.parse("O|z", .{ &ctx_zv, context.Class.entry, &value_zv.ptr });
+        try ctx.call.parse("O|z", .{ &ctx_zv, context.Class.entry.ptr(), &value_zv.ptr });
 
         self.ctx = try .fromZval(ctx_zv);
         self.ctx.addref();
