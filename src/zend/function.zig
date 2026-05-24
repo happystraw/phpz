@@ -72,7 +72,7 @@ pub const Function = opaque {
 
     /// Call as a global function (no object, no scope).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn call(self: *Function, retval: *c.zval, params: anytype) void {
+    pub fn call(self: *Function, retval: ?*c.zval, params: anytype) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("call: params must be a tuple, e.g. .{} or .{a, b}");
@@ -90,7 +90,7 @@ pub const Function = opaque {
 
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: *c.zval, params: anytype) void {
+    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("callStatic: params must be a tuple, e.g. .{} or .{a, b}");
@@ -108,7 +108,7 @@ pub const Function = opaque {
 
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callMethod(self: *Function, obj: *Object, retval: *c.zval, params: anytype) void {
+    pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("callMethod: params must be a tuple, e.g. .{} or .{a, b}");

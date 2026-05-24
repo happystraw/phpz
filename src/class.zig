@@ -278,15 +278,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Calls a method on the object.
         /// retval is optional, if not provided the return value will be discarded.
-        pub fn call(self: *Self, method_name: []const u8, params: anytype, retval: ?*c.zval) !void {
+        pub fn call(self: *Self, method_name: []const u8, retval: ?*c.zval, params: anytype) !void {
             const obj: *zend.Object = .from(&self.std);
-            if (retval) |out| {
-                try obj.call(method_name, out, params);
-            } else {
-                var discard = Zval.native.undef;
-                defer Zval.native.dtor(&discard);
-                try obj.call(method_name, &discard, params);
-            }
+            try obj.call(method_name, retval, params);
         }
 
         // Calls the constructor method (__construct) on the object with the given parameters.

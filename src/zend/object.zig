@@ -9,6 +9,7 @@ pub const Object = opaque {
     pub const Error = error{
         InitFailed,
         CloneFailed,
+        MethodNotFound,
         MethodCallFailed,
         AccessDenied,
     };
@@ -183,14 +184,14 @@ pub const Object = opaque {
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
     /// Returns:
-    ///   Error.MethodCallFailed if the method is not found in the class
+    ///   Error.MethodNotFound if the method is not in the class function table
     pub fn call(
         self: *Object,
         method_name: []const u8,
-        retval: *c.zval,
+        retval: ?*c.zval,
         params: anytype,
     ) Error!void {
-        const method = self.findMethod(method_name) orelse return Error.MethodCallFailed;
+        const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
         method.callMethod(self, retval, params);
     }
 
@@ -202,15 +203,15 @@ pub const Object = opaque {
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
     /// Returns:
-    ///   Error.MethodCallFailed if the method is not found in the class
+    ///   Error.MethodNotFound if the method is not in the class function table
     pub fn callStatic(
         self: *Object,
         method_name: []const u8,
         ce: *ClassEntry,
-        retval: *c.zval,
+        retval: ?*c.zval,
         params: anytype,
     ) Error!void {
-        const method = self.findMethod(method_name) orelse return Error.MethodCallFailed;
+        const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
         method.callStatic(ce, retval, params);
     }
 
@@ -218,7 +219,7 @@ pub const Object = opaque {
     pub fn callIfExists(
         self: *Object,
         method_name: []const u8,
-        retval: *c.zval,
+        retval: ?*c.zval,
         params: []c.zval,
     ) Error!void {
         const zstr = String.init(method_name);
