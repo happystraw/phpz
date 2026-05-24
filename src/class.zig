@@ -28,9 +28,10 @@
 ///   - T: The Zig type to wrap (your data structure)
 ///
 /// Optional T declarations:
-///   - `init()`: Called after object allocation, before constructor
+///   - `init()`: Called after object allocation, before constructor.
+///     Supported signatures: `fn(self: *T)` or `fn(self: *T, ce: *phpz.ClassEntry)`
 ///   - `deinit()`: Called during object destruction, before deallocation
-///   - `register(fn) *ClassEntry`: Custom entry registration (e.g., to set parent class)
+///   - `register(fn) *phpz.ClassEntry`: Custom entry registration (e.g., to set parent class)
 ///
 /// Example:
 /// ```zig
@@ -44,14 +45,17 @@
 ///         self.age = 0;
 ///     }
 ///
+///     // Optional: Initialize with class entry access
+///     // pub fn init(self: *Student, ce: *phpz.ClassEntry) void { ... }
+///
 ///     // Optional: Clean up resources
 ///     pub fn deinit(self: *Student) void {
 ///         // Free any allocated resources
 ///     }
 ///
 ///     // Optional: Custom registration (e.g., inherit from parent class)
-///     pub fn register(impl: anytype) *ClassEntry {
-///         return impl(c.zend_ce_stringable); // Implement Stringable
+///     pub fn register(impl: anytype) *phpz.ClassEntry {
+///         return .from(impl(c.zend_ce_stringable));
 ///     }
 ///
 ///     pub fn construct(self: *Student, ctx: Ctx) !void {
@@ -105,7 +109,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         pub const name = class_name;
 
         /// The PHP class entry
-        pub var entry: *ClassEntry = undefined;
+        pub var entry: *zend.ClassEntry = undefined;
 
         /// Object handlers for this class (cloned from std_object_handlers)
         var handlers: c.zend_object_handlers = undefined;
@@ -116,15 +120,23 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// This function:
         /// 1. Allocates memory for the object
         /// 2. Initializes the PHP object header
-        /// 3. Calls T.init() if defined
+        /// 3. Calls T.init() if defined (supports `fn(self: *T)` or
+        ///    `fn(self: *T, ce: *phpz.ClassEntry)`)
         /// 4. Sets up object handlers
         ///
         /// Note: This is an internal function called by PHP's object system.
-        pub fn init(ce: ?*ClassEntry) callconv(.c) ?*c.zend_object {
+        pub fn init(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
             var intern: *Self = @ptrCast(@alignCast(c.zend_object_alloc(@sizeOf(Self), ce.?)));
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
-            if (@hasDecl(T, "init")) intern.impl.init();
+            if (@hasDecl(T, "init")) {
+                if (comptime @typeInfo(@TypeOf(T.init)).@"fn".params.len == 1) {
+                    intern.impl.init();
+                } else comptime {
+                    if (@typeInfo(@TypeOf(T.init)).@"fn".params.len != 2) @compileError("T.init must take 1 or 2 parameters");
+                    intern.impl.init(entry);
+                }
+            }
             intern.std.handlers = &handlers;
             return &intern.std;
         }
@@ -155,10 +167,10 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///    - Framework sets up: create_object handler, object handlers, offset
         ///
         /// 2. Custom Entry Mode (T.register declared):
-        ///    - `pub fn register(fn) *ClassEntry`
+        ///    - `pub fn register(fn) *phpz.ClassEntry`
         ///    - Useful for setting parent class or implementing interfaces
         ///    - Framework still sets up handlers after your customization
-        ///    Example: `return impl(c.zend_ce_stringable);` // Implement Stringable
+        ///    Example: `return .from(impl(c.zend_ce_stringable));`
         ///
         /// The register_class_* function is generated from PHP stub files during
         /// the translate-c process and contains class metadata (methods, properties).
@@ -172,8 +184,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// ```
         pub fn register() void {
             entry = callRegisterClassFn(class_name, T);
-            // FIXME: unnamed_1 ...
-            entry.unnamed_1.create_object = &init;
+            // FIXME: unname union
+            entry.ptr().*.unnamed_1.create_object = &init;
             handlers = c.std_object_handlers;
             handlers.free_obj = &deinit;
             handlers.offset = @offsetOf(Self, "std");
@@ -261,7 +273,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Creates a new instance of the class.
         pub fn new() *Self {
-            return .from(.std, init(entry) orelse @panic("Out of memory"));
+            return .from(.std, init(entry.ptr()) orelse @panic("Out of memory"));
         }
 
         /// Calls a method on the object.
@@ -283,24 +295,25 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             if (try obj.constructor()) |ctor| {
                 var discard = Zval.native.undef;
                 defer Zval.native.dtor(&discard);
-                ctor.callMethod(obj.ptr(), &discard, params);
+                ctor.callMethod(obj, &discard, params);
             }
         }
 
         /// Update object property value.
         pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) void {
+            const ce = entry.ptr();
             switch (zk) {
-                .null => c.zend_update_property_null(entry, &self.std, prop_name.ptr, prop_name.len),
-                .bool => c.zend_update_property_bool(entry, &self.std, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
-                .int => c.zend_update_property_long(entry, &self.std, prop_name.ptr, prop_name.len, prop_value),
-                .float => c.zend_update_property_double(entry, &self.std, prop_name.ptr, prop_name.len, prop_value),
-                .string => c.zend_update_property_stringl(entry, &self.std, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+                .null => c.zend_update_property_null(ce, &self.std, prop_name.ptr, prop_name.len),
+                .bool => c.zend_update_property_bool(ce, &self.std, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+                .int => c.zend_update_property_long(ce, &self.std, prop_name.ptr, prop_name.len, prop_value),
+                .float => c.zend_update_property_double(ce, &self.std, prop_name.ptr, prop_name.len, prop_value),
+                .string => c.zend_update_property_stringl(ce, &self.std, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
                 .undef => unreachable,
                 else => {
                     var zv: c.zval = undefined;
                     var zval: Zval = .from(&zv);
                     zval.set(zk, prop_value);
-                    c.zend_update_property(entry, &self.std, prop_name.ptr, prop_name.len, &zv);
+                    c.zend_update_property(ce, &self.std, prop_name.ptr, prop_name.len, &zv);
                 },
             }
         }
@@ -308,29 +321,30 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// Read object property.
         pub fn property(self: *Self, prop_name: []const u8, silent: bool) ?Zval {
             var rv: c.zval = undefined;
-            const val = c.zend_read_property(entry, &self.std, prop_name.ptr, prop_name.len, silent, &rv);
+            const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, &rv);
             const zv: Zval = .from(@ptrCast(val));
             return if (zv.is(.undef)) null else zv;
         }
 
         /// Unset (delete) object property.
         pub fn unsetProperty(self: *Self, prop_name: []const u8) void {
-            c.zend_unset_property(entry, &self.std, prop_name.ptr, prop_name.len);
+            c.zend_unset_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len);
         }
 
         /// Set static property value.
         pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) !void {
+            const ce = entry.ptr();
             const result = switch (zk) {
-                .null => c.zend_update_static_property_null(entry, prop_name.ptr, prop_name.len),
-                .bool => c.zend_update_static_property_bool(entry, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
-                .int => c.zend_update_static_property_long(entry, prop_name.ptr, prop_name.len, prop_value),
-                .float => c.zend_update_static_property_double(entry, prop_name.ptr, prop_name.len, prop_value),
-                .string => c.zend_update_static_property_stringl(entry, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+                .null => c.zend_update_static_property_null(ce, prop_name.ptr, prop_name.len),
+                .bool => c.zend_update_static_property_bool(ce, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+                .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
+                .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
+                .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
                 else => blk: {
                     var zv: c.zval = undefined;
                     var zval: Zval = .from(&zv);
                     zval.set(zk, prop_value);
-                    break :blk c.zend_update_static_property(entry, prop_name.ptr, prop_name.len, &zv);
+                    break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
                 },
             };
             if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
@@ -338,7 +352,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Read static property.
         pub fn staticProperty(prop_name: []const u8, silent: bool) ?Zval {
-            const val = c.zend_read_static_property(entry, prop_name.ptr, prop_name.len, silent);
+            const val = c.zend_read_static_property(entry.ptr(), prop_name.ptr, prop_name.len, silent);
             const zv: Zval = .from(@ptrCast(val));
             return if (zv.is(.undef)) null else zv;
         }
@@ -355,8 +369,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// Use cases:
 ///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
 ///   - Interfaces (e.g., Tester extends Stringable)
-///   - PHP enums (e.g., `SimpleClass("MyExt\\Status", void)`). Use `zend.Object.isEnum()`,
-///     `zend.Object.enumCaseName()`, `zend.Object.enumCaseValue()` for runtime enum inspection.
+///   - PHP enums (e.g., `SimpleClass("MyExt\\Status", void)`). Use `zend.ClassEntry.isEnum()`
+///     for enum checking, and `zend.Object.enumCaseName()`, `zend.Object.enumCaseValue()` for case inspection.
 ///   - Classes where internal implementation is handled by PHP runtime
 ///
 /// Parameters:
@@ -371,13 +385,13 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// // Create a custom exception class
 /// pub const MyException = phpz.SimpleClass("MyExt\\MyException", struct {
 ///     pub fn register(impl: anytype) *phpz.ClassEntry {
-///         return impl(c.spl_ce_RuntimeException);
+///         return .from(impl(c.spl_ce_RuntimeException));
 ///     }
 /// });
 ///
 /// // Throw the exception
 /// pub fn throw(message: [:0]const u8) void {
-///     _ = c.zend_throw_exception(MyException.entry, message.ptr, 0);
+///     _ = c.zend_throw_exception(MyException.entry.ptr(), message.ptr, 0);
 /// }
 ///
 /// // Register during module initialization
@@ -391,7 +405,7 @@ pub fn SimpleClass(comptime class_name: [:0]const u8, comptime T: type) type {
         pub const name = class_name;
 
         /// The PHP class entry
-        pub var entry: *ClassEntry = undefined;
+        pub var entry: *zend.ClassEntry = undefined;
 
         pub fn register() void {
             entry = callRegisterClassFn(class_name, T);
@@ -429,22 +443,21 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
     return result;
 }
 
-fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *ClassEntry {
+fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *phpz.ClassEntry {
     const register_class_fn = @field(c, getRegisterClassFnName(class_name));
     return switch (T) {
-        void => @call(.auto, register_class_fn, .{}),
+        void => .from(@call(.auto, register_class_fn, .{})),
         else => if (@hasDecl(T, "register"))
             @call(.auto, T.register, .{register_class_fn})
         else
-            @call(.auto, register_class_fn, .{}),
+            .from(@call(.auto, register_class_fn, .{})),
     };
 }
 
 const std = @import("std");
 
-const c = @import("root.zig").c;
-/// Type alias for Zend class entry structure.
-pub const ClassEntry = c.zend_class_entry;
+const phpz = @import("root.zig");
+const c = phpz.c;
 const function_helper = @import("function.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;

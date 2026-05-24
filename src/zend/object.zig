@@ -1,6 +1,7 @@
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
+const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
 
@@ -21,10 +22,10 @@ pub const Object = opaque {
     }
 
     /// Create an object from a class entry
-    pub fn initClass(ce: *c.zend_class_entry) Error!*Object {
-        const obj = c.zend_objects_new(ce);
+    pub fn initClass(ce: *ClassEntry) Error!*Object {
+        const obj = c.zend_objects_new(ce.ptr());
         if (obj == null) return Error.InitFailed;
-        c.object_properties_init(obj, ce);
+        c.object_properties_init(obj, ce.ptr());
         return @ptrCast(obj);
     }
 
@@ -54,15 +55,8 @@ pub const Object = opaque {
     }
 
     /// Get the class entry
-    pub inline fn class(self: *Object) *c.zend_class_entry {
-        return self.ptr().ce;
-    }
-
-    /// Get the class name
-    pub fn className(self: *Object) []const u8 {
-        const ce = self.class();
-        const name = ce.name;
-        return name.*.val()[0..name.*.len];
+    pub inline fn class(self: *Object) *ClassEntry {
+        return ClassEntry.from(self.ptr().ce);
     }
 
     /// Get object handle
@@ -117,13 +111,8 @@ pub const Object = opaque {
     ///
     /// Returns:
     ///   The function pointer, or null if the method is not in the table
-    pub fn findMethod(self: *Object, method_name: []const u8) ?*Function {
-        const fn_ptr = c.zend_hash_str_find_ptr(
-            &self.ptr().ce.*.function_table,
-            method_name.ptr,
-            method_name.len,
-        );
-        return if (fn_ptr != null) .from(@ptrCast(@alignCast(fn_ptr))) else null;
+    pub inline fn findMethod(self: *Object, method_name: []const u8) ?*Function {
+        return self.class().findMethod(method_name);
     }
 
     /// Read a property value
@@ -182,8 +171,8 @@ pub const Object = opaque {
     }
 
     /// Check if object is an instance of a class
-    pub fn instanceof(self: *Object, ce: *c.zend_class_entry) bool {
-        return c.instanceof_function(self.class(), ce);
+    pub fn instanceof(self: *Object, ce: *ClassEntry) bool {
+        return c.instanceof_function(self.class().ptr(), ce.ptr());
     }
 
     /// Call a known method by name.
@@ -202,7 +191,7 @@ pub const Object = opaque {
         params: anytype,
     ) Error!void {
         const method = self.findMethod(method_name) orelse return Error.MethodCallFailed;
-        method.callMethod(self.ptr(), retval, params);
+        method.callMethod(self, retval, params);
     }
 
     /// Call a known static method by name.
@@ -217,7 +206,7 @@ pub const Object = opaque {
     pub fn callStatic(
         self: *Object,
         method_name: []const u8,
-        ce: *c.zend_class_entry,
+        ce: *ClassEntry,
         retval: *c.zval,
         params: anytype,
     ) Error!void {
@@ -263,30 +252,6 @@ pub const Object = opaque {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
 
-    /// Get an enum case by name from a class entry.
-    pub fn getEnumCase(ce: *c.zend_class_entry, case_name: []const u8) ?*Object {
-        const case_obj = c.zend_enum_get_case_cstr(ce, case_name.ptr);
-        return if (case_obj) |obj| .from(obj) else null;
-    }
-
-    /// Check if this object is an enum case
-    pub inline fn isEnum(self: *Object) bool {
-        return (self.class().ce_flags & c.ZEND_ACC_ENUM) != 0;
-    }
-
-    /// Enum backing type
-    pub const EnumBackingType = enum(u32) {
-        undef = c.IS_UNDEF,
-        int = c.IS_LONG,
-        string = c.IS_STRING,
-        _,
-    };
-
-    /// Get the backing type of this enum
-    pub inline fn enumBackingType(self: *Object) EnumBackingType {
-        return @enumFromInt(self.class().enum_backing_type);
-    }
-
     /// Get the case name from an enum case object
     pub fn enumCaseName(self: *Object) []const u8 {
         const zv = c.zend_enum_fetch_case_name(self.ptr());
@@ -295,11 +260,10 @@ pub const Object = opaque {
 
     /// Get the backing value from a backed enum case, or null if pure enum
     pub fn enumCaseValue(self: *Object) ?*c.zval {
-        if (self.class().enum_backing_type == c.IS_UNDEF) return null;
+        if (self.class().enumBackingType() == .undef) return null;
         return c.zend_enum_fetch_case_value(self.ptr());
     }
 };
-
 
 test {
     @import("std").testing.refAllDecls(Object);

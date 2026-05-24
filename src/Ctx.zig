@@ -1,5 +1,6 @@
 //! PHP function/method call context.
 const c = @import("root.zig").c;
+const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const Zval = @import("zval.zig").Zval;
 
 /// Provides access to the current call frame and return value.
@@ -301,9 +302,10 @@ pub const Call = opaque {
     /// Returns null for non-method contexts.
     ///
     /// Returns:
-    ///   The zend_class_entry pointer, or null if not in a class context
-    pub fn scope(self: *Call) ?*c.zend_class_entry {
-        return @ptrCast(self.ptr().func.*.common.scope);
+    ///   The class entry, or null if not in a class context
+    pub fn scope(self: *Call) ?*ClassEntry {
+        const raw = @as(?*c.zend_class_entry, @ptrCast(self.ptr().func.*.common.scope));
+        return if (raw) |ce| ClassEntry.from(ce) else null;
     }
 
     /// Get the called scope (class) for the current method call.
@@ -319,9 +321,10 @@ pub const Call = opaque {
     ///   $obj->foo(); // scope() = Parent, calledScope() = Child
     ///
     /// Returns:
-    ///   The zend_class_entry pointer of the called class
-    pub fn calledScope(self: *Call) ?*c.zend_class_entry {
-        return @ptrCast(c.zend_get_called_scope(self.ptr()));
+    ///   The class entry of the called class
+    pub fn calledScope(self: *Call) ?*ClassEntry {
+        const raw = c.zend_get_called_scope(self.ptr());
+        return if (raw) |ce| .from(ce) else null;
     }
 };
 

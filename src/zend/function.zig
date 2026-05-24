@@ -1,4 +1,6 @@
 const c = @import("../root.zig").c;
+const ClassEntry = @import("class_entry.zig").ClassEntry;
+const Object = @import("object.zig").Object;
 
 pub const Function = opaque {
     /// Function type classification.
@@ -38,10 +40,10 @@ pub const Function = opaque {
         )));
     }
 
-    /// Look up a method in a class function table (for static methods)
-    pub fn findMethod(ce: *c.zend_class_entry, method_name: []const u8) ?*Function {
+    /// Look up a method directly from a class's function table
+    pub fn findMethod(ce: *ClassEntry, method_name: []const u8) ?*Function {
         return @ptrCast(@alignCast(c.zend_hash_str_find_ptr(
-            &ce.*.function_table,
+            &ce.ptr().*.function_table,
             method_name.ptr,
             method_name.len,
         )));
@@ -88,36 +90,36 @@ pub const Function = opaque {
 
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callStatic(self: *Function, ce: *c.zend_class_entry, retval: *c.zval, params: anytype) void {
+    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: *c.zval, params: anytype) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("callStatic: params must be a tuple, e.g. .{} or .{a, b}");
 
         const n = info.@"struct".fields.len;
         switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), null, ce, retval, 0, null, null),
+            0 => c.zend_call_known_function(self.ptr(), null, ce.ptr(), retval, 0, null, null),
             else => {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), null, ce, retval, @intCast(n), @ptrCast(&arr), null);
+                c.zend_call_known_function(self.ptr(), null, ce.ptr(), retval, @intCast(n), @ptrCast(&arr), null);
             },
         }
     }
 
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callMethod(self: *Function, obj: *c.zend_object, retval: *c.zval, params: anytype) void {
+    pub fn callMethod(self: *Function, obj: *Object, retval: *c.zval, params: anytype) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("callMethod: params must be a tuple, e.g. .{} or .{a, b}");
 
         const n = info.@"struct".fields.len;
         switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), obj, obj.ce, retval, 0, null, null),
+            0 => c.zend_call_known_function(self.ptr(), obj.ptr(), obj.class().ptr(), retval, 0, null, null),
             else => {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), obj, obj.ce, retval, @intCast(n), @ptrCast(&arr), null);
+                c.zend_call_known_function(self.ptr(), obj.ptr(), obj.class().ptr(), retval, @intCast(n), @ptrCast(&arr), null);
             },
         }
     }

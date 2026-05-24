@@ -16,8 +16,8 @@ pub const Object = opaque {
     }
 
     /// Create an object from a class entry
-    pub fn initClass(zv: *c.zval, ce: *c.zend_class_entry) Error!*Object {
-        const result = c.object_init_ex(zv, ce);
+    pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) Error!*Object {
+        const result = c.object_init_ex(zv, ce.ptr());
         if (result != c.SUCCESS) return Error.InitFailed;
         return @ptrCast(zv);
     }
@@ -25,10 +25,10 @@ pub const Object = opaque {
     /// Create an object with class and properties
     pub fn initClassWithProperties(
         zv: *c.zval,
-        ce: *c.zend_class_entry,
+        ce: *zend.ClassEntry,
         properties: ?*c.zend_array,
     ) Error!*Object {
-        const result = c.object_and_properties_init(zv, ce, properties);
+        const result = c.object_and_properties_init(zv, ce.ptr(), properties);
         if (result != c.SUCCESS) return Error.InitFailed;
         return @ptrCast(zv);
     }
@@ -51,15 +51,8 @@ pub const Object = opaque {
     }
 
     /// Get the class entry
-    pub fn class(self: *Object) *c.zend_class_entry {
-        return self.object().ptr().*.ce;
-    }
-
-    /// Get the class name
-    pub fn className(self: *Object) []const u8 {
-        const ce = self.class();
-        const name = ce.*.name;
-        return name.*.val()[0..name.*.len];
+    pub fn class(self: *Object) *zend.ClassEntry {
+        return self.object().class();
     }
 
     /// Set a property value
