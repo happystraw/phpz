@@ -265,10 +265,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             return @fieldParentPtr(@tagName(field), field_ptr);
         }
 
-        /// Creates an instance of the class from an existing zval pointer.
-        pub fn fromZval(zv: *c.zval) !*Self {
-            const obj: *Zval.Object = try .from(zv);
-            return .from(.std, obj.object().ptr());
+        /// Creates an instance of the class from a Zval.Object.
+        pub fn fromObjectZval(zv: *Zval.Object) *Self {
+            return .from(.std, zv.object().ptr());
         }
 
         /// Creates a new instance of the class.
@@ -283,7 +282,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             try obj.call(method_name, retval, params);
         }
 
-        // Calls the constructor method (__construct) on the object with the given parameters.
+        /// Calls the constructor method (__construct) on the object with the given parameters.
         pub fn construct(self: *Self, params: anytype) !void {
             const obj: *zend.Object = .from(&self.std);
             if (try obj.constructor()) |ctor| {
@@ -451,8 +450,8 @@ fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *php
 
 const std = @import("std");
 
+const function_helper = @import("function.zig");
 const phpz = @import("root.zig");
 const c = phpz.c;
-const function_helper = @import("function.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;

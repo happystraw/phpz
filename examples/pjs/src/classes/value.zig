@@ -20,7 +20,7 @@ pub const Value = extern struct {
         var value_zv: phpz.Zval.Optional = .init;
         try ctx.call.parse("O|z", .{ &ctx_zv, context.Class.entry.ptr(), &value_zv.ptr });
 
-        self.ctx = try .fromZval(ctx_zv);
+        self.ctx = .fromObjectZval((try .from(ctx_zv)));
         self.ctx.addref();
 
         if (value_zv.unwrap()) |value| {

@@ -4,7 +4,7 @@ const AbstractEntity = extern struct {
     }
 
     pub fn onLoad(ctx: phpz.Ctx) !void {
-        const this = phpz.zend.Object.from(ctx.call.thisObject().?);
+        const this = ctx.call.thisObject().?;
 
         var ret = phpz.Zval.native.undef;
         defer phpz.Zval.native.dtor(&ret);

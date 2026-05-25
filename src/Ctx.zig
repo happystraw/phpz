@@ -1,6 +1,7 @@
 //! PHP function/method call context.
 const c = @import("root.zig").c;
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
+const zend = @import("zend/object.zig");
 const Zval = @import("zval.zig").Zval;
 
 /// Provides access to the current call frame and return value.
@@ -324,65 +325,28 @@ pub const Call = opaque {
         }
     }
 
-    /// Parse method parameters (for class methods).
-    ///
-    /// This is similar to parse() but specifically for class methods. It handles
-    /// the implicit $this parameter that all PHP methods have.
-    ///
-    /// Note: In most cases, you don't need to call this directly. The method
-    /// wrapper automatically extracts the object instance. Use parse() instead.
-    ///
-    /// Parameters:
-    ///   - type_spec: Type specification string (same format as parse())
-    ///   - args: Tuple of pointers to receive the parsed values
-    ///
-    /// Returns:
-    ///   Error.ParseFailure if parsing fails
-    pub fn parseMethod(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) Error!void {
-        if (@typeInfo(@TypeOf(args)) != .@"struct") {
-            @compileError("parseMethod: args must be a tuple (use .{} syntax)");
-        }
-        var this_ptr: ?*c.zval = null;
-        const result = @call(
-            .auto,
-            c.zend_parse_method_parameters,
-            .{ self.numArgs(), self.this(), type_spec.ptr, &this_ptr } ++ type_args,
-        );
-        if (result == c.FAILURE) return Error.ParseFailure;
-    }
-
     /// Get the $this object as a zval (for class methods).
     ///
     /// Returns the current object context when called from a method.
     /// Returns null when called from a static method or function.
     ///
     /// Returns:
-    ///   The $this zval pointer, or null if not in an object context
-    pub fn this(self: *Call) ?*c.zval {
-        const this_zval = &self.ptr().This;
-        if (Zval.native.getType(this_zval) == c.IS_OBJECT) {
-            return this_zval;
-        }
-        return null;
+    ///   The $this Zval, or null if not in an object context
+    pub fn this(self: *Call) ?*Zval {
+        const zv = Zval.from(&self.ptr().This);
+        return if (zv.is(.object)) zv else null;
     }
 
-    /// Get the $this object as a zend_object (for class methods).
+    /// Get the $this object as a zend.Object (for class methods).
     ///
     /// This is the preferred way to access the object instance in methods,
     /// as it gives you direct access to the object structure.
     ///
     /// Returns:
-    ///   The zend_object pointer, or null if not in an object context
-    ///
-    /// Example:
-    /// ```zig
-    /// fn myMethod(self: *MyClass, ctx: Ctx) !void {
-    ///     // The wrapper already extracts 'self', but if you need raw access:
-    ///     const obj = ctx.call.thisObject();
-    /// }
-    /// ```
-    pub fn thisObject(self: *Call) ?*c.zend_object {
-        return c.zend_get_this_object(self.ptr());
+    ///   The Object pointer, or null if not in an object context
+    pub fn thisObject(self: *Call) ?*zend.Object {
+        const obj = c.zend_get_this_object(self.ptr());
+        return if (obj) |o| .from(o) else null;
     }
 
     /// Get the scope (class) where the current function was defined.

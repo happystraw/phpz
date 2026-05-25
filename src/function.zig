@@ -123,7 +123,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
         fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args: Args = (if (kind == .object) blk: {
-                const obj: *Class = .from(.std, ctx.call.thisObject().?);
+                const obj: *Class = .from(.std, ctx.call.thisObject().?.ptr());
                 break :blk if (impl_type == args_type_info.fields[0].type) .{obj.impl} else .{&obj.impl};
             } else .{}) ++ rest: {
                 const rest_count = args_type_info.fields.len - impl_offset;

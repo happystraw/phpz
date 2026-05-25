@@ -76,7 +76,7 @@ fn map(ctx: phpz.Ctx) !void {
     var it = phpz.zend.Array.from(ht).iterator();
     while (it.next()) |entry| {
         var rv = Zval.native.undef;
-        try cb.withRetval(&rv).call(.{ entry.value.* });
+        try cb.withRetval(&rv).call(.{entry.value.*});
 
         switch (entry.key) {
             .string => |s| result.set(.mixed, s, &rv),
