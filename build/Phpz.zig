@@ -34,6 +34,12 @@ pub const Options = struct {
     /// Build as a shared library for PHP to load dynamically.
     /// Set to false for static linking (less common for PHP extensions).
     shared: bool = true,
+
+    /// Maximum stack frames captured for memory leak traceback when
+    /// `ZEND_DEBUG=1` and using `php_allocator`. Each frame is resolved
+    /// to `file:line:column` via DWARF debug info and included in PHP's
+    /// leak reports. Has no effect when using a different allocator.
+    debug_leak_trace_frames: usize = 3,
 };
 
 /// Initialize Phpz from a build dependency.
@@ -55,6 +61,7 @@ pub fn initInner(b: *Build, options: Options) Phpz {
     // Create build options for conditional compilation
     const mod_opts = b.addOptions();
     mod_opts.addOption(bool, "shared", options.shared);
+    mod_opts.addOption(usize, "debug_leak_trace_frames", options.debug_leak_trace_frames);
     mod.addOptions("phpz_options", mod_opts);
 
     return .{ .mod = mod, .options = options };
@@ -112,6 +119,5 @@ fn createPhpCModule(b: *Build, options: Options) *Build.Module {
 
 const std = @import("std");
 const Build = std.Build;
-const builtin = @import("builtin");
 
 const Translator = @import("translate_c").Translator;
