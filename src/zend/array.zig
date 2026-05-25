@@ -129,6 +129,46 @@ pub const Array = opaque {
         return c.zend_hash_compare(self.ptr(), other.ptr(), null, ordered);
     }
 
+    /// HashTable apply result codes.
+    pub const ApplyResult = enum(c_int) {
+        keep = c.ZEND_HASH_APPLY_KEEP,
+        remove = c.ZEND_HASH_APPLY_REMOVE,
+        stop = c.ZEND_HASH_APPLY_STOP,
+    };
+
+    /// Apply a callback to each element in the array.
+    ///
+    /// Return `.keep` to retain the element, `.remove` to delete it from the array,
+    /// or `.stop` to halt iteration. Use `.remove` for filtering.
+    pub fn applyEach(self: *Array, comptime apply_fn: fn (*c.zval) ApplyResult) void {
+        const Cb = struct {
+            fn cb(zv: *c.zval) callconv(.c) c_int {
+                return @intFromEnum(apply_fn(zv));
+            }
+        };
+        c.zend_hash_apply(self.ptr(), Cb.cb);
+    }
+
+    /// Apply a callback to each element, passing a user-provided argument pointer.
+    pub fn applyEachWithArg(self: *Array, comptime apply_fn: fn (*c.zval, *anyopaque) ApplyResult, arg: *anyopaque) void {
+        const Cb = struct {
+            fn cb(zv: *c.zval, a: *anyopaque) callconv(.c) c_int {
+                return @intFromEnum(apply_fn(zv, a));
+            }
+        };
+        c.zend_hash_apply_with_argument(self.ptr(), Cb.cb, arg);
+    }
+
+    /// Sort the array in-place with a custom compare function and optional renumbering.
+    pub fn sort(self: *Array, comptime compare_fn: fn (*c.zval, *c.zval) c_int, renumber: bool) void {
+        const Cb = struct {
+            fn cb(a: *c.Bucket, b: *c.Bucket) callconv(.c) c_int {
+                return compare_fn(&a.val, &b.val);
+            }
+        };
+        c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
+    }
+
     /// Get refcount
     pub inline fn refcount(self: *Array) u32 {
         return c.zend_gc_refcount(&self.ptr().gc);
@@ -211,8 +251,8 @@ pub const Array = opaque {
             var num_key: c.zend_ulong = undefined;
             const key_type = c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos);
             const key: Key = switch (key_type) {
-                @as(c.zend_hash_key_type, c.HASH_KEY_IS_STRING) => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
-                @as(c.zend_hash_key_type, c.HASH_KEY_IS_LONG) => .{ .int = @bitCast(num_key) },
+                c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
+                c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
                 else => unreachable,
             };
 
@@ -287,4 +327,7 @@ pub const Array = opaque {
 test {
     @import("std").testing.refAllDecls(Array);
     @import("std").testing.refAllDecls(Array.Iterator);
+    @import("std").testing.refAllDecls(Array.KeyIterator);
+    @import("std").testing.refAllDecls(Array.ValueIterator);
+    @import("std").testing.refAllDecls(Array.PtrValueIterator(struct {}));
 }

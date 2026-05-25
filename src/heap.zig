@@ -100,8 +100,8 @@ const php_allocator_impl = struct {
             c.efree(memory.ptr);
         }
     }
-};
 
-test {
-    std.testing.refAllDecls(@This());
-}
+    test {
+        std.testing.refAllDecls(@This());
+    }
+};

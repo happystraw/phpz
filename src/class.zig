@@ -363,6 +363,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// Use cases:
 ///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
 ///   - Interfaces (e.g., Tester extends Stringable)
+///   - PHP traits (e.g., `SimpleClass("MyExt\\LoggerTrait", void)`)
 ///   - PHP enums (e.g., `SimpleClass("MyExt\\Status", void)`). Use `zend.ClassEntry.isEnum()`
 ///     for enum checking, and `zend.Object.enumCaseName()`, `zend.Object.enumCaseValue()` for case inspection.
 ///   - Classes where internal implementation is handled by PHP runtime
