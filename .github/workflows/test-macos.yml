@@ -1,4 +1,4 @@
-name: Test (macOS)
+name: macOS Test
 
 on:
   push:
@@ -21,11 +21,13 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.php }}, ${{ matrix.arch }}, ${{ matrix.debug && 'debug' || 'release' }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
         arch: [x86_64, aarch64]
+        debug: [true, false]
         include:
           - arch: x86_64
             os: macos-15-intel
@@ -35,13 +37,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
-      - name: Setup PHP with debugging symbols
+      - name: Setup PHP (${{ matrix.debug && 'debug' || 'release' }})
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           tools: php-config
         env:
-          debug: true
+          debug: ${{ matrix.debug }}
       - name: Run unit tests
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
@@ -54,3 +56,7 @@ jobs:
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
+      - name: Run example tests (ReleaseFast)
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseFast
