@@ -125,7 +125,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// 4. Sets up object handlers
         ///
         /// Note: This is an internal function called by PHP's object system.
-        pub fn init(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
+        fn init(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
             var intern: *Self = @ptrCast(@alignCast(c.zend_object_alloc(@sizeOf(Self), ce.?)));
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
@@ -149,7 +149,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// 2. Calls standard object destructor (cleanup PHP resources)
         ///
         /// Note: This is an internal function called by PHP's garbage collector.
-        pub fn deinit(obj: ?*c.zend_object) callconv(.c) void {
+        fn deinit(obj: ?*c.zend_object) callconv(.c) void {
             var intern: *Self = .from(.std, obj.?);
             if (@hasDecl(T, "deinit")) intern.impl.deinit();
             c.zend_object_std_dtor(obj);
@@ -262,7 +262,13 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Retrieves the parent struct pointer from a field pointer.
         pub fn from(comptime field: std.meta.FieldEnum(Self), field_ptr: *@FieldType(Self, @tagName(field))) *Self {
-            return @fieldParentPtr(@tagName(field), field_ptr);
+            return @fieldParentPtr(
+                @tagName(field),
+                @as(
+                    *align(@alignOf(Self)) @FieldType(Self, @tagName(field)),
+                    @alignCast(field_ptr),
+                ),
+            );
         }
 
         /// Creates an instance of the class from a Zval.Object.
@@ -286,9 +292,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         pub fn construct(self: *Self, params: anytype) !void {
             const obj: *zend.Object = .from(&self.std);
             if (try obj.constructor()) |ctor| {
-                var discard = Zval.native.undef;
-                defer Zval.native.dtor(&discard);
-                ctor.callMethod(obj, &discard, params);
+                ctor.callMethod(obj, null, params);
             }
         }
 
@@ -302,21 +306,19 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                 .float => c.zend_update_property_double(ce, &self.std, prop_name.ptr, prop_name.len, prop_value),
                 .string => c.zend_update_property_stringl(ce, &self.std, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
                 .undef => unreachable,
-                else => {
+                inline else => {
                     var zv: c.zval = undefined;
-                    var zval: Zval = .from(&zv);
-                    zval.set(zk, prop_value);
+                    native.set(&zv, zk, prop_value);
                     c.zend_update_property(ce, &self.std, prop_name.ptr, prop_name.len, &zv);
                 },
             }
         }
 
         /// Read object property.
-        pub fn property(self: *Self, prop_name: []const u8, silent: bool) ?Zval {
+        pub fn property(self: *Self, prop_name: []const u8, silent: bool) *Zval {
             var rv: c.zval = undefined;
             const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, &rv);
-            const zv: Zval = .from(@ptrCast(val));
-            return if (zv.is(.undef)) null else zv;
+            return .from(val);
         }
 
         /// Unset (delete) object property.
@@ -333,10 +335,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                 .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
                 .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
                 .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
-                else => blk: {
+                inline else => blk: {
                     var zv: c.zval = undefined;
-                    var zval: Zval = .from(&zv);
-                    zval.set(zk, prop_value);
+                    native.set(&zv, zk, prop_value);
                     break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
                 },
             };
@@ -344,10 +345,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         }
 
         /// Read static property.
-        pub fn staticProperty(prop_name: []const u8, silent: bool) ?Zval {
+        pub fn staticProperty(prop_name: []const u8, silent: bool) *Zval {
             const val = c.zend_read_static_property(entry.ptr(), prop_name.ptr, prop_name.len, silent);
-            const zv: Zval = .from(@ptrCast(val));
-            return if (zv.is(.undef)) null else zv;
+            return .from(val);
         }
     };
 }
@@ -455,3 +455,4 @@ const phpz = @import("root.zig");
 const c = phpz.c;
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
+const native = Zval.native;
