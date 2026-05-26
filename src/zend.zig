@@ -6,6 +6,8 @@ pub const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 pub const Function = @import("zend/function.zig").Function;
 pub const Object = @import("zend/object.zig").Object;
 pub const Property = @import("zend/property.zig").Property;
+pub const Reference = @import("zend/reference.zig").Reference;
+pub const Resource = @import("zend/resource.zig").Resource;
 pub const String = @import("zend/string.zig").String;
 
 test {

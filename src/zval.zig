@@ -87,10 +87,10 @@ pub const Zval = opaque {
     ///   - float -> f64 (PHP floats are double precision)
     ///   - string -> []const u8 (byte slice)
     ///   - bool -> bool
-    ///   - array -> *c.zend_array (PHP array structure)
-    ///   - object -> *c.zend_object (PHP object structure)
-    ///   - resource -> *c.zend_resource (resource handle)
-    ///   - reference -> *c.zend_reference (reference structure)
+    ///   - array -> *zend.Array (PHP array structure)
+    ///   - object -> *zend.Object (PHP object structure)
+    ///   - resource -> *zend.Resource (resource handle)
+    ///   - reference -> *zend.Reference (reference structure)
     ///   - mixed -> *c.zval (raw zval pointer)
     ///
     /// Example:
@@ -105,10 +105,10 @@ pub const Zval = opaque {
             .float => f64,
             .string => []const u8,
             .bool => bool,
-            .array => *c.zend_array,
-            .object => *c.zend_object,
-            .resource => *c.zend_resource,
-            .reference => *c.zend_reference,
+            .array => *zend.Array,
+            .object => *zend.Object,
+            .resource => *zend.Resource,
+            .reference => *zend.Reference,
             .indirect => *c.zval,
             .ptr => ?*anyopaque,
             .mixed => *c.zval,
@@ -294,7 +294,7 @@ pub const Zval = opaque {
     /// Special cases:
     ///   - For .string: The string is automatically copied and reference-counted by PHP
     ///   - For .undef and .null: The val parameter should be {} (void value)
-    ///   - For .array, .object, .resource: Pass the appropriate pointer type
+    ///   - For .array, .object, .resource, .reference: Pass the appropriate wrapper pointer
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
         native.set(self.ptr(), zk, val);
     }
@@ -488,10 +488,10 @@ pub const Zval = opaque {
                     break :blk zend_str.*.val()[0..zend_str.*.len];
                 },
                 .bool => getType(zv) == c.IS_TRUE,
-                .array => zv.value.arr orelse unreachable,
-                .object => zv.value.obj orelse unreachable,
-                .resource => zv.value.res orelse unreachable,
-                .reference => zv.value.ref orelse unreachable,
+                .array => zend.Array.from(zv.value.arr orelse unreachable),
+                .object => zend.Object.from(zv.value.obj orelse unreachable),
+                .resource => zend.Resource.from(zv.value.res orelse unreachable),
+                .reference => zend.Reference.from(zv.value.ref orelse unreachable),
                 .indirect => zv.value.zv,
                 .ptr => zv.value.ptr,
                 .mixed => zv,
@@ -524,19 +524,19 @@ pub const Zval = opaque {
                     zv.u1.type_info = if (val) c.IS_TRUE else c.IS_FALSE;
                 },
                 .array => {
-                    zv.value.arr = val;
+                    zv.value.arr = val.ptr();
                     zv.u1.type_info = c.IS_ARRAY_EX;
                 },
                 .object => {
-                    zv.value.obj = val;
+                    zv.value.obj = val.ptr();
                     zv.u1.type_info = c.IS_OBJECT_EX;
                 },
                 .resource => {
-                    zv.value.res = val;
+                    zv.value.res = val.ptr();
                     zv.u1.type_info = c.IS_RESOURCE_EX;
                 },
                 .reference => {
-                    zv.value.ref = val;
+                    zv.value.ref = val.ptr();
                     zv.u1.type_info = c.IS_REFERENCE_EX;
                 },
                 .mixed => native.setZval(zv, val, true, false),
