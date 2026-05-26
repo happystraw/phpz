@@ -1,9 +1,4 @@
 const User = extern struct {
-    name: [*]u8,
-    name_len: usize,
-    age: i64 = 0,
-    has_age: bool = false,
-
     pub fn register(impl: anytype) *phpz.ClassEntry {
         return .from(impl(AbstractEntity.entry.ptr(), c.zend_ce_stringable));
     }
@@ -13,36 +8,37 @@ const User = extern struct {
         var age: phpz.Zval.Optional = .init;
         try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
 
-        const name_copy = try gpa.dupe(u8, name);
-        self.name = name_copy.ptr;
-        self.name_len = name_copy.len;
-
         const wrapper: *Class = .from(.impl, self);
         wrapper.updateProperty(.string, "name", name);
         if (age.unwrap()) |zv| {
-            self.age = if (zv.is(.int)) zv.asUnchecked(.int) else 0;
-            self.has_age = true;
-            wrapper.updateProperty(.int, "age", self.age);
+            if (zv.is(.int)) {
+                wrapper.updateProperty(.int, "age", zv.asUnchecked(.int));
+            }
         }
         try wrapper.call("onload", null, .{});
-    }
-
-    pub fn deinit(self: *User) void {
-        gpa.free(self.name[0..self.name_len]);
     }
 
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
         var zv: *c.zval = undefined;
         try ctx.call.parse("z", .{&zv});
 
+        const wrapper: *Class = .from(.impl, self);
+        const name_zv = wrapper.property("name", false);
+        if (name_zv.is(.undef)) return error.NamePropertyMissing;
+        const name = name_zv.asUnchecked(.string);
+        const age = if (wrapper.property("age", false).is(.undef))
+            @as(i64, 0)
+        else
+            wrapper.property("age", false).asUnchecked(.int);
+
         var buf: [256]u8 = undefined;
         if (phpz.Zval.native.is(zv, .int)) {
-            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({d})\n", .{ self.name[0..self.name_len], self.age, phpz.Zval.native.asUnchecked(zv, .int) });
+            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({d})\n", .{ name, age, phpz.Zval.native.asUnchecked(zv, .int) });
             buf[result.len] = 0;
             _ = phpz.printf(buf[0..result.len :0], .{});
         } else if (phpz.Zval.native.is(zv, .string)) {
             const s = phpz.Zval.native.asUnchecked(zv, .string);
-            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({s})\n", .{ self.name[0..self.name_len], self.age, s });
+            const result = try std.fmt.bufPrint(&buf, "{s}({d}).handle({s})\n", .{ name, age, s });
             buf[result.len] = 0;
             _ = phpz.printf(buf[0..result.len :0], .{});
         }
@@ -54,7 +50,11 @@ const User = extern struct {
     }
 
     pub fn toString(self: *const User, ctx: phpz.Ctx) !void {
-        const result = try std.fmt.allocPrint(gpa, "User({s})", .{self.name[0..self.name_len]});
+        const wrapper: *Class = .from(.impl, @constCast(self));
+        const name_zv = wrapper.property("name", false);
+        const name = if (name_zv.is(.undef)) "" else name_zv.asUnchecked(.string);
+
+        const result = try std.fmt.allocPrint(gpa, "User({s})", .{name});
         defer gpa.free(result);
         ctx.ret.set(.string, result);
     }

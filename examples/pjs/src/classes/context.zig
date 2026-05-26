@@ -8,11 +8,10 @@ pub const Context = extern struct {
     }
 
     pub fn construct(self: *Context, ctx: phpz.Ctx) !void {
-        var php_rt_zv: *c.zval = undefined;
-        try ctx.call.parse("O", .{ &php_rt_zv, runtime.Class.entry.ptr() });
-        const php_rt: *phpz.Zval = .from(php_rt_zv);
+        var rt_zv: *c.zval = undefined;
+        try ctx.call.parse("O", .{ &rt_zv, runtime.Class.entry.ptr() });
 
-        self.rt = .from(.std, try php_rt.as(.object));
+        self.rt = .fromObjectZval(try .from(rt_zv));
         self.rt.addref();
 
         self.inner = try .init(self.rt.impl.inner);
@@ -46,7 +45,7 @@ pub const Context = extern struct {
         try val.impl.updateValueFromJsValue(result);
         ctx_obj.addref();
 
-        ctx.ret.set(.object, &val.std);
+        ctx.ret.set(.object, phpz.zend.Object.from(&val.std));
     }
 };
 
@@ -63,6 +62,6 @@ const phpz = @import("phpz");
 const c = phpz.c;
 const quickjs = @import("quickjs");
 
-const runtime = @import("runtime.zig");
 const exception = @import("exception.zig");
+const runtime = @import("runtime.zig");
 const value = @import("value.zig");

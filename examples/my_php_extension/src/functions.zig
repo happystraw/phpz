@@ -4,8 +4,8 @@ const phpz = @import("phpz");
 const c = phpz.c;
 const Zval = phpz.Zval;
 
-const UserClass = @import("classes.zig").user.Class;
 const StatusEnum = @import("classes.zig").status.Enum;
+const UserClass = @import("classes.zig").user.Class;
 
 fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
@@ -26,7 +26,7 @@ fn increment(ctx: phpz.Ctx) !void {
     try ctx.call.parse("z", .{&zv});
 
     const raw = if (Zval.native.is(zv, .reference))
-        &Zval.native.asUnchecked(zv, .reference).val
+        Zval.native.asUnchecked(zv, .reference).val()
     else
         zv;
 
@@ -45,7 +45,7 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
 
     const user: *UserClass = .new();
     try user.construct(.{ name_zv, age_zv });
-    ctx.ret.set(.object, &user.std);
+    ctx.ret.set(.object, .from(&user.std));
 }
 
 fn listStatuses(ctx: phpz.Ctx) !void {
@@ -56,10 +56,10 @@ fn listStatuses(ctx: phpz.Ctx) !void {
     defer phpz.Zval.native.dtor(&cases_zv);
 
     var ret = phpz.Zval.Array.empty(ctx.ret.ptr());
-    var cases = phpz.zend.Array.from(phpz.Zval.native.asUnchecked(&cases_zv, .array));
+    var cases = phpz.Zval.native.asUnchecked(&cases_zv, .array);
     var it = cases.iterator();
     while (it.next()) |entry| {
-        const entry_obj = phpz.zend.Object.from(phpz.Zval.native.asUnchecked(entry.value, .object));
+        const entry_obj = phpz.Zval.native.asUnchecked(entry.value, .object);
         const name = entry_obj.enumCaseName();
         const value = phpz.Zval.native.asUnchecked(entry_obj.enumCaseValue().?, .int);
         ret.set(.int, name, value);
@@ -73,7 +73,7 @@ fn map(ctx: phpz.Ctx) !void {
 
     var result = phpz.Zval.Array.empty(ctx.ret.ptr());
     const ht = Zval.native.asUnchecked(arr_zv, .array);
-    var it = phpz.zend.Array.from(ht).iterator();
+    var it = ht.iterator();
     while (it.next()) |entry| {
         var rv = Zval.native.undef;
         try cb.withRetval(&rv).call(.{entry.value.*});

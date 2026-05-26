@@ -1,6 +1,7 @@
+const std = @import("std");
+
 const phpz = @import("phpz");
 const c = phpz.c;
-const std = @import("std");
 
 pub const Dumper = extern struct {
     pub fn dump(ctx: phpz.Ctx) !void {
@@ -33,7 +34,7 @@ pub const Dumper = extern struct {
                 _ = phpz.printf("string(%d) \"%.*s\"\n", .{ s.len, s.len, s.ptr });
             },
             .array => {
-                const zarr = phpz.zend.Array.from(val.asUnchecked(.array));
+                const zarr = val.asUnchecked(.array);
                 indent(depth);
                 _ = phpz.printf("array(%d) {\n", .{zarr.len()});
                 var it = zarr.iterator();
@@ -51,22 +52,20 @@ pub const Dumper = extern struct {
             .reference => {
                 indent(depth);
                 _ = phpz.printf("&", .{});
-                const ref = val.asUnchecked(.reference);
-                dumpValue(.from(&ref.val), 0);
+                dumpValue(.from(val.asUnchecked(.reference).val()), 0);
             },
             .resource => {
                 indent(depth);
-                const r = val.asUnchecked(.resource);
-                _ = phpz.printf("resource(%d)\n", .{r.*.handle});
+                _ = phpz.printf("resource(%d)\n", .{val.asUnchecked(.resource).handle()});
             },
             .object => {
-                const obj = phpz.zend.Object.from(val.asUnchecked(.object));
+                const obj = val.asUnchecked(.object);
                 indent(depth);
 
                 // Check if this is an enum
-                if (obj.class().isEnum()) {
+                if (obj.isEnum()) {
                     const case_name = obj.enumCaseName();
-                    switch (obj.class().enumBackingType()) {
+                    switch (obj.enumBackingType()) {
                         .int => {
                             const v = phpz.Zval.native.asUnchecked(obj.enumCaseValue().?, .int);
                             _ = phpz.printf("enum %.*s { %.*s = %ld }\n", .{
