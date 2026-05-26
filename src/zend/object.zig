@@ -1,5 +1,5 @@
 const c = @import("../root.zig").c;
-const Zval = @import("../zval.zig").Zval;
+const native = @import("../zval.zig").Zval.native;
 const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
@@ -256,13 +256,23 @@ pub const Object = opaque {
     /// Get the case name from an enum case object
     pub fn enumCaseName(self: *Object) []const u8 {
         const zv = c.zend_enum_fetch_case_name(self.ptr());
-        return Zval.native.asUnchecked(zv, .string);
+        return native.asUnchecked(zv, .string);
     }
 
     /// Get the backing value from a backed enum case, or null if pure enum
     pub fn enumCaseValue(self: *Object) ?*c.zval {
-        if (self.class().enumBackingType() == .undef) return null;
+        if (self.enumBackingType() == .undef) return null;
         return c.zend_enum_fetch_case_value(self.ptr());
+    }
+
+    /// Get the enum backing type of this object's class
+    pub inline fn enumBackingType(self: *Object) ClassEntry.EnumBackingType {
+        return self.class().enumBackingType();
+    }
+
+    /// Check if this object is an enum case
+    pub inline fn isEnum(self: *Object) bool {
+        return self.class().isEnum();
     }
 };
 

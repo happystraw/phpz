@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @import("../root.zig").c;
-const Zval = @import("../zval.zig").Zval;
+const native = @import("../zval.zig").Zval.native;
 
 /// Parsed callable ready for invocation.
 ///
@@ -64,7 +64,7 @@ pub const Callable = struct {
     /// Increment refcounts on `function_name` and `fcc.object`.
     /// Prevents premature destruction when the callable is retained.
     pub inline fn addref(self: *Callable) void {
-        Zval.native.tryAddref(&self.fci.function_name);
+        native.tryAddref(&self.fci.function_name);
         if (self.fcc.object) |obj|
             _ = c.zend_gc_addref(&obj.*.gc);
     }
@@ -72,7 +72,7 @@ pub const Callable = struct {
     /// Decrement refcounts on `function_name` and `fcc.object`.
     /// Frees resources when the last reference is dropped.
     pub inline fn delref(self: *Callable) void {
-        Zval.native.dtor(&self.fci.function_name);
+        native.dtor(&self.fci.function_name);
         if (self.fcc.object) |obj|
             c.zend_object_release(obj);
     }
