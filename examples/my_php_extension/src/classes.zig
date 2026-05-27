@@ -5,4 +5,5 @@ pub const my_error = @import("classes/my_error.zig");
 pub const abstract_entity = @import("classes/abstract_entity.zig");
 pub const user = @import("classes/user.zig");
 pub const counter = @import("classes/counter.zig");
+pub const array_like = @import("classes/array_like.zig");
 pub const dumper = @import("classes/dumper.zig");

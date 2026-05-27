@@ -13,6 +13,7 @@ fn startup() !void {
     classes.abstract_entity.Class.register();
     classes.user.Class.register();
     classes.counter.Class.register();
+    classes.array_like.Class.register();
     classes.dumper.Class.register();
 }
 

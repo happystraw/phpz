@@ -125,4 +125,58 @@ namespace MyPHPExt {
         {
         }
     }
+
+    class ArrayLike implements \ArrayAccess, \Countable, \Iterator
+    {
+        public function __construct(array $data = [])
+        {
+        }
+
+        public function toArray(): array
+        {
+        }
+
+        // ArrayAccess
+        public function offsetExists(mixed $offset): bool
+        {
+        }
+
+        public function offsetGet(mixed $offset): mixed
+        {
+        }
+
+        public function offsetSet(mixed $offset, mixed $value): void
+        {
+        }
+
+        public function offsetUnset(mixed $offset): void
+        {
+        }
+
+        // Countable
+        public function count(): int
+        {
+        }
+
+        // Iterator
+        public function current(): mixed
+        {
+        }
+
+        public function key(): mixed
+        {
+        }
+
+        public function next(): void
+        {
+        }
+
+        public function rewind(): void
+        {
+        }
+
+        public function valid(): bool
+        {
+        }
+    }
 }

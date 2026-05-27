@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 73d8a3a174cc958009aa9eef397ff0a0777bef18 */
+ * Stub hash: 071a43051d57cb8617aa12c2ae98488e9b406efc */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -64,6 +64,43 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Counter_value arginfo_class_MyPHPExt_Identifiable_getId
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ArrayLike___construct, 0, 0, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, data, IS_ARRAY, 0, "[]")
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_MyPHPExt_ArrayLike_toArray arginfo_MyPHPExt_listStatuses
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetExists, 0, 1, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetGet, 0, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetSet, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetUnset, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_MyPHPExt_ArrayLike_count arginfo_class_MyPHPExt_Identifiable_getId
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_current, 0, 0, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_MyPHPExt_ArrayLike_key arginfo_class_MyPHPExt_ArrayLike_current
+
+#define arginfo_class_MyPHPExt_ArrayLike_next arginfo_hello
+
+#define arginfo_class_MyPHPExt_ArrayLike_rewind arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_valid, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
 
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
@@ -82,6 +119,18 @@ ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, add);
 ZEND_METHOD(MyPHPExt_Counter, dec);
 ZEND_METHOD(MyPHPExt_Counter, value);
+ZEND_METHOD(MyPHPExt_ArrayLike, __construct);
+ZEND_METHOD(MyPHPExt_ArrayLike, toArray);
+ZEND_METHOD(MyPHPExt_ArrayLike, offsetExists);
+ZEND_METHOD(MyPHPExt_ArrayLike, offsetGet);
+ZEND_METHOD(MyPHPExt_ArrayLike, offsetSet);
+ZEND_METHOD(MyPHPExt_ArrayLike, offsetUnset);
+ZEND_METHOD(MyPHPExt_ArrayLike, count);
+ZEND_METHOD(MyPHPExt_ArrayLike, current);
+ZEND_METHOD(MyPHPExt_ArrayLike, key);
+ZEND_METHOD(MyPHPExt_ArrayLike, next);
+ZEND_METHOD(MyPHPExt_ArrayLike, rewind);
+ZEND_METHOD(MyPHPExt_ArrayLike, valid);
 
 
 static const zend_function_entry ext_functions[] = {
@@ -144,6 +193,23 @@ static const zend_function_entry class_MyPHPExt_Counter_methods[] = {
 	ZEND_ME(MyPHPExt_Counter, add, arginfo_class_MyPHPExt_Counter_add, ZEND_ACC_PUBLIC)
 	ZEND_ME(MyPHPExt_Counter, dec, arginfo_class_MyPHPExt_Counter_dec, ZEND_ACC_PUBLIC)
 	ZEND_ME(MyPHPExt_Counter, value, arginfo_class_MyPHPExt_Counter_value, ZEND_ACC_PUBLIC)
+	ZEND_FE_END
+};
+
+
+static const zend_function_entry class_MyPHPExt_ArrayLike_methods[] = {
+	ZEND_ME(MyPHPExt_ArrayLike, __construct, arginfo_class_MyPHPExt_ArrayLike___construct, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, toArray, arginfo_class_MyPHPExt_ArrayLike_toArray, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, offsetExists, arginfo_class_MyPHPExt_ArrayLike_offsetExists, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, offsetGet, arginfo_class_MyPHPExt_ArrayLike_offsetGet, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, offsetSet, arginfo_class_MyPHPExt_ArrayLike_offsetSet, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, offsetUnset, arginfo_class_MyPHPExt_ArrayLike_offsetUnset, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, count, arginfo_class_MyPHPExt_ArrayLike_count, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, current, arginfo_class_MyPHPExt_ArrayLike_current, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, key, arginfo_class_MyPHPExt_ArrayLike_key, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, next, arginfo_class_MyPHPExt_ArrayLike_next, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, rewind, arginfo_class_MyPHPExt_ArrayLike_rewind, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_ArrayLike, valid, arginfo_class_MyPHPExt_ArrayLike_valid, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
 };
 
@@ -264,6 +330,17 @@ static zend_class_entry *register_class_MyPHPExt_Counter(void)
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Counter", class_MyPHPExt_Counter_methods);
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
 	class_entry->ce_flags |= ZEND_ACC_FINAL;
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_MyPHPExt_ArrayLike(zend_class_entry *class_entry_ArrayAccess, zend_class_entry *class_entry_Countable, zend_class_entry *class_entry_Iterator)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "ArrayLike", class_MyPHPExt_ArrayLike_methods);
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+	zend_class_implements(class_entry, 3, class_entry_ArrayAccess, class_entry_Countable, class_entry_Iterator);
 
 	return class_entry;
 }
