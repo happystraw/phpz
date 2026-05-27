@@ -111,10 +111,14 @@ const DebugSourceLocation = if (c.ZEND_DEBUG == 1) struct {
     /// in allocation headers, so it must outlive the allocation.
     var storage: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
 
-    /// Captures a stack trace starting from `return_address`, resolves each
-    /// frame to source locations via DWARF, formats the result, and persists
-    /// it into `storage`.
+    /// Cache: return address → trace. Avoids repeated DWARF resolution
+    /// for allocations from the same call site (e.g. inside loops).
+    var cache: std.AutoArrayHashMapUnmanaged(usize, DebugSourceLocation) = .{};
+
+    /// Captures a stack trace starting from `return_address`. Results are
+    /// cached by return address to avoid repeated DWARF resolution.
     fn resolve(return_address: usize) DebugSourceLocation {
+        if (cache.get(return_address)) |cached| return cached;
         var addr_buf: [max_trace_depth]usize = undefined;
         const st = std.debug.captureCurrentStackTrace(.{ .first_address = return_address }, &addr_buf);
         if (st.return_addresses.len == 0) return .unknown;
@@ -125,7 +129,9 @@ const DebugSourceLocation = if (c.ZEND_DEBUG == 1) struct {
         if (pos == 0) return .unknown;
 
         const persisted = storage.allocator().dupeSentinel(u8, buf[0..pos], 0) catch return .unknown;
-        return .{ .file = persisted, .line = line };
+        const result: DebugSourceLocation = .{ .file = persisted, .line = line };
+        cache.put(storage.allocator(), return_address, result) catch {};
+        return result;
     }
 
     /// Resolves each address to a `Symbol` via DWARF and writes formatted
