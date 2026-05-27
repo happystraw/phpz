@@ -31,8 +31,7 @@ pub const ClassEntry = opaque {
 
     /// Get the parent class entry, or null if no parent
     pub fn parent(self: *ClassEntry) ?*ClassEntry {
-        // FIXME: unname union
-        const p = self.ptr().*.unnamed_0.parent;
+        const p = c.phpz_class_entry_get_parent(self.ptr());
         return if (p) |parent_ptr| .from(parent_ptr) else null;
     }
 
@@ -102,8 +101,7 @@ pub const ClassEntry = opaque {
     /// Get an implemented interface by index (0-based), or null if out of range
     pub fn interfaceAt(self: *ClassEntry, index: u32) ?*ClassEntry {
         if (index >= self.interfaceCount()) return null;
-        // FIXME: unname union
-        return .from(self.ptr().*.unnamed_2.interfaces[index]);
+        return .from(c.phpz_class_entry_get_interface(self.ptr(), index));
     }
 
     /// Check if this class implements a given interface

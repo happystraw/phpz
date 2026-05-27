@@ -37,4 +37,21 @@ static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, boo
     ZVAL_ZVAL(z, src, copy, dtor_src);
 }
 
+/* Bridge helpers for zend_class_entry anonymous unions.
+ * translate-c numbers unnamed unions (unnamed_0, unnamed_1, ...),
+ * which break when PHP headers change union layout. These inline
+ * wrappers give translate-c stable symbol names to bind against. */
+
+static zend_always_inline void phpz_class_entry_set_create_object(zend_class_entry *ce, zend_object* (*handler)(zend_class_entry *)) {
+    ce->create_object = handler;
+}
+
+static zend_always_inline zend_class_entry *phpz_class_entry_get_parent(zend_class_entry *ce) {
+    return ce->parent;
+}
+
+static zend_always_inline zend_class_entry *phpz_class_entry_get_interface(zend_class_entry *ce, uint32_t index) {
+    return ce->interfaces[index];
+}
+
 #endif
