@@ -58,7 +58,7 @@ pub const Array = opaque {
             .resource => c.add_assoc_resource_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .reference => c.add_assoc_reference_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .mixed => c.add_assoc_zval_ex(self.ptr(), key.ptr, key.len, val),
-            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array value"),
+            inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array value"),
         }
     }
 
@@ -78,7 +78,7 @@ pub const Array = opaque {
             .mixed => {
                 if (c.add_index_zval(self.ptr(), idx, val) != c.SUCCESS) return Error.SetIndexFailed;
             },
-            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array element"),
+            inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array element"),
         }
     }
 
@@ -95,7 +95,7 @@ pub const Array = opaque {
             .resource => c.add_next_index_resource(self.ptr(), val.ptr()),
             .reference => c.add_next_index_reference(self.ptr(), val.ptr()),
             .mixed => c.add_next_index_zval(self.ptr(), val),
-            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be appended to array"),
+            inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be appended to array"),
         };
         if (result != c.SUCCESS) return Error.AppendFailed;
     }

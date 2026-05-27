@@ -68,7 +68,7 @@ pub const Object = opaque {
             .resource => c.add_property_resource_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .reference => c.add_property_reference_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .mixed => c.add_property_zval_ex(self.ptr(), key.ptr, key.len, val),
-            .undef => @compileError("'undef' represents an uninitialized value and cannot be set as object property"),
+            inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as object property"),
         }
     }
 };
