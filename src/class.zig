@@ -21,13 +21,13 @@ const native = Zval.native;
 /// PHP object handler overrides.
 ///
 /// Define a `phpz.ObjectHandlers` with the handlers you want to override, then
-/// pass it to the generated class's `setHandlers` function. Only non-null fields
-/// will replace the default std_object_handlers entries.
+/// pass it to the generated class's `setObjectHandlers` function. Only non-null
+/// fields will replace the default std_object_handlers entries.
 ///
 /// Example:
 /// ```zig
 /// const myHandlers = phpz.ObjectHandlers{ .clone_obj = &myClone };
-/// StudentClass.setHandlers(myHandlers);
+/// StudentClass.setObjectHandlers(myHandlers);
 /// ```
 pub const ObjectHandlers = struct {
     /// __clone(): void  —  triggered by `clone $obj`
@@ -52,6 +52,14 @@ pub const ObjectHandlers = struct {
     do_operation: c.zend_object_do_operation_t = null,
     /// $a == $b / $a > $b / $a <=> $b  —  comparison
     compare: c.zend_object_compare_t = null,
+    /// $obj->prop = &$ref  —  reference property support
+    get_property_ptr_ptr: c.zend_object_get_property_ptr_ptr_t = null,
+    /// Closure::fromCallable($obj) / arrow functions
+    get_closure: c.zend_object_get_closure_t = null,
+    /// gc_collect_cycles()  —  circular reference tracking
+    get_gc: c.zend_object_get_gc_t = null,
+    /// get_properties_for()  —  PHP 8.1+ property purposes (var_dump, json, etc.)
+    get_properties_for: c.zend_object_get_properties_for_t = null,
 };
 
 /// Create a PHP class wrapper around a Zig type.
@@ -233,8 +241,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             handlers.offset = @offsetOf(Self, "std");
 
             entry = callRegisterClassFn(class_name, T);
-            // FIXME: unname union
-            entry.ptr().*.unnamed_1.create_object = &init;
+            c.phpz_class_entry_set_create_object(entry.ptr(), &init);
         }
 
         /// Apply custom object handlers.
@@ -360,7 +367,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             try obj.call(method_name, retval, params);
         }
 
-        /// Calls the constructor method (__construct) on the object with the given parameters.
+        /// Calls the constructor (`__construct`) with the given parameters.
+        /// Does nothing if the class has no constructor defined.
         pub fn construct(self: *Self, params: anytype) !void {
             const obj: *zend.Object = .from(&self.std);
             if (try obj.constructor()) |ctor| {
@@ -377,7 +385,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                 .int => c.zend_update_property_long(ce, &self.std, prop_name.ptr, prop_name.len, prop_value),
                 .float => c.zend_update_property_double(ce, &self.std, prop_name.ptr, prop_name.len, prop_value),
                 .string => c.zend_update_property_stringl(ce, &self.std, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
-                .undef => unreachable,
+                .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as object property"),
                 inline else => {
                     var zv: c.zval = undefined;
                     native.set(&zv, zk, prop_value);
@@ -398,7 +406,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             c.zend_unset_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len);
         }
 
-        /// Set static property value.
+        /// Set static property value. Returns `error.UpdateStaticPropertyFailed` on failure.
         pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) !void {
             const ce = entry.ptr();
             const result = switch (zk) {
@@ -407,6 +415,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                 .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
                 .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
                 .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+                .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as static property"),
                 inline else => blk: {
                     var zv: c.zval = undefined;
                     native.set(&zv, zk, prop_value);
