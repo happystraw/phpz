@@ -199,7 +199,7 @@ pub const Array = opaque {
         value: *c.zval,
     };
 
-    pub const Iterator = struct {
+    pub const Iterator = extern struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -208,30 +208,69 @@ pub const Array = opaque {
                 .ht = array.ptr(),
                 .pos = 0,
             };
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.reset();
             return self;
         }
 
+        /// Reset the internal pointer to the first element.
+        pub fn reset(self: *Iterator) void {
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+        }
+
+        /// Return the current key without advancing, or null if exhausted.
+        pub fn currentKey(self: *Iterator) ?Key {
+            return if (self.hasMore()) self.peekKey() else null;
+        }
+
+        /// Return the current value without advancing, or null if exhausted.
+        pub fn currentValue(self: *Iterator) ?*c.zval {
+            return if (self.hasMore()) self.peekValue() else null;
+        }
+
+        /// Return the current element (key + value) without advancing, or null if exhausted.
+        pub fn current(self: *Iterator) ?Entry {
+            return if (self.hasMore()) self.peek() else null;
+        }
+
+        /// Return the current element and advance, or null if exhausted.
         pub fn next(self: *Iterator) ?Entry {
-            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+            if (!self.hasMore()) return null;
+            defer self.advance();
+            return self.peek();
+        }
 
-            const val = c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+        /// Move the internal pointer forward without returning a value.
+        pub fn advance(self: *Iterator) void {
+            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+        }
 
+        /// Unsafe: peek key + value without bounds check. Prefer `current()`.
+        pub fn peek(self: *Iterator) Entry {
+            return .{ .key = self.peekKey(), .value = self.peekValue() };
+        }
+
+        /// Unsafe: peek the current key without bounds check. Prefer `currentKey()`.
+        pub fn peekKey(self: *Iterator) Key {
             var str_key: ?*c.zend_string = null;
             var num_key: c.zend_ulong = undefined;
-            const key_type = c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos);
-            const key: Key = switch (key_type) {
+            return switch (c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos)) {
                 c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
                 c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
                 else => unreachable,
             };
+        }
 
-            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
-            return .{ .key = key, .value = val };
+        /// Unsafe: peek the current value without bounds check. Prefer `currentValue()`.
+        pub fn peekValue(self: *Iterator) *c.zval {
+            return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+        }
+
+        inline fn hasMore(self: *Iterator) bool {
+            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
         }
     };
 
-    pub const KeyIterator = struct {
+    pub const KeyIterator = extern struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -240,28 +279,49 @@ pub const Array = opaque {
                 .ht = array.ptr(),
                 .pos = 0,
             };
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.reset();
             return self;
         }
 
-        pub fn next(self: *KeyIterator) ?Key {
-            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
+        /// Reset the iterator to the first element.
+        pub fn reset(self: *KeyIterator) void {
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+        }
 
+        /// Return the current key without advancing, or null if exhausted.
+        pub fn current(self: *KeyIterator) ?Key {
+            return if (self.hasMore()) self.peek() else null;
+        }
+
+        /// Return the current key and advance, or null if exhausted.
+        pub fn next(self: *KeyIterator) ?Key {
+            if (!self.hasMore()) return null;
+            defer self.advance();
+            return self.peek();
+        }
+
+        /// Move the internal pointer forward without returning a value.
+        pub fn advance(self: *KeyIterator) void {
+            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+        }
+
+        /// Unsafe: peek without bounds check. Prefer `current()`.
+        pub fn peek(self: *KeyIterator) Key {
             var str_key: ?*c.zend_string = null;
             var num_key: c.zend_ulong = undefined;
-            const key_type = c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos);
-            const key: Key = switch (key_type) {
+            return switch (c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos)) {
                 c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
                 c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
                 else => unreachable,
             };
+        }
 
-            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
-            return key;
+        inline fn hasMore(self: *KeyIterator) bool {
+            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
         }
     };
 
-    pub const ValueIterator = struct {
+    pub const ValueIterator = extern struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -270,20 +330,44 @@ pub const Array = opaque {
                 .ht = array.ptr(),
                 .pos = 0,
             };
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.reset();
             return self;
         }
 
+        /// Reset the iterator to the first element.
+        pub fn reset(self: *ValueIterator) void {
+            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+        }
+
+        /// Return the current value without advancing, or null if exhausted.
+        pub fn current(self: *ValueIterator) ?*c.zval {
+            return if (self.hasMore()) self.peek() else null;
+        }
+
+        /// Return the current value and advance, or null if exhausted.
         pub fn next(self: *ValueIterator) ?*c.zval {
-            if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
-            const zv = c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+            if (!self.hasMore()) return null;
+            defer self.advance();
+            return self.peek();
+        }
+
+        /// Move the internal pointer forward without returning a value.
+        pub fn advance(self: *ValueIterator) void {
             _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
-            return zv;
+        }
+
+        /// Unsafe: peek without bounds check. Prefer `current()`.
+        pub fn peek(self: *ValueIterator) *c.zval {
+            return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+        }
+
+        inline fn hasMore(self: *ValueIterator) bool {
+            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
         }
     };
 
     pub fn PtrValueIterator(comptime T: type) type {
-        return struct {
+        return extern struct {
             ht: *c.HashTable,
             pos: c.HashPosition,
 
@@ -297,16 +381,40 @@ pub const Array = opaque {
                     .ht = array.ptr(),
                     .pos = 0,
                 };
-                c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+                self.reset();
                 return self;
             }
 
-            /// Return the next element as a typed pointer, or null when iteration is complete.
+            /// Reset the iterator to the first element.
+            pub fn reset(self: *Self) void {
+                c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            }
+
+            /// Return the current element as a typed pointer without advancing.
+            pub fn current(self: *Self) ?*T {
+                return if (self.hasMore()) self.peek() else null;
+            }
+
+            /// Return the current element and advance, or null when iteration is complete.
             pub fn next(self: *Self) ?*T {
-                if (c.zend_hash_has_more_elements_ex(self.ht, &self.pos) != c.SUCCESS) return null;
-                const info = c.zend_hash_get_current_data_ptr_ex(self.ht, &self.pos).?;
+                if (!self.hasMore()) return null;
+                defer self.advance();
+                return self.peek();
+            }
+
+            /// Move the internal pointer forward without returning a value.
+            pub fn advance(self: *Self) void {
                 _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            }
+
+            /// Unsafe: peek without bounds check. Prefer `current()`.
+            pub fn peek(self: *Self) *T {
+                const info = c.zend_hash_get_current_data_ptr_ex(self.ht, &self.pos).?;
                 return @ptrCast(@alignCast(info));
+            }
+
+            inline fn hasMore(self: *Self) bool {
+                return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
             }
         };
     }
