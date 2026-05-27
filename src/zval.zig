@@ -147,21 +147,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn kind(self: *Zval) Kind {
-        return switch (native.getType(self.ptr())) {
-            c.IS_UNDEF => .undef,
-            c.IS_NULL => .null,
-            c.IS_LONG => .int,
-            c.IS_DOUBLE => .float,
-            c.IS_STRING => .string,
-            c.IS_TRUE, c.IS_FALSE => .bool,
-            c.IS_ARRAY => .array,
-            c.IS_OBJECT => .object,
-            c.IS_RESOURCE => .resource,
-            c.IS_REFERENCE => .reference,
-            c.IS_INDIRECT => .indirect,
-            c.IS_PTR => .ptr,
-            else => .mixed,
-        };
+        return native.kind(self.ptr());
     }
 
     /// Check if this zval is of a specific type.
@@ -446,6 +432,25 @@ pub const Zval = opaque {
         /// ```
         pub fn getTypeName(zv: *c.zval) [*:0]const u8 {
             return c.zend_zval_type_name(zv);
+        }
+
+        /// Get the type (Kind) of a raw zval.
+        pub fn kind(zv: *c.zval) Kind {
+            return switch (getType(zv)) {
+                c.IS_UNDEF => .undef,
+                c.IS_NULL => .null,
+                c.IS_LONG => .int,
+                c.IS_DOUBLE => .float,
+                c.IS_STRING => .string,
+                c.IS_TRUE, c.IS_FALSE => .bool,
+                c.IS_ARRAY => .array,
+                c.IS_OBJECT => .object,
+                c.IS_RESOURCE => .resource,
+                c.IS_REFERENCE => .reference,
+                c.IS_INDIRECT => .indirect,
+                c.IS_PTR => .ptr,
+                else => .mixed,
+            };
         }
 
         /// Check if a raw zval is of a specific type.
