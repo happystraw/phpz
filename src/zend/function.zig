@@ -73,53 +73,39 @@ pub const Function = opaque {
     /// Call as a global function (no object, no scope).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     pub fn call(self: *Function, retval: ?*c.zval, params: anytype) void {
-        const info = @typeInfo(@TypeOf(params));
-        if (!(info == .@"struct" and info.@"struct".is_tuple))
-            @compileError("call: params must be a tuple, e.g. .{} or .{a, b}");
-
-        const n = info.@"struct".fields.len;
-        switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), null, null, retval, 0, null, null),
-            else => {
-                var arr: [n]c.zval = undefined;
-                inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), null, null, retval, @intCast(n), @ptrCast(&arr), null);
-            },
-        }
+        self.callKnown(null, null, retval, params);
     }
 
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) void {
-        const info = @typeInfo(@TypeOf(params));
-        if (!(info == .@"struct" and info.@"struct".is_tuple))
-            @compileError("callStatic: params must be a tuple, e.g. .{} or .{a, b}");
-
-        const n = info.@"struct".fields.len;
-        switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), null, ce.ptr(), retval, 0, null, null),
-            else => {
-                var arr: [n]c.zval = undefined;
-                inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), null, ce.ptr(), retval, @intCast(n), @ptrCast(&arr), null);
-            },
-        }
+        self.callKnown(null, ce.ptr(), retval, params);
     }
 
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) void {
+        self.callKnown(obj.ptr(), obj.class().ptr(), retval, params);
+    }
+
+    inline fn callKnown(
+        self: *Function,
+        obj: ?*c.zend_object,
+        scope: ?*c.zend_class_entry,
+        retval: ?*c.zval,
+        params: anytype,
+    ) void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
-            @compileError("callMethod: params must be a tuple, e.g. .{} or .{a, b}");
+            @compileError("params must be a tuple, e.g. .{} or .{a, b}");
 
         const n = info.@"struct".fields.len;
         switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), obj.ptr(), obj.class().ptr(), retval, 0, null, null),
+            0 => c.zend_call_known_function(self.ptr(), obj, scope, retval, 0, null, null),
             else => {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), obj.ptr(), obj.class().ptr(), retval, @intCast(n), @ptrCast(&arr), null);
+                c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), null);
             },
         }
     }
