@@ -14,6 +14,7 @@ pub const zend = @import("zend.zig");
 const class_helper = @import("class.zig");
 pub const Class = class_helper.Class;
 pub const SimpleClass = class_helper.SimpleClass;
+pub const ObjectHandlers = class_helper.ObjectHandlers;
 pub const ClassEntry = zend.ClassEntry;
 
 const function_helper = @import("function.zig");

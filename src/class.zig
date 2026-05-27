@@ -9,6 +9,51 @@
 //! handling registration through auto-generated `register_class_*` functions from
 //! PHP stub files.
 
+const std = @import("std");
+
+const function_helper = @import("function.zig");
+const phpz = @import("root.zig");
+const c = phpz.c;
+const zend = @import("zend.zig");
+const Zval = @import("zval.zig").Zval;
+const native = Zval.native;
+
+/// PHP object handler overrides.
+///
+/// Define a `phpz.ObjectHandlers` with the handlers you want to override, then
+/// pass it to the generated class's `setHandlers` function. Only non-null fields
+/// will replace the default std_object_handlers entries.
+///
+/// Example:
+/// ```zig
+/// const myHandlers = phpz.ObjectHandlers{ .clone_obj = &myClone };
+/// StudentClass.setHandlers(myHandlers);
+/// ```
+pub const ObjectHandlers = struct {
+    /// __clone(): void  —  triggered by `clone $obj`
+    clone_obj: c.zend_object_clone_obj_t = null,
+    /// offsetGet($offset): mixed  —  ArrayAccess
+    read_dimension: c.zend_object_read_dimension_t = null,
+    /// offsetSet($offset, $value): void  —  ArrayAccess
+    write_dimension: c.zend_object_write_dimension_t = null,
+    /// offsetExists($offset): bool  —  ArrayAccess
+    has_dimension: c.zend_object_has_dimension_t = null,
+    /// offsetUnset($offset): void  —  ArrayAccess
+    unset_dimension: c.zend_object_unset_dimension_t = null,
+    /// get_object_vars($obj) / `foreach` properties
+    get_properties: c.zend_object_get_properties_t = null,
+    /// (settype) / (string) / (int) / (bool)  —  type casting
+    cast_object: c.zend_object_cast_t = null,
+    /// count($obj): int  —  Countable
+    count_elements: c.zend_object_count_elements_t = null,
+    /// var_dump($obj): array  —  debug info
+    get_debug_info: c.zend_object_get_debug_info_t = null,
+    /// operator overloading: + - * / etc.
+    do_operation: c.zend_object_do_operation_t = null,
+    /// $a == $b / $a > $b / $a <=> $b  —  comparison
+    compare: c.zend_object_compare_t = null,
+};
+
 /// Create a PHP class wrapper around a Zig type.
 ///
 /// This function generates a wrapper structure that bridges Zig code with PHP's
@@ -183,12 +228,39 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn register() void {
-            entry = callRegisterClassFn(class_name, T);
-            // FIXME: unname union
-            entry.ptr().*.unnamed_1.create_object = &init;
             handlers = c.std_object_handlers;
             handlers.free_obj = &deinit;
             handlers.offset = @offsetOf(Self, "std");
+
+            entry = callRegisterClassFn(class_name, T);
+            // FIXME: unname union
+            entry.ptr().*.unnamed_1.create_object = &init;
+        }
+
+        /// Apply custom object handlers.
+        ///
+        /// Only non-null fields override the current handler entries.
+        /// Call from `T.register` — the class wrapper type is accessible in
+        /// the same scope as the impl struct.
+        ///
+        /// Example:
+        /// ```zig
+        /// const User = extern struct {
+        ///     pub fn register(impl: anytype) *phpz.ClassEntry {
+        ///         Class.setObjectHandlers(.{ .clone_obj = &myClone });
+        ///         return .from(impl(c.zend_ce_stringable));
+        ///     }
+        ///     fn myClone(self: *User) ?*c.zend_object {
+        ///         // Custom clone implementation
+        ///     }
+        /// };
+        /// pub const Class = phpz.Class("User", User);
+        /// ```
+        pub fn setObjectHandlers(comptime hs: ObjectHandlers) void {
+            inline for (@typeInfo(ObjectHandlers).@"struct".fields) |field| {
+                const fv = @field(hs, field.name);
+                if (fv != null) @field(handlers, field.name) = fv;
+            }
         }
 
         /// Register a method for this PHP class.
@@ -447,12 +519,3 @@ fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *php
             .from(@call(.auto, register_class_fn, .{})),
     };
 }
-
-const std = @import("std");
-
-const function_helper = @import("function.zig");
-const phpz = @import("root.zig");
-const c = phpz.c;
-const zend = @import("zend.zig");
-const Zval = @import("zval.zig").Zval;
-const native = Zval.native;
