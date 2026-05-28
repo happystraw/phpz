@@ -70,6 +70,14 @@ pub fn throwExceptionEx(ce: ?*c.zend_class_entry, code: c.zend_long, comptime fo
     return @call(.auto, c.zend_throw_exception_ex, .{ ce, code, format.ptr } ++ args);
 }
 
+/// Check whether a PHP exception is pending (EG(exception) != null).
+pub inline fn hasException() bool {
+    return c.executor_globals.exception != null;
+}
+
+/// Clear the pending PHP exception. Does nothing if no exception is set.
+pub const clearException = c.zend_clear_exception;
+
 /// Trigger a PHP error
 pub fn err(level: Level, comptime format: [:0]const u8, args: anytype) void {
     @call(.auto, c.zend_error, .{ @intFromEnum(level), format.ptr } ++ args);
