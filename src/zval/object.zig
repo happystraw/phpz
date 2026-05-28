@@ -3,22 +3,18 @@ const zend = @import("../zend.zig");
 const Zval = @import("../zval.zig").Zval;
 
 pub const Object = opaque {
-    pub const Error = error{
-        NullPointer,
-        InitFailed,
-        CallFailed,
-    } || Zval.Error;
-
     /// Create a standard object (stdClass)
     pub fn init(zv: *c.zval) *Object {
         c.object_init(zv);
         return @ptrCast(zv);
     }
 
+    pub const InitClassError = error{InitFailed};
+
     /// Create an object from a class entry
-    pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) Error!*Object {
+    pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) InitClassError!*Object {
         const result = c.object_init_ex(zv, ce.ptr());
-        if (result != c.SUCCESS) return Error.InitFailed;
+        if (result != c.SUCCESS) return error.InitFailed;
         return @ptrCast(zv);
     }
 
@@ -27,16 +23,18 @@ pub const Object = opaque {
         zv: *c.zval,
         ce: *zend.ClassEntry,
         properties: ?*c.zend_array,
-    ) Error!*Object {
+    ) InitClassError!*Object {
         const result = c.object_and_properties_init(zv, ce.ptr(), properties);
-        if (result != c.SUCCESS) return Error.InitFailed;
+        if (result != c.SUCCESS) return error.InitFailed;
         return @ptrCast(zv);
     }
 
+    pub const FromError = error{NullPointer} || Zval.Error;
+
     /// Create from an existing zval pointer (must be object type)
-    pub fn from(zv: *c.zval) Error!*Object {
-        if (Zval.native.getType(zv) != c.IS_OBJECT) return Error.TypeMismatch;
-        if (zv.value.obj == null) return Error.NullPointer;
+    pub fn from(zv: *c.zval) FromError!*Object {
+        if (Zval.native.getType(zv) != c.IS_OBJECT) return error.TypeMismatch;
+        if (zv.value.obj == null) return error.NullPointer;
         return @ptrCast(zv);
     }
 

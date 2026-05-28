@@ -25,8 +25,13 @@ pub const Array = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Destroy the array
+    /// Release the array (decrement refcount, destroy if zero).
     pub fn deinit(self: *Array) void {
+        c.zend_array_release(self.ptr());
+    }
+
+    /// Unconditionally destroy the array, regardless of refcount.
+    pub fn destroy(self: *Array) void {
         c.zend_array_destroy(self.ptr());
     }
 

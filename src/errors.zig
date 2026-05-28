@@ -37,20 +37,26 @@ pub const Level = enum(c_int) {
     _,
 };
 
+pub const ArgumentTypeError = error{PhpArgumentTypeError};
+
 /// Return an argument type error
-pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentTypeError}!void {
+pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentTypeError!void {
     @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentTypeError;
 }
 
+pub const ArgumentValueError = error{PhpArgumentValueError};
+
 /// Return an argument value error
-pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) error{PhpArgumentValueError}!void {
+pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentValueError!void {
     @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentValueError;
 }
 
+pub const ArgumentCountError = error{PhpArgumentCountError};
+
 /// Return an argument count error
-pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) error{PhpArgumentCountError}!void {
+pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError!void {
     @call(.auto, c.zend_argument_count_error, .{format.ptr} ++ args);
     return error.PhpArgumentCountError;
 }

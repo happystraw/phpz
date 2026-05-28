@@ -78,7 +78,7 @@ pub const Function = opaque {
     /// Call as a global function (no object, no scope).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     ///
-    /// Returns `Error.PhpException` if the called function throws a PHP exception.
+    /// Returns `error.PhpException` if the called function throws a PHP exception.
     pub fn call(self: *Function, retval: ?*c.zval, params: anytype) Error!void {
         try self.invoke(null, null, retval, params);
     }
@@ -86,7 +86,7 @@ pub const Function = opaque {
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     ///
-    /// Returns `Error.PhpException` if the called method throws a PHP exception.
+    /// Returns `error.PhpException` if the called method throws a PHP exception.
     pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) Error!void {
         try self.invoke(null, ce.ptr(), retval, params);
     }
@@ -94,7 +94,7 @@ pub const Function = opaque {
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     ///
-    /// Returns `Error.PhpException` if the called method throws a PHP exception.
+    /// Returns `error.PhpException` if the called method throws a PHP exception.
     pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) Error!void {
         try self.invoke(obj.ptr(), obj.class().ptr(), retval, params);
     }
@@ -119,7 +119,7 @@ pub const Function = opaque {
                 c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), null);
             },
         }
-        if (errors.hasException()) return Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
     }
 };
 

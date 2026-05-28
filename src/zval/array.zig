@@ -3,12 +3,6 @@ const zend = @import("../zend.zig");
 const Zval = @import("../zval.zig").Zval;
 
 pub const Array = opaque {
-    pub const Error = error{
-        NullPointer,
-        SetIndexFailed,
-        AppendFailed,
-    } || Zval.Error;
-
     /// Create an empty array
     pub fn empty(zv: *c.zval) *Array {
         zv.value.arr = c.zend_new_array(0);
@@ -23,10 +17,12 @@ pub const Array = opaque {
         return @ptrCast(zv);
     }
 
+    pub const FromError = error{NullPointer} || Zval.Error;
+
     /// Create from an existing zval pointer (must be array type)
-    pub fn from(zv: *c.zval) Error!*Array {
-        if (Zval.native.getType(zv) != c.IS_ARRAY) return Error.TypeMismatch;
-        if (zv.value.arr == null) return Error.NullPointer;
+    pub fn from(zv: *c.zval) FromError!*Array {
+        if (Zval.native.getType(zv) != c.IS_ARRAY) return error.TypeMismatch;
+        if (zv.value.arr == null) return error.NullPointer;
         return @ptrCast(zv);
     }
 
@@ -62,8 +58,10 @@ pub const Array = opaque {
         }
     }
 
+    pub const SetAtError = error{SetIndexFailed};
+
     /// Set a value by index
-    pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: isize, val: Zval.Type(zk)) Error!void {
+    pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: isize, val: Zval.Type(zk)) SetAtError!void {
         const idx: c.zend_ulong = @bitCast(index);
         switch (zk) {
             .null => c.add_index_null(self.ptr(), idx),
@@ -76,14 +74,16 @@ pub const Array = opaque {
             .resource => c.add_index_resource(self.ptr(), idx, val.ptr()),
             .reference => c.add_index_reference(self.ptr(), idx, val.ptr()),
             .mixed => {
-                if (c.add_index_zval(self.ptr(), idx, val) != c.SUCCESS) return Error.SetIndexFailed;
+                if (c.add_index_zval(self.ptr(), idx, val) != c.SUCCESS) return error.SetIndexFailed;
             },
             inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array element"),
         }
     }
 
+    pub const AppendError = error{AppendFailed};
+
     /// Append a value to the array
-    pub fn append(self: *Array, comptime zk: Zval.Kind, val: Zval.Type(zk)) Error!void {
+    pub fn append(self: *Array, comptime zk: Zval.Kind, val: Zval.Type(zk)) AppendError!void {
         const result = switch (zk) {
             .null => c.add_next_index_null(self.ptr()),
             .int => c.add_next_index_long(self.ptr(), @intCast(val)),
@@ -97,7 +97,7 @@ pub const Array = opaque {
             .mixed => c.add_next_index_zval(self.ptr(), val),
             inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be appended to array"),
         };
-        if (result != c.SUCCESS) return Error.AppendFailed;
+        if (result != c.SUCCESS) return error.AppendFailed;
     }
 };
 

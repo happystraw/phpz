@@ -37,8 +37,8 @@ pub const Callable = extern struct {
 
     /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
     ///
-    /// Returns `Error.CallFailed` if the executor is inactive.
-    /// Returns `Error.PhpException` if the callable throws a PHP exception.
+    /// Returns `error.CallFailed` if the executor is inactive.
+    /// Returns `error.PhpException` if the callable throws a PHP exception.
     pub fn call(self: *Callable, args: anytype) Error!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
@@ -56,7 +56,7 @@ pub const Callable = extern struct {
                 self.fci.params = null;
                 self.fci.named_params = null;
                 if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
-                    return Error.CallFailed;
+                    return error.CallFailed;
                 }
             },
             else => {
@@ -66,11 +66,11 @@ pub const Callable = extern struct {
                 self.fci.params = @ptrCast(&arr);
                 self.fci.named_params = null;
                 if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
-                    return Error.CallFailed;
+                    return error.CallFailed;
                 }
             },
         }
-        if (errors.hasException()) return Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
     }
 
     /// Increment refcounts on `function_name` and `fcc.object`.

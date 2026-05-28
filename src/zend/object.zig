@@ -7,26 +7,20 @@ const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
 
 pub const Object = opaque {
-    pub const Error = error{
-        InitFailed,
-        CloneFailed,
-        MethodNotFound,
-        MethodCallFailed,
-        AccessDenied,
-    };
+    pub const InitError = error{InitFailed};
 
     /// Create a standard object (stdClass)
-    pub fn init() Error!*Object {
+    pub fn init() InitError!*Object {
         const obj = c.zend_objects_new(c.zend_standard_class_def);
-        if (obj == null) return Error.InitFailed;
+        if (obj == null) return error.InitFailed;
         c.object_properties_init(obj, c.zend_standard_class_def);
         return @ptrCast(obj);
     }
 
     /// Create an object from a class entry
-    pub fn initClass(ce: *ClassEntry) Error!*Object {
+    pub fn initClass(ce: *ClassEntry) InitError!*Object {
         const obj = c.zend_objects_new(ce.ptr());
-        if (obj == null) return Error.InitFailed;
+        if (obj == null) return error.InitFailed;
         c.object_properties_init(obj, ce.ptr());
         return @ptrCast(obj);
     }
@@ -77,16 +71,18 @@ pub const Object = opaque {
         return if (self.properties()) |props| props.len() else 0;
     }
 
+    pub const ConstructorError = error{AccessDenied};
+
     /// Look up the constructor via PHP's standard handler.
     ///
     /// Returns `null` if the class defines no constructor. Returns
     /// `error.AccessDenied` if the constructor exists but is inaccessible
     /// (private/protected) — in that case a PHP exception is also pending.
-    pub fn constructor(self: *Object) Error!?*Function {
+    pub fn constructor(self: *Object) ConstructorError!?*Function {
         const fn_ptr = c.zend_std_get_constructor(self.ptr());
         return if (fn_ptr) |fp|
             Function.from(fp)
-        else if (errors.hasException()) Error.AccessDenied else null;
+        else if (errors.hasException()) error.AccessDenied else null;
     }
 
     /// Resolve a method via PHP's OOP dispatch.
@@ -119,7 +115,7 @@ pub const Object = opaque {
 
     /// Read a property value.
     ///
-    /// Returns `Function.Error.PhpException` if a magic `__get` handler throws.
+    /// Returns `error.PhpException` if a magic `__get` handler throws.
     pub fn readProperty(
         self: *Object,
         name: []const u8,
@@ -135,13 +131,13 @@ pub const Object = opaque {
             null,
             &rv,
         );
-        if (errors.hasException()) return Function.Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
         return result;
     }
 
     /// Write a property value.
     ///
-    /// Returns `Function.Error.PhpException` if a magic `__set` handler throws.
+    /// Returns `error.PhpException` if a magic `__set` handler throws.
     pub fn writeProperty(
         self: *Object,
         name: []const u8,
@@ -156,7 +152,7 @@ pub const Object = opaque {
             value,
             null,
         );
-        if (errors.hasException()) return Function.Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
         return result;
     }
 
@@ -173,7 +169,7 @@ pub const Object = opaque {
 
     /// Check if a property exists.
     ///
-    /// Returns `Function.Error.PhpException` if a magic `__isset` handler throws.
+    /// Returns `error.PhpException` if a magic `__isset` handler throws.
     pub fn hasProperty(
         self: *Object,
         name: []const u8,
@@ -183,25 +179,27 @@ pub const Object = opaque {
         defer zstr.deinit();
 
         const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @intFromEnum(check), null);
-        if (errors.hasException()) return Function.Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
         return result != 0;
     }
 
     /// Unset a property.
     ///
-    /// Returns `Function.Error.PhpException` if a magic `__unset` handler throws.
+    /// Returns `error.PhpException` if a magic `__unset` handler throws.
     pub fn unsetProperty(self: *Object, name: []const u8) Function.Error!void {
         const zstr = String.init(name);
         defer zstr.deinit();
 
         c.zend_std_unset_property(self.ptr(), zstr.ptr(), null);
-        if (errors.hasException()) return Function.Error.PhpException;
+        if (errors.hasException()) return error.PhpException;
     }
 
     /// Check if object is an instance of a class
     pub fn instanceof(self: *Object, ce: *ClassEntry) bool {
         return c.instanceof_function(self.class().ptr(), ce.ptr());
     }
+
+    pub const CallError = error{MethodNotFound} || Function.Error;
 
     /// Call a known method by name.
     ///
@@ -211,15 +209,15 @@ pub const Object = opaque {
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
     /// Returns:
-    ///   Error.MethodNotFound if the method is not in the class function table
-    ///   Function.Error.PhpException if the called method threw a PHP exception
+    ///   error.MethodNotFound if the method is not in the class function table
+    ///   error.PhpException if the called method threw a PHP exception
     pub fn call(
         self: *Object,
         method_name: []const u8,
         retval: ?*c.zval,
         params: anytype,
-    ) (Error || Function.Error)!void {
-        const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
+    ) CallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
         try method.callMethod(self, retval, params);
     }
 
@@ -231,18 +229,20 @@ pub const Object = opaque {
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
     /// Returns:
-    ///   Error.MethodNotFound if the method is not in the class function table
-    ///   Function.Error.PhpException if the called method threw a PHP exception
+    ///   error.MethodNotFound if the method is not in the class function table
+    ///   error.PhpException if the called method threw a PHP exception
     pub fn callStatic(
         self: *Object,
         method_name: []const u8,
         ce: *ClassEntry,
         retval: ?*c.zval,
         params: anytype,
-    ) (Error || Function.Error)!void {
-        const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
+    ) CallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
         try method.callStatic(ce, retval, params);
     }
+
+    pub const CallIfExistsError = error{MethodCallFailed} || Function.Error;
 
     /// Call a method by name, succeeding only if the method exists.
     pub fn callIfExists(
@@ -250,7 +250,7 @@ pub const Object = opaque {
         method_name: []const u8,
         retval: ?*c.zval,
         params: []c.zval,
-    ) (Error || Function.Error)!void {
+    ) CallIfExistsError!void {
         const zstr = String.init(method_name);
         defer zstr.deinit();
 
@@ -261,17 +261,19 @@ pub const Object = opaque {
             @intCast(params.len),
             if (params.len > 0) @ptrCast(params.ptr) else null,
         );
-        if (result == c.FAILURE) return Error.MethodCallFailed;
-        if (errors.hasException()) return Function.Error.PhpException;
+        if (result == c.FAILURE) return error.MethodCallFailed;
+        if (errors.hasException()) return error.PhpException;
     }
+
+    pub const CloneError = error{CloneFailed};
 
     /// Clone the object.
     ///
-    /// Returns `Error.CloneFailed` if the object is uncloneable or `__clone` throws.
+    /// Returns `error.CloneFailed` if the object is uncloneable or `__clone` throws.
     /// Check `errors.hasException()` to distinguish.
-    pub fn clone(self: *Object) Error!*Object {
+    pub fn clone(self: *Object) CloneError!*Object {
         const cloned = c.zend_objects_clone_obj(self.ptr());
-        if (cloned == null) return Error.CloneFailed;
+        if (cloned == null) return error.CloneFailed;
         return @ptrCast(cloned);
     }
 
