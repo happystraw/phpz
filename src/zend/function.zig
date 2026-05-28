@@ -1,8 +1,13 @@
+const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
 
 pub const Function = opaque {
+    pub const Error = error{
+        PhpException,
+    };
+
     /// Function type classification.
     pub const Kind = enum(u8) {
         /// PHP internal function (written in C/Zig)
@@ -72,29 +77,35 @@ pub const Function = opaque {
 
     /// Call as a global function (no object, no scope).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn call(self: *Function, retval: ?*c.zval, params: anytype) void {
-        self.callKnown(null, null, retval, params);
+    ///
+    /// Returns `Error.PhpException` if the called function throws a PHP exception.
+    pub fn call(self: *Function, retval: ?*c.zval, params: anytype) Error!void {
+        try self.invoke(null, null, retval, params);
     }
 
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) void {
-        self.callKnown(null, ce.ptr(), retval, params);
+    ///
+    /// Returns `Error.PhpException` if the called method throws a PHP exception.
+    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) Error!void {
+        try self.invoke(null, ce.ptr(), retval, params);
     }
 
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) void {
-        self.callKnown(obj.ptr(), obj.class().ptr(), retval, params);
+    ///
+    /// Returns `Error.PhpException` if the called method throws a PHP exception.
+    pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) Error!void {
+        try self.invoke(obj.ptr(), obj.class().ptr(), retval, params);
     }
 
-    inline fn callKnown(
+    inline fn invoke(
         self: *Function,
         obj: ?*c.zend_object,
         scope: ?*c.zend_class_entry,
         retval: ?*c.zval,
         params: anytype,
-    ) void {
+    ) Error!void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("params must be a tuple, e.g. .{} or .{a, b}");
@@ -108,6 +119,7 @@ pub const Function = opaque {
                 c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), null);
             },
         }
+        if (errors.hasException()) return Error.PhpException;
     }
 };
 

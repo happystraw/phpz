@@ -1,4 +1,6 @@
 const std = @import("std");
+
+const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const native = @import("../zval.zig").Zval.native;
 
@@ -11,7 +13,7 @@ const native = @import("../zval.zig").Zval.native;
 /// try ctx.call.parse("f", .{ &cb.fci, &cb.fcc });
 /// try cb.call(.{ arg1 });
 /// ```
-pub const Callable = struct {
+pub const Callable = extern struct {
     /// Call info: function name, params, retval pointer.
     fci: c.zend_fcall_info,
     /// Cache: resolved function handler, scope, object.
@@ -19,6 +21,7 @@ pub const Callable = struct {
 
     pub const Error = error{
         CallFailed,
+        PhpException,
     };
 
     /// Check whether a zval contains a callable.
@@ -33,10 +36,18 @@ pub const Callable = struct {
     }
 
     /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
+    ///
+    /// Returns `Error.CallFailed` if the executor is inactive.
+    /// Returns `Error.PhpException` if the callable throws a PHP exception.
     pub fn call(self: *Callable, args: anytype) Error!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("call: args must be a tuple, e.g. .{} or .{a, b}");
+
+        var discard: c.zval = undefined;
+        const owns_retval = self.fci.retval == null;
+        if (owns_retval) self.fci.retval = &discard;
+        defer if (owns_retval) native.dtor(&discard);
 
         const n = info.@"struct".fields.len;
         switch (n) {
@@ -59,6 +70,7 @@ pub const Callable = struct {
                 }
             },
         }
+        if (errors.hasException()) return Error.PhpException;
     }
 
     /// Increment refcounts on `function_name` and `fcc.object`.

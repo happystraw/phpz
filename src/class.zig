@@ -362,22 +362,28 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Calls a method on the object.
         /// retval is optional, if not provided the return value will be discarded.
-        pub fn call(self: *Self, method_name: []const u8, retval: ?*c.zval, params: anytype) !void {
+        ///
+        /// Returns `Object.Error.MethodNotFound` if the method is not in the class.
+        /// Returns `Function.Error.PhpException` if the called method throws a PHP exception.
+        pub fn call(self: *Self, method_name: []const u8, retval: ?*c.zval, params: anytype) (zend.Object.Error || zend.Function.Error)!void {
             const obj: *zend.Object = .from(&self.std);
             try obj.call(method_name, retval, params);
         }
 
         /// Calls the constructor (`__construct`) with the given parameters.
         /// Does nothing if the class has no constructor defined.
-        pub fn construct(self: *Self, params: anytype) !void {
+        ///
+        /// Returns `Object.Error.AccessDenied` if the constructor is inaccessible.
+        /// Returns `Function.Error.PhpException` if the constructor throws a PHP exception.
+        pub fn construct(self: *Self, params: anytype) (zend.Object.Error || zend.Function.Error)!void {
             const obj: *zend.Object = .from(&self.std);
-            if (try obj.constructor()) |ctor| {
-                ctor.callMethod(obj, null, params);
-            }
+            if (try obj.constructor()) |ctor| try ctor.callMethod(obj, null, params);
         }
 
         /// Update object property value.
-        pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) void {
+        ///
+        /// Returns `Function.Error.PhpException` if a magic `__set` handler throws.
+        pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) zend.Function.Error!void {
             const ce = entry.ptr();
             switch (zk) {
                 .null => c.zend_update_property_null(ce, &self.std, prop_name.ptr, prop_name.len),
@@ -392,22 +398,29 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                     c.zend_update_property(ce, &self.std, prop_name.ptr, prop_name.len, &zv);
                 },
             }
+            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
         }
 
         /// Read object property.
-        pub fn property(self: *Self, prop_name: []const u8, silent: bool) *Zval {
+        ///
+        /// Returns `Function.Error.PhpException` if a magic `__get` handler throws.
+        pub fn property(self: *Self, prop_name: []const u8, silent: bool) zend.Function.Error!*Zval {
             var rv: c.zval = undefined;
             const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, &rv);
+            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
             return .from(val);
         }
 
         /// Unset (delete) object property.
-        pub fn unsetProperty(self: *Self, prop_name: []const u8) void {
+        ///
+        /// Returns `Function.Error.PhpException` if a magic `__unset` handler throws.
+        pub fn unsetProperty(self: *Self, prop_name: []const u8) zend.Function.Error!void {
             c.zend_unset_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len);
+            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
         }
 
         /// Set static property value. Returns `error.UpdateStaticPropertyFailed` on failure.
-        pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) !void {
+        pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) error{UpdateStaticPropertyFailed}!void {
             const ce = entry.ptr();
             const result = switch (zk) {
                 .null => c.zend_update_static_property_null(ce, prop_name.ptr, prop_name.len),

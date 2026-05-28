@@ -1,3 +1,4 @@
+const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const native = @import("../zval.zig").Zval.native;
 const Array = @import("array.zig").Array;
@@ -85,7 +86,7 @@ pub const Object = opaque {
         const fn_ptr = c.zend_std_get_constructor(self.ptr());
         return if (fn_ptr) |fp|
             Function.from(fp)
-        else if (c.executor_globals.exception != null) Error.AccessDenied else null;
+        else if (errors.hasException()) Error.AccessDenied else null;
     }
 
     /// Resolve a method via PHP's OOP dispatch.
@@ -116,59 +117,85 @@ pub const Object = opaque {
         return self.class().findMethod(method_name);
     }
 
-    /// Read a property value
+    /// Read a property value.
+    ///
+    /// Returns `Function.Error.PhpException` if a magic `__get` handler throws.
     pub fn readProperty(
         self: *Object,
         name: []const u8,
-    ) ?*c.zval {
+    ) Function.Error!?*c.zval {
         const zstr = String.init(name);
         defer zstr.deinit();
 
         var rv: c.zval = undefined;
-        return c.zend_std_read_property(
+        const result = c.zend_std_read_property(
             self.ptr(),
             zstr.ptr(),
             c.BP_VAR_R,
             null,
             &rv,
         );
+        if (errors.hasException()) return Function.Error.PhpException;
+        return result;
     }
 
-    /// Write a property value
+    /// Write a property value.
+    ///
+    /// Returns `Function.Error.PhpException` if a magic `__set` handler throws.
     pub fn writeProperty(
         self: *Object,
         name: []const u8,
         value: *c.zval,
-    ) ?*c.zval {
+    ) Function.Error!?*c.zval {
         const zstr = String.init(name);
         defer zstr.deinit();
 
-        return c.zend_std_write_property(
+        const result = c.zend_std_write_property(
             self.ptr(),
             zstr.ptr(),
             value,
             null,
         );
+        if (errors.hasException()) return Function.Error.PhpException;
+        return result;
     }
 
-    /// Check if a property exists
+    /// Property existence check mode, passed to `hasProperty`.
+    pub const PropertyCheck = enum(c_int) {
+        /// `isset($obj->prop)` — property exists and is not null
+        isset = c.ZEND_PROPERTY_ISSET,
+        /// `!empty($obj->prop)` — property exists and is not empty
+        not_empty = c.ZEND_PROPERTY_NOT_EMPTY,
+        /// `property_exists($obj, 'prop')` — property exists
+        exists = c.ZEND_PROPERTY_EXISTS,
+        _,
+    };
+
+    /// Check if a property exists.
+    ///
+    /// Returns `Function.Error.PhpException` if a magic `__isset` handler throws.
     pub fn hasProperty(
         self: *Object,
         name: []const u8,
-        has_set_exists: c_int,
-    ) bool {
+        comptime check: PropertyCheck,
+    ) Function.Error!bool {
         const zstr = String.init(name);
         defer zstr.deinit();
 
-        return c.zend_std_has_property(self.ptr(), zstr.ptr(), has_set_exists, null) != 0;
+        const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @intFromEnum(check), null);
+        if (errors.hasException()) return Function.Error.PhpException;
+        return result != 0;
     }
 
-    /// Unset a property
-    pub fn unsetProperty(self: *Object, name: []const u8) void {
+    /// Unset a property.
+    ///
+    /// Returns `Function.Error.PhpException` if a magic `__unset` handler throws.
+    pub fn unsetProperty(self: *Object, name: []const u8) Function.Error!void {
         const zstr = String.init(name);
         defer zstr.deinit();
 
         c.zend_std_unset_property(self.ptr(), zstr.ptr(), null);
+        if (errors.hasException()) return Function.Error.PhpException;
     }
 
     /// Check if object is an instance of a class
@@ -185,14 +212,15 @@ pub const Object = opaque {
     ///
     /// Returns:
     ///   Error.MethodNotFound if the method is not in the class function table
+    ///   Function.Error.PhpException if the called method threw a PHP exception
     pub fn call(
         self: *Object,
         method_name: []const u8,
         retval: ?*c.zval,
         params: anytype,
-    ) Error!void {
+    ) (Error || Function.Error)!void {
         const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
-        method.callMethod(self, retval, params);
+        try method.callMethod(self, retval, params);
     }
 
     /// Call a known static method by name.
@@ -204,15 +232,16 @@ pub const Object = opaque {
     ///
     /// Returns:
     ///   Error.MethodNotFound if the method is not in the class function table
+    ///   Function.Error.PhpException if the called method threw a PHP exception
     pub fn callStatic(
         self: *Object,
         method_name: []const u8,
         ce: *ClassEntry,
         retval: ?*c.zval,
         params: anytype,
-    ) Error!void {
+    ) (Error || Function.Error)!void {
         const method = self.findMethod(method_name) orelse return Error.MethodNotFound;
-        method.callStatic(ce, retval, params);
+        try method.callStatic(ce, retval, params);
     }
 
     /// Call a method by name, succeeding only if the method exists.
@@ -221,7 +250,7 @@ pub const Object = opaque {
         method_name: []const u8,
         retval: ?*c.zval,
         params: []c.zval,
-    ) Error!void {
+    ) (Error || Function.Error)!void {
         const zstr = String.init(method_name);
         defer zstr.deinit();
 
@@ -232,11 +261,14 @@ pub const Object = opaque {
             @intCast(params.len),
             if (params.len > 0) @ptrCast(params.ptr) else null,
         );
-        if (result == c.SUCCESS) return;
-        return Error.MethodCallFailed;
+        if (result == c.FAILURE) return Error.MethodCallFailed;
+        if (errors.hasException()) return Function.Error.PhpException;
     }
 
-    /// Clone the object
+    /// Clone the object.
+    ///
+    /// Returns `Error.CloneFailed` if the object is uncloneable or `__clone` throws.
+    /// Check `errors.hasException()` to distinguish.
     pub fn clone(self: *Object) Error!*Object {
         const cloned = c.zend_objects_clone_obj(self.ptr());
         if (cloned == null) return Error.CloneFailed;
