@@ -82,11 +82,10 @@ pub const Callable = extern struct {
     }
 
     /// Decrement refcounts on `function_name` and `fcc.object`.
-    /// Frees resources when the last reference is dropped.
     pub inline fn delref(self: *Callable) void {
         native.dtor(&self.fci.function_name);
         if (self.fcc.object) |obj|
-            c.zend_object_release(obj);
+            _ = c.zend_gc_delref(&obj.*.gc);
     }
 
     /// Release call trampoline from the cache.
