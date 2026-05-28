@@ -31,7 +31,7 @@ pub const Value = extern struct {
             );
         } else {
             const php_obj: *Class = .from(.impl, self);
-            php_obj.updateProperty(.null, "value", {});
+            try php_obj.updateProperty(.null, "value", {});
             self.inner = .null;
         }
     }
@@ -40,23 +40,23 @@ pub const Value = extern struct {
         const php_obj: *Class = .from(.impl, self);
         switch (zv.kind()) {
             .null => {
-                php_obj.updateProperty(.null, "value", {});
+                try php_obj.updateProperty(.null, "value", {});
                 self.inner = .null;
             },
             .bool => {
-                php_obj.updateProperty(.bool, "value", zv.asUnchecked(.bool));
+                try php_obj.updateProperty(.bool, "value", zv.asUnchecked(.bool));
                 self.inner = .initBool(zv.asUnchecked(.bool));
             },
             .int => {
-                php_obj.updateProperty(.int, "value", zv.asUnchecked(.int));
+                try php_obj.updateProperty(.int, "value", zv.asUnchecked(.int));
                 self.inner = .initInt64(zv.asUnchecked(.int));
             },
             .float => {
-                php_obj.updateProperty(.float, "value", zv.asUnchecked(.float));
+                try php_obj.updateProperty(.float, "value", zv.asUnchecked(.float));
                 self.inner = .initFloat64(zv.asUnchecked(.float));
             },
             .string => {
-                php_obj.updateProperty(.string, "value", zv.asUnchecked(.string));
+                try php_obj.updateProperty(.string, "value", zv.asUnchecked(.string));
                 self.inner = .initStringLen(self.ctx.impl.inner, zv.asUnchecked(.string));
             },
             // TODO: more types
@@ -67,16 +67,16 @@ pub const Value = extern struct {
     pub fn updateValueFromJsValue(self: *Value, js_value: quickjs.Value) !void {
         const php_obj: *Class = .from(.impl, self);
         if (js_value.isNull()) {
-            php_obj.updateProperty(.null, "value", {});
+            try php_obj.updateProperty(.null, "value", {});
             return;
         }
         if (js_value.isNumber()) {
-            php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.ctx.impl.inner));
+            try php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.ctx.impl.inner));
             return;
         }
 
         if (js_value.isBool()) {
-            php_obj.updateProperty(.bool, "value", try js_value.toBool(self.ctx.impl.inner));
+            try php_obj.updateProperty(.bool, "value", try js_value.toBool(self.ctx.impl.inner));
             return;
         }
 
@@ -86,7 +86,7 @@ pub const Value = extern struct {
         defer str_val.deinit(self.ctx.impl.inner);
         if (str_val.toZigSlice(self.ctx.impl.inner)) |msg| {
             defer self.ctx.impl.inner.freeCString(msg.ptr);
-            php_obj.updateProperty(.string, "value", msg);
+            try php_obj.updateProperty(.string, "value", msg);
         }
     }
 

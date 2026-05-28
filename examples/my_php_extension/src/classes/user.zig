@@ -8,28 +8,30 @@ const User = extern struct {
         var age: phpz.Zval.Optional = .init;
         try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
 
-        const wrapper: *Class = .from(.impl, self);
-        wrapper.updateProperty(.string, "name", name);
+        const user: *Class = .from(.impl, self);
+        try user.updateProperty(.string, "name", name);
         if (age.unwrap()) |zv| {
             if (zv.is(.int)) {
-                wrapper.updateProperty(.int, "age", zv.asUnchecked(.int));
+                try user.updateProperty(.int, "age", zv.asUnchecked(.int));
             }
         }
-        try wrapper.call("onload", null, .{});
+        try user.call("onload", null, .{});
     }
 
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
         var zv: *c.zval = undefined;
         try ctx.call.parse("z", .{&zv});
 
-        const wrapper: *Class = .from(.impl, self);
-        const name_zv = wrapper.property("name", false);
-        if (name_zv.is(.undef)) return error.NamePropertyMissing;
-        const name = name_zv.asUnchecked(.string);
-        const age = if (wrapper.property("age", false).is(.undef))
-            @as(i64, 0)
+        const user: *Class = .from(.impl, self);
+        const name = blk: {
+            const name_zv = try user.property("name", false);
+            if (name_zv.is(.undef)) return error.NamePropertyMissing;
+            break :blk name_zv.asUnchecked(.string);
+        };
+        const age: i64 = if ((try user.property("age", false)).is(.undef))
+            0
         else
-            wrapper.property("age", false).asUnchecked(.int);
+            (try user.property("age", false)).asUnchecked(.int);
 
         var buf: [256]u8 = undefined;
         if (phpz.Zval.native.is(zv, .int)) {
@@ -50,9 +52,11 @@ const User = extern struct {
     }
 
     pub fn toString(self: *const User, ctx: phpz.Ctx) !void {
-        const wrapper: *Class = .from(.impl, @constCast(self));
-        const name_zv = wrapper.property("name", false);
-        const name = if (name_zv.is(.undef)) "" else name_zv.asUnchecked(.string);
+        const user: *Class = .from(.impl, @constCast(self));
+        const name = blk: {
+            const name_zv = try user.property("name", false);
+            break :blk if (name_zv.is(.undef)) "" else name_zv.asUnchecked(.string);
+        };
 
         const result = try std.fmt.allocPrint(gpa, "User({s})", .{name});
         defer gpa.free(result);

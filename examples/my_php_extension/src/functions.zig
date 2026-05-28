@@ -52,7 +52,7 @@ fn listStatuses(ctx: phpz.Ctx) !void {
     const cases_fn = StatusEnum.entry.findMethod("cases").?;
 
     var cases_zv: c.zval = undefined;
-    cases_fn.callStatic(StatusEnum.entry, &cases_zv, .{});
+    try cases_fn.callStatic(StatusEnum.entry, &cases_zv, .{});
     defer phpz.Zval.native.dtor(&cases_zv);
 
     var ret = phpz.Zval.Array.empty(ctx.ret.ptr());
