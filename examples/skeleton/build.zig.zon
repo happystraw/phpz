@@ -1,0 +1,19 @@
+.{
+    .name = .skeleton,
+    .version = "0.0.0",
+    .fingerprint = 0xddd8a92a8b2a4054,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .phpz = .{
+            .path = "../..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "skeleton.h",
+        "skeleton.stub.php",
+        "skeleton_arginfo.h",
+    },
+}

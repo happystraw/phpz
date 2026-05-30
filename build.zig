@@ -88,6 +88,7 @@ fn addTestStep(b: *std.Build, mod: *std.Build.Module) void {
 fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
     const step = b.step("test-examples", "Run example tests for phpz");
     const examples = [_][]const u8{
+        "skeleton",
         "my_php_extension",
         "pjs",
     };
