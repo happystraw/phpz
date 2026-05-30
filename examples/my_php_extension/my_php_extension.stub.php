@@ -109,7 +109,7 @@ namespace MyPHPExt {
 
     final class Counter
     {
-        public function __construct(int $n)
+        public function __construct(int $n = 0)
         {
         }
 

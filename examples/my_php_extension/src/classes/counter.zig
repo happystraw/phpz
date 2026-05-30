@@ -3,7 +3,7 @@ pub const Counter = extern struct {
 
     pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
         var n: i64 = 0;
-        try ctx.call.parse("l", .{&n});
+        try ctx.call.parse("|l", .{&n});
         self.n = n;
     }
 
