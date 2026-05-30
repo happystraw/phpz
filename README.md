@@ -7,18 +7,20 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 ## Requirements
 
 - zig: 0.16.0
-- php: 8.2-8.5 tested on linux/macos
+- php: 8.2-8.5 (tested on linux/macos)
 
 ## Features
 
 - **Module** — `phpz.module()` w/ `module_startup`, `module_shutdown`, `request_startup`, `request_shutdown`, `info` lifecycle hooks
 - **Class & OOP** — `phpz.Class` (Zig `extern struct` ↦ PHP class, `init`/`deinit`), `phpz.SimpleClass` (interfaces, traits, enums, exceptions), methods, properties (static & instance), inheritance via `register()` hook
-- **Functions** — `phpz.function()` with type-safe `Ctx.Call.parse()`, `phpz.method()`, `Ctx` return values, `$this` / scope access
+- **Functions** — `phpz.function()` with type-safe `Ctx.Call.parse()`, `Ctx` return values, `$this` / scope access
+- **Constants** — global and class constants via `const` in stub files, auto-registered during MINIT by `register_{name}_symbols`
 - **Type-safe Zval** — checked conversions (`is`/`as`/`asOrDefault`), `Zval.Array` / `Zval.Object` builders, `Zval.Optional` nullable params, `Zval.native` raw pointer ops
-- **Zend APIs** — `zend.Array` (HashTable CRUD, iterators, sort), `zend.String` (concat, hash), `zend.Object` (properties, calls, enum), `zend.ClassEntry`, `zend.Function`, `zend.Callable` (type-safe fci/fcc), `zend.Property`, `zend.Reference`, `zend.Resource`
+- **Zend APIs** — `zend.Array` (HashTable CRUD, iterators, sort), `zend.String` (concat, hash), `zend.Object` (properties, calls, enum), `zend.ClassEntry`, `zend.Function`, `zend.Callable` (type-safe fci/fcc), `zend.PropertyInfo`, `zend.Reference`, `zend.Resource`
 - **INI Settings** — `php.ini` directives with on-update callbacks and runtime getters
 - **Error Handling** — PHP error triggers, exception throwing, argument validation errors
 - **Memory** — Zig `Allocator` backed by PHP's `emalloc`, with DWARF leak tracing for debug builds
+- **Auto-Registration** — stub-file-driven: functions (`ext_functions`) and constants (`const` in stub → `register_{name}_symbols`) are automatically registered at module startup; classes require an explicit `Class.register()` call in `module_startup_fn`
 
 ## Usage
 
@@ -57,13 +59,13 @@ Generate the arginfo header using PHP's gen_stub.php:
 php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
 ```
 
-This will generate `my_php_extension_arginfo.h` containing all the necessary argument info definitions.
+This will generate `my_php_extension_arginfo.h` containing all the necessary argument info definitions (functions, classes, constants, etc.).
 
 ### 3. Configure build.zig
 
 Create a C header file (e.g., `my_php_extension.h`):
 
-> [phpz.h](./build/phpz.h) provides the core C API needed for building PHP extensions (includes `php.h` and `Zend/zend_API.h`).
+> [phpz.h](./build/phpz.h) provides the core C API needed for building PHP extensions (includes `php.h`, `Zend/zend_API.h` etc.).
 >
 > Include it in your extension header to access all necessary PHP C APIs.
 
@@ -130,13 +132,21 @@ Check out the [`examples/`](./examples/) directory for complete working examples
                                                              ├─── PHP loads .so
                                                              │
                                                              ▼
-                                                        module_startup
+                                                        module_startup  [auto]
                                                         ├─ register_{name}_symbols   (constants)
-                                                        ├─ register_class_*          (classes)
                                                         ├─ ini_entries
                                                         └─ user hook
+                                                             └─ Class.register()     (classes) [manual]
 ```
 
 1. **Build-time** — `gen_stub.php` generates `arginfo.h` from `.stub.php`, containing function metadata and `register_*` symbols. `translate-c` converts PHP C headers into Zig bindings.
 2. **Compile-time** — `phpz.function()` exports `zif_*` wrappers, `phpz.Class()` creates wrapper types, `phpz.module()` exports `get_module()` for the dynamic loader.
-3. **Runtime** — PHP loads `.so` → `get_module()` → `module_startup` calls `register_{name}_symbols` (constants) and `register_class_*` (classes), then INI entries and user hook.
+3. **Runtime** — PHP loads `.so` → `get_module()`:
+
+   | What | Registered by | When | How |
+   | --- | --- | --- | --- |
+   | Functions | `ext_functions` | Module init | Auto: set in module entry struct |
+   | Constants | `register_{name}_symbols` | MINIT | Auto: called by `module_startup_func` |
+   | Classes | `register_class_*` | MINIT | Manual: `Class.register()` in `module_startup_fn` |
+
+   > Functions are resolved from the module entry when the extension loads; constants are registered during MINIT via the auto-generated `register_{name}_symbols`. Classes require an explicit `Class.register()` call in `module_startup_fn` — this gives you control over registration order and the opportunity to configure `ObjectHandlers` or parent classes.

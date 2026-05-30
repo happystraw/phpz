@@ -359,7 +359,8 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Must be called after `register()`, otherwise `entry` is undefined.
         pub fn new() *Self {
-            return .from(.std, init(entry.ptr()) orelse @panic("Out of memory"));
+            // emalloc never returns null (it aborts on OOM), so `orelse` is unreachable.
+            return .from(.std, init(entry.ptr()) orelse unreachable);
         }
 
         /// Calls a method on the object.
