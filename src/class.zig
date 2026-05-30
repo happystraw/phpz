@@ -471,7 +471,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 ///
 /// // Throw the exception
 /// pub fn throw(message: [:0]const u8) void {
-///     _ = phpz.errors.throwException(MyException.entry.ptr(), message);
+///     _ = phpz.errors.throwException(MyException.entry, message, 0);
 /// }
 ///
 /// // Register during module initialization

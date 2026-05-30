@@ -1,4 +1,5 @@
 const c = @import("root.zig").c;
+const zend = @import("zend.zig");
 
 /// PHP error levels
 ///
@@ -62,18 +63,20 @@ pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) Argument
 }
 
 /// Throw a PHP Error
-pub fn throwError(ce: ?*c.zend_class_entry, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.zend_throw_error, .{ ce, format.ptr } ++ args);
+pub fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: anytype) void {
+    @call(.auto, c.zend_throw_error, .{ if (ce) |e| e.ptr() else null, format.ptr } ++ args);
 }
 
 /// Throw a PHP exception
-pub fn throwException(ce: ?*c.zend_class_entry, message: [:0]const u8) ?*c.zend_object {
-    return c.zend_throw_exception(ce, message.ptr, 0);
+pub fn throwException(ce: *zend.ClassEntry, message: [:0]const u8, code: i64) ?*zend.Object {
+    const obj = c.zend_throw_exception(ce.ptr(), message.ptr, @intCast(code));
+    return if (obj) |o| zend.Object.from(o) else null;
 }
 
 /// Throw a PHP exception with formatted message and error code
-pub fn throwExceptionEx(ce: ?*c.zend_class_entry, code: c.zend_long, comptime format: [:0]const u8, args: anytype) ?*c.zend_object {
-    return @call(.auto, c.zend_throw_exception_ex, .{ ce, code, format.ptr } ++ args);
+pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]const u8, args: anytype) ?*zend.Object {
+    const obj = @call(.auto, c.zend_throw_exception_ex, .{ ce.ptr(), @as(c.zend_long, @intCast(code)), format.ptr } ++ args);
+    return if (obj) |o| zend.Object.from(o) else null;
 }
 
 /// Check whether a PHP exception is pending (EG(exception) != null).
