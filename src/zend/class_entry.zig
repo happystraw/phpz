@@ -2,7 +2,7 @@ const c = @import("../root.zig").c;
 const Array = @import("array.zig").Array;
 const Function = @import("function.zig").Function;
 const Object = @import("object.zig").Object;
-const Property = @import("property.zig").Property;
+const PropertyInfo = @import("property_info.zig").PropertyInfo;
 
 pub const ClassEntry = opaque {
     /// Enum backing type classification.
@@ -73,13 +73,13 @@ pub const ClassEntry = opaque {
     }
 
     /// Find a property by name (this class's own declarations only)
-    pub fn findProperty(self: *ClassEntry, prop_name: []const u8) ?*Property {
-        return Property.find(self, prop_name);
+    pub fn findPropertyInfo(self: *ClassEntry, prop_name: []const u8) ?*PropertyInfo {
+        return PropertyInfo.find(self, prop_name);
     }
 
     /// Iterate over this class's own declared properties
-    pub fn propertyIterator(self: *ClassEntry) Array.PtrValueIterator(Property) {
-        return Property.iterator(self);
+    pub fn propertyInfoIterator(self: *ClassEntry) Array.PtrValueIterator(PropertyInfo) {
+        return PropertyInfo.iterator(self);
     }
 
     /// Find a method by name (lowercase) in the class function table

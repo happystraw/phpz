@@ -43,7 +43,7 @@ test {
     _ = @import("zend/class_entry.zig");
     _ = @import("zend/function.zig");
     _ = @import("zend/object.zig");
-    _ = @import("zend/property.zig");
+    _ = @import("zend/property_info.zig");
     _ = @import("zend/string.zig");
     _ = @import("zval/array.zig");
     _ = @import("zval/object.zig");
