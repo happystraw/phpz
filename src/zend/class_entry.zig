@@ -1,4 +1,5 @@
 const c = @import("../root.zig").c;
+const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
 const Function = @import("function.zig").Function;
 const Object = @import("object.zig").Object;
@@ -118,6 +119,33 @@ pub const ClassEntry = opaque {
     pub fn getEnumCase(self: *ClassEntry, case_name: [:0]const u8) ?*Object {
         const case_obj = c.zend_enum_get_case_cstr(self.ptr(), case_name.ptr);
         return if (case_obj) |obj| Object.from(obj) else null;
+    }
+
+    pub const SetStaticPropertyError = error{UpdateStaticPropertyFailed};
+
+    /// Set static property value. Returns `error.UpdateStaticPropertyFailed` on failure.
+    pub fn setStaticProperty(self: *ClassEntry, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) SetStaticPropertyError!void {
+        const ce = self.ptr();
+        const result = switch (zk) {
+            .null => c.zend_update_static_property_null(ce, prop_name.ptr, prop_name.len),
+            .bool => c.zend_update_static_property_bool(ce, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+            .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
+            .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
+            .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as static property"),
+            inline else => blk: {
+                var zv: c.zval = undefined;
+                Zval.native.set(&zv, zk, prop_value);
+                break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
+            },
+        };
+        if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
+    }
+
+    /// Read static property.
+    pub fn staticProperty(self: *ClassEntry, prop_name: []const u8, silent: bool) *Zval {
+        const val = c.zend_read_static_property(self.ptr(), prop_name.ptr, prop_name.len, silent);
+        return .from(val);
     }
 };
 

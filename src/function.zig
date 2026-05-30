@@ -78,12 +78,12 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
 ///
 /// Accepts a Class type (returned by `class.Class()`) which enables automatic
 /// detection of static vs object methods based on the function signature.
-pub fn methodWithClass(comptime Class: anytype, comptime func_name: [:0]const u8, comptime func: anytype) void {
+pub fn methodWithClass(comptime Class: anytype, comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
         exportFn(
             .method,
-            methodEntryName(Class.name, func_name),
-            wrapMethod(Class, Class.name ++ "::" ++ func_name ++ "()", func),
+            methodEntryName(class_name, func_name),
+            wrapMethod(Class, class_name ++ "::" ++ func_name ++ "()", func),
         );
     }
 }

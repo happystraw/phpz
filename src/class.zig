@@ -3,7 +3,7 @@
 //! This module provides utilities for creating PHP classes from Zig types:
 //!
 //! - `Class`: Full-featured class wrapper with Zig data binding and lifecycle management
-//! - `SimpleClass`: Lightweight class registration without Zig data binding
+//! - `SimpleClass`: Lightweight class and method registration without Zig data binding
 //!
 //! Both functions generate class wrappers that integrate with PHP's object system,
 //! handling registration through auto-generated `register_class_*` functions from
@@ -158,9 +158,6 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         const Self = @This();
 
-        /// The PHP class name
-        pub const name = class_name;
-
         /// The PHP class entry
         pub var entry: *zend.ClassEntry = undefined;
 
@@ -277,7 +274,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Parameters:
         ///   - func_name: PHP method name (null-terminated, e.g., "__construct", "getName")
-        ///   - func: Enum value corresponding to the T's method declaration
+        ///   - func_decl: Enum value corresponding to the T's method declaration
         ///
         /// Special method names:
         ///   - "__construct": Constructor, called when `new ClassName()` is executed
@@ -326,7 +323,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn method(comptime func_name: [:0]const u8, comptime func_decl: std.meta.DeclEnum(T)) void {
-            function_helper.methodWithClass(Self, func_name, @field(T, @tagName(func_decl)));
+            function_helper.methodWithClass(Self, class_name, func_name, @field(T, @tagName(func_decl)));
         }
 
         /// Increments the reference count of the object.
@@ -438,42 +435,15 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             c.zend_unset_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len);
             if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
         }
-
-        pub const SetStaticPropertyError = error{UpdateStaticPropertyFailed};
-
-        /// Set static property value. Returns `error.UpdateStaticPropertyFailed` on failure.
-        pub fn setStaticProperty(comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) SetStaticPropertyError!void {
-            const ce = entry.ptr();
-            const result = switch (zk) {
-                .null => c.zend_update_static_property_null(ce, prop_name.ptr, prop_name.len),
-                .bool => c.zend_update_static_property_bool(ce, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
-                .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
-                .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
-                .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
-                .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as static property"),
-                inline else => blk: {
-                    var zv: c.zval = undefined;
-                    native.set(&zv, zk, prop_value);
-                    break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
-                },
-            };
-            if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
-        }
-
-        /// Read static property.
-        pub fn staticProperty(prop_name: []const u8, silent: bool) *Zval {
-            const val = c.zend_read_static_property(entry.ptr(), prop_name.ptr, prop_name.len, silent);
-            return .from(val);
-        }
     };
 }
 
 /// Create a simple PHP class without Zig data binding.
 ///
-/// This function creates a lightweight PHP class wrapper that only handles
-/// class registration. Unlike `Class`, it does not manage object lifecycle
-/// or bind Zig data structures. The internal implementation is handled by
-/// PHP's native object system.
+/// This function creates a lightweight PHP class wrapper for class and method
+/// registration. Unlike `Class`, it does not manage object lifecycle or bind
+/// Zig data structures. The internal implementation is handled by PHP's native
+/// object system.
 ///
 /// Use cases:
 ///   - Exception subclasses (e.g., custom exceptions extending RuntimeException)
@@ -501,7 +471,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 ///
 /// // Throw the exception
 /// pub fn throw(message: [:0]const u8) void {
-///     _ = c.zend_throw_exception(MyException.entry.ptr(), message.ptr, 0);
+///     _ = phpz.errors.throwException(MyException.entry.ptr(), message);
 /// }
 ///
 /// // Register during module initialization
@@ -511,14 +481,15 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// ```
 pub fn SimpleClass(comptime class_name: [:0]const u8, comptime T: type) type {
     return struct {
-        /// The PHP class name
-        pub const name = class_name;
-
         /// The PHP class entry
         pub var entry: *zend.ClassEntry = undefined;
 
         pub fn register() void {
             entry = callRegisterClassFn(class_name, T);
+        }
+
+        pub fn method(comptime func_name: [:0]const u8, comptime func: anytype) void {
+            function_helper.method(class_name, func_name, func);
         }
     };
 }
