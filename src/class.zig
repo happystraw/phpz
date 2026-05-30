@@ -384,6 +384,21 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             if (try obj.constructor()) |ctor| try ctor.callMethod(obj, null, params);
         }
 
+        /// Create a new instance and call its constructor in one step.
+        ///
+        /// Combines `new()` and `construct()`. If the class has no constructor,
+        /// the params are silently ignored.
+        ///
+        /// Must be called after `register()`, otherwise `entry` is undefined.
+        ///
+        /// Returns `error.AccessDenied` if the constructor is inaccessible.
+        /// Returns `error.PhpException` if the constructor throws a PHP exception.
+        pub fn newWith(params: anytype) ConstructError!*Self {
+            const instance = new();
+            try instance.construct(params);
+            return instance;
+        }
+
         /// Update object property value.
         ///
         /// Returns `error.PhpException` if a magic `__set` handler throws.
