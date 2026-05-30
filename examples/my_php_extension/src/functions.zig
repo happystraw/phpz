@@ -43,8 +43,7 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
     defer Zval.native.dtor(&name_zv);
     const age_zv = Zval.native.init(.int, 25);
 
-    const user: *UserClass = .new();
-    try user.construct(.{ name_zv, age_zv });
+    const user: *UserClass = try .newWith(.{ name_zv, age_zv });
     ctx.ret.set(.object, .from(&user.std));
 }
 
