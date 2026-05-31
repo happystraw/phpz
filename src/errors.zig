@@ -41,7 +41,8 @@ pub const Level = enum(c_int) {
 pub const ArgumentTypeError = error{PhpArgumentTypeError};
 
 /// Return an argument type error
-pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentTypeError!void {
+pub inline fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentTypeError {
+    @branchHint(.cold);
     @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentTypeError;
 }
@@ -49,7 +50,8 @@ pub fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, a
 pub const ArgumentValueError = error{PhpArgumentValueError};
 
 /// Return an argument value error
-pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentValueError!void {
+pub inline fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentValueError {
+    @branchHint(.cold);
     @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentValueError;
 }
@@ -57,9 +59,27 @@ pub fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, 
 pub const ArgumentCountError = error{PhpArgumentCountError};
 
 /// Return an argument count error
-pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError!void {
+pub inline fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError {
+    @branchHint(.cold);
     @call(.auto, c.zend_argument_count_error, .{format.ptr} ++ args);
     return error.PhpArgumentCountError;
+}
+
+pub const WrongParameterCountError = error{PhpWrongParameterCountError};
+
+/// Report wrong number of parameters — PHP generates the message automatically.
+/// min: minimum expected parameters, max: maximum expected parameters (0 = unlimited).
+pub inline fn wrongParameterCount(min: u32, max: u32) WrongParameterCountError {
+    @branchHint(.cold);
+    c.zend_wrong_parameters_count_error(min, max);
+    return error.PhpWrongParameterCountError;
+}
+
+/// Report that the function expects no parameters.
+pub inline fn wrongParametersNone() WrongParameterCountError {
+    @branchHint(.cold);
+    c.zend_wrong_parameters_none_error();
+    return error.PhpWrongParameterCountError;
 }
 
 /// Throw a PHP Error

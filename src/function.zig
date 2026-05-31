@@ -96,7 +96,7 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
             const args = switch (Args) {
                 @Tuple(&.{Ctx}) => .{ctx},
                 @Tuple(&.{}) => blk: {
-                    ctx.call.parseNone() catch return;
+                    ctx.call.expectNone() catch return;
                     break :blk .{};
                 },
                 else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: expected fn(Ctx) or fn()", .{func_desc})),
@@ -133,7 +133,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
                     else
                         @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: expected Ctx", .{func_desc}))
                 else if (rest_count == 0) blk: {
-                    ctx.call.parseNone() catch return;
+                    ctx.call.expectNone() catch return;
                     break :blk .{};
                 } else {
                     @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: {any}", .{ func_desc, Args }));

@@ -1,4 +1,5 @@
 const c = @import("../root.zig").c;
+const native = @import("../zval.zig").Zval.native;
 
 pub const Array = opaque {
     pub const Error = error{
@@ -204,6 +205,121 @@ pub const Array = opaque {
         value: *c.zval,
     };
 
+    /// Iterate values with a comptime callback — IS_UNDEF and user code in same scope.
+    ///
+    /// Equivalent to C's `ZEND_HASH_FOREACH_VAL`.
+    /// Unlike pull-based iterators, this inlines the loop body so the compiler can
+    /// eliminate redundant type checks (e.g., IS_UNDEF + IS_LONG in the same scope).
+    ///
+    /// Example:
+    /// ```zig
+    /// var sum: i64 = 0;
+    /// arr.eachValue(&sum, struct {
+    ///     fn body(zv: *c.zval, s: *i64) void {
+    ///         if (native.is(zv, .int)) s.* += native.asUnchecked(zv, .int);
+    ///     }
+    /// }.body);
+    /// ```
+    pub inline fn eachValue(
+        self: *Array,
+        ctx: anytype,
+        comptime body: if (@TypeOf(ctx) == void) fn (*c.zval) void else fn (*c.zval, @TypeOf(ctx)) void,
+    ) void {
+        const ht = self.ptr();
+        const count = ht.nNumUsed;
+        const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
+        var el: [*]u8 = @ptrCast(ht.unnamed_0.arPacked);
+
+        var i: u32 = 0;
+        while (i < count) : (i += 1) {
+            const zv: *c.zval = @ptrCast(@alignCast(el));
+            el += el_size;
+
+            // IS_UNDEF check in same scope as body → compiler can eliminate redundancy
+            if (native.is(zv, .undef)) {
+                @branchHint(.unlikely);
+                continue;
+            }
+            if (comptime @TypeOf(ctx) == void) {
+                @call(.always_inline, body, .{zv});
+            } else {
+                @call(.always_inline, body, .{ zv, ctx });
+            }
+        }
+    }
+
+    /// Iterate key-value pairs with a comptime callback — IS_UNDEF and user code in same scope.
+    ///
+    /// Equivalent to C's `ZEND_HASH_FOREACH`. Walks the bucket array directly.
+    /// Key extraction follows C semantics (before IS_UNDEF check).
+    /// The callback receives an `Entry` (`.key` and `.value`).
+    /// When `ctx` is `void`, no context argument is passed.
+    ///
+    /// Example:
+    /// ```zig
+    /// arr.each(&ctx, struct {
+    ///     fn body(e: Array.Entry, ctx: *Ctx) void {
+    ///         switch (e.key) {
+    ///             .int => |i| // numeric key
+    ///             .string => |s| // string key
+    ///         }
+    ///     }
+    /// }.body);
+    /// ```
+    pub inline fn each(
+        self: *Array,
+        ctx: anytype,
+        comptime body: if (@TypeOf(ctx) == void) fn (Entry) void else fn (Entry, @TypeOf(ctx)) void,
+    ) void {
+        const ht = self.ptr();
+        const count = ht.nNumUsed;
+        const is_packed = (ht.u.flags & c.HASH_FLAG_PACKED) != 0;
+        const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
+        var el: [*]u8 = @ptrCast(ht.unnamed_0.arPacked);
+
+        if (is_packed) {
+            // Packed
+            var idx: u32 = 0;
+            var i: u32 = 0;
+            while (i < count) : (i += 1) {
+                const zv: *c.zval = @ptrCast(@alignCast(el));
+                el += el_size;
+                const key: Key = .{ .int = @as(isize, @intCast(idx)) };
+                idx += 1;
+                if (native.is(zv, .undef)) {
+                    @branchHint(.unlikely);
+                    continue; // IS_UNDEF check
+                }
+                if (comptime @TypeOf(ctx) == void) {
+                    @call(.always_inline, body, .{Entry{ .key = key, .value = zv }});
+                } else {
+                    @call(.always_inline, body, .{ Entry{ .key = key, .value = zv }, ctx });
+                }
+            }
+        } else {
+            // Hash
+            var i: u32 = 0;
+            while (i < count) : (i += 1) {
+                const bucket: *c.Bucket = @ptrCast(@alignCast(el));
+                const zv: *c.zval = &bucket.val;
+                el += el_size;
+                const key: Key = if (bucket.key) |k|
+                    .{ .string = k.*.val()[0..k.*.len] }
+                else
+                    .{ .int = @bitCast(bucket.h) };
+                if (native.is(zv, .undef)) {
+                    @branchHint(.unlikely);
+                    continue; // IS_UNDEF check
+                }
+                if (comptime @TypeOf(ctx) == void) {
+                    @call(.always_inline, body, .{Entry{ .key = key, .value = zv }});
+                } else {
+                    @call(.always_inline, body, .{ Entry{ .key = key, .value = zv }, ctx });
+                }
+            }
+        }
+    }
+
     pub const Iterator = extern struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
@@ -371,6 +487,172 @@ pub const Array = opaque {
         }
     };
 
+    /// Fast value-only iterator that walks the raw bucket array directly.
+    /// Zero C function calls — same performance as `eachValue`.
+    /// Automatically skips IS_UNDEF slots.
+    pub const FastValueIterator = extern struct {
+        el: [*]u8,
+        el_size: usize,
+        pos: u32,
+        count: u32,
+
+        /// Create an iterator over the array.
+        pub fn init(array: *Array) FastValueIterator {
+            const ht = array.ptr();
+            return .{
+                .el = @ptrCast(ht.unnamed_0.arPacked),
+                .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
+                .pos = 0,
+                .count = ht.nNumUsed,
+            };
+        }
+
+        /// Reset to the beginning of the array.
+        pub fn reset(self: *FastValueIterator) void {
+            self.el = @ptrCast(self.el - self.pos * self.el_size);
+            self.pos = 0;
+        }
+
+        /// Return the current value and advance, or null when exhausted.
+        /// Automatically skips IS_UNDEF slots.
+        pub inline fn next(self: *FastValueIterator) ?*c.zval {
+            while (self.pos < self.count) {
+                const zv: *c.zval = @ptrCast(@alignCast(self.el));
+                self.el += self.el_size;
+                self.pos += 1;
+                if (native.is(zv, .undef)) {
+                    @branchHint(.unlikely);
+                    continue;
+                }
+                return zv;
+            }
+            return null;
+        }
+
+        /// Return the current value without advancing, or null if exhausted.
+        pub fn current(self: *FastValueIterator) ?*c.zval {
+            var p = self.pos;
+            var e = self.el;
+            while (p < self.count) {
+                const zv: *c.zval = @ptrCast(@alignCast(e));
+                e += self.el_size;
+                p += 1;
+                if (native.is(zv, .undef)) {
+                    @branchHint(.unlikely);
+                    continue;
+                }
+                return zv;
+            }
+            return null;
+        }
+    };
+
+    /// Fast key+value iterator that walks the raw bucket array directly.
+    /// Zero C function calls — same performance as `each`.
+    /// Extracts keys inline and automatically skips IS_UNDEF slots.
+    pub const FastIterator = extern struct {
+        el: [*]u8,
+        el_size: usize,
+        pos: u32,
+        count: u32,
+        idx: u32,
+        is_packed: bool,
+
+        /// Create an iterator over the array.
+        pub fn init(array: *Array) FastIterator {
+            const ht = array.ptr();
+            return .{
+                .el = @ptrCast(ht.unnamed_0.arPacked),
+                .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
+                .pos = 0,
+                .count = ht.nNumUsed,
+                .idx = 0,
+                .is_packed = (ht.u.flags & c.HASH_FLAG_PACKED) != 0,
+            };
+        }
+
+        /// Reset to the beginning of the array.
+        pub fn reset(self: *FastIterator) void {
+            self.el = @ptrCast(self.el - self.pos * self.el_size);
+            self.pos = 0;
+            self.idx = 0;
+        }
+
+        /// Return the current entry (key + value) and advance, or null when exhausted.
+        /// Automatically skips IS_UNDEF slots.
+        pub inline fn next(self: *FastIterator) ?Entry {
+            if (self.is_packed) {
+                while (self.pos < self.count) {
+                    const zv: *c.zval = @ptrCast(@alignCast(self.el));
+                    self.el += self.el_size;
+                    self.pos += 1;
+                    const key: Key = .{ .int = @as(isize, @intCast(self.idx)) };
+                    self.idx += 1;
+                    if (native.is(zv, .undef)) {
+                        @branchHint(.unlikely);
+                        continue;
+                    }
+                    return Entry{ .key = key, .value = zv };
+                }
+            } else {
+                while (self.pos < self.count) {
+                    const bucket: *c.Bucket = @ptrCast(@alignCast(self.el));
+                    const zv: *c.zval = &bucket.val;
+                    self.el += self.el_size;
+                    self.pos += 1;
+                    const key: Key = if (bucket.key) |k|
+                        .{ .string = k.*.val()[0..k.*.len] }
+                    else
+                        .{ .int = @bitCast(bucket.h) };
+                    if (native.is(zv, .undef)) {
+                        @branchHint(.unlikely);
+                        continue;
+                    }
+                    return Entry{ .key = key, .value = zv };
+                }
+            }
+            return null;
+        }
+
+        /// Return the current entry without advancing, or null if exhausted.
+        pub fn current(self: *FastIterator) ?Entry {
+            var p = self.pos;
+            var e = self.el;
+            var i = self.idx;
+            if (self.is_packed) {
+                while (p < self.count) {
+                    const zv: *c.zval = @ptrCast(@alignCast(e));
+                    e += self.el_size;
+                    p += 1;
+                    const key: Key = .{ .int = @as(isize, @intCast(i)) };
+                    i += 1;
+                    if (native.is(zv, .undef)) {
+                        @branchHint(.unlikely);
+                        continue;
+                    }
+                    return Entry{ .key = key, .value = zv };
+                }
+            } else {
+                while (p < self.count) {
+                    const bucket: *c.Bucket = @ptrCast(@alignCast(e));
+                    const zv: *c.zval = &bucket.val;
+                    e += self.el_size;
+                    p += 1;
+                    const key: Key = if (bucket.key) |k|
+                        .{ .string = k.*.val()[0..k.*.len] }
+                    else
+                        .{ .int = @bitCast(bucket.h) };
+                    if (native.is(zv, .undef)) {
+                        @branchHint(.unlikely);
+                        continue;
+                    }
+                    return Entry{ .key = key, .value = zv };
+                }
+            }
+            return null;
+        }
+    };
+
     pub fn PtrValueIterator(comptime T: type) type {
         return extern struct {
             ht: *c.HashTable,
@@ -424,16 +706,31 @@ pub const Array = opaque {
         };
     }
 
+    /// Create a C-API iterator (key + value). Prefer `fastIterator` for read-only access.
     pub fn iterator(self: *Array) Iterator {
         return Iterator.init(self);
     }
 
+    /// Create a C-API key-only iterator.
     pub fn keyIterator(self: *Array) KeyIterator {
         return KeyIterator.init(self);
     }
 
+    /// Create a C-API value-only iterator.
     pub fn valueIterator(self: *Array) ValueIterator {
         return ValueIterator.init(self);
+    }
+
+    /// Create a fast key+value iterator that walks the raw bucket array.
+    /// Zero C function calls — same performance as `each`.
+    pub fn fastIterator(self: *Array) FastIterator {
+        return FastIterator.init(self);
+    }
+
+    /// Create a fast value-only iterator that walks the raw bucket array.
+    /// Zero C function calls — same performance as `eachValue`.
+    pub fn fastValueIterator(self: *Array) FastValueIterator {
+        return FastValueIterator.init(self);
     }
 };
 
@@ -442,5 +739,7 @@ test {
     @import("std").testing.refAllDecls(Array.Iterator);
     @import("std").testing.refAllDecls(Array.KeyIterator);
     @import("std").testing.refAllDecls(Array.ValueIterator);
+    @import("std").testing.refAllDecls(Array.FastIterator);
+    @import("std").testing.refAllDecls(Array.FastValueIterator);
     @import("std").testing.refAllDecls(Array.PtrValueIterator(struct {}));
 }

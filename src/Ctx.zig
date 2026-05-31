@@ -1,5 +1,8 @@
 //! PHP function/method call context.
+const std = @import("std");
+
 const c = @import("root.zig").c;
+const errors = @import("errors.zig");
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const zend = @import("zend/object.zig");
 const Zval = @import("zval.zig").Zval;
@@ -27,8 +30,9 @@ ret: *Zval,
 
 /// Parameter parsing and call frame access.
 ///
-/// Wraps `zend_execute_data` to provide type-safe parameter parsing
-/// via `parse()`, argument counting, and scope/object introspection.
+/// Wraps `zend_execute_data` to provide type-safe argument extraction
+/// via `expectArgs` / `expectArg` / `expectArgCount`, or the lower-level
+/// `parse()` for complex type specs (callable, object, variadic, etc.).
 pub const Call = opaque {
     /// Errors that can occur during parameter parsing
     pub const Error = error{
@@ -81,6 +85,113 @@ pub const Call = opaque {
         if (count == 0) return &[_]c.zval{};
         const base: [*]c.zval = @ptrCast(self.ptr());
         return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
+    }
+
+    /// Validate the total number of arguments against expected min/max.
+    /// Call once at the top of each function, before accessing individual args.
+    /// max = 0 means unlimited.
+    pub inline fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
+        const count = self.numArgs();
+        if (count < min or (max > 0 and count > max)) {
+            return errors.wrongParameterCount(min, max);
+        }
+    }
+
+    /// Expect zero arguments. Calls zend_wrong_parameters_none_error on failure.
+    pub inline fn expectNone(self: *Call) errors.WrongParameterCountError!void {
+        if (self.numArgs() != 0) {
+            return errors.wrongParametersNone();
+        }
+    }
+
+    fn ExpectArgsType(comptime opts: []const ExpectArgOption) type {
+        var types: [opts.len]type = undefined;
+        for (opts, 0..) |opt, i| {
+            const T = Zval.Type(opt.expect_type);
+            types[i] = if (opt.optional) ?T else T;
+        }
+        return std.meta.Tuple(&types);
+    }
+
+    /// Extract all arguments with compile-time validation.
+    /// Optionals must come after required args. min/max derived automatically.
+    ///
+    /// Example:
+    /// ```zig
+    /// const args = try self.expectArgs(&.{
+    ///     .{ .expect_type = .string },
+    ///     .{ .expect_type = .int, .optional = true },
+    /// });
+    /// const name: []const u8 = args[0];
+    /// const age: ?i64 = args[1];
+    /// ```
+    pub inline fn expectArgs(
+        self: *Call,
+        comptime opts: []const ExpectArgOption,
+    ) (ExpectArgError || errors.WrongParameterCountError)!ExpectArgsType(opts) {
+        comptime {
+            var seen_optional = false;
+            for (opts) |opt| {
+                if (seen_optional and !opt.optional) {
+                    @compileError("required argument after optional");
+                }
+                if (opt.optional) seen_optional = true;
+            }
+        }
+
+        const min = comptime min: {
+            var count: u32 = 0;
+            for (opts) |opt| {
+                if (!opt.optional) count += 1;
+            }
+            break :min count;
+        };
+        const max: u32 = @intCast(opts.len);
+
+        try self.expectArgCount(min, max);
+
+        const Result = ExpectArgsType(opts);
+        var result: Result = undefined;
+        inline for (opts, 0..) |opt, i| {
+            result[i] = try self.expectArg(@intCast(i + 1), opt);
+        }
+        return result;
+    }
+
+    /// Error set for `expectArg` / `expectArgs`: missing required argument or type mismatch.
+    pub const ExpectArgError = errors.ArgumentCountError || errors.ArgumentTypeError;
+
+    /// Configuration for a single argument in `expectArg` / `expectArgs`.
+    pub const ExpectArgOption = struct {
+        /// Expected PHP type for this argument.
+        expect_type: Zval.Kind = .mixed,
+        /// When true, argument may be omitted (returns null).
+        optional: bool = false,
+    };
+
+    fn ExpectArgType(comptime opt: ExpectArgOption) type {
+        const T = Zval.Type(opt.expect_type);
+        return if (opt.optional) ?T else T;
+    }
+
+    /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
+    /// When optional is true, returns null if the argument was not passed.
+    pub inline fn expectArg(
+        self: *Call,
+        n: u32,
+        comptime opt: ExpectArgOption,
+    ) ExpectArgError!ExpectArgType(opt) {
+        if (n > self.numArgs()) {
+            @branchHint(.cold);
+            return if (comptime opt.optional)
+                null
+            else
+                errors.argumentCountError("missing required argument #%d", .{n});
+        }
+
+        const zv = self.arg(n);
+        return Zval.native.as(zv, opt.expect_type) catch
+            errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(opt.expect_type).ptr, @tagName(Zval.native.kind(zv)).ptr });
     }
 
     /// Parse function parameters according to a type specification.
@@ -300,29 +411,6 @@ pub const Call = opaque {
             .{ self.numArgs(), type_spec.ptr } ++ type_args,
         );
         if (result == c.FAILURE) return Error.ParseFailure;
-    }
-
-    /// Parse function parameters when no parameters are expected.
-    ///
-    /// This is a convenience function for functions that take no parameters.
-    /// It validates that the argument count is zero and emits a PHP error
-    /// message if arguments were provided.
-    ///
-    /// Returns:
-    ///   Error.ParseFailure if any arguments were provided
-    ///
-    /// Example:
-    /// ```zig
-    /// fn helloWorld(ctx: Ctx) !void {
-    ///     try ctx.call.parseNone();
-    ///     ctx.ret.set(.string, "Hello, World!");
-    /// }
-    /// ```
-    pub fn parseNone(self: *Call) Error!void {
-        if (self.numArgs() != 0) {
-            c.zend_wrong_parameters_none_error();
-            return Error.ParseFailure;
-        }
     }
 
     /// Get the $this object as a zval (for class methods).
