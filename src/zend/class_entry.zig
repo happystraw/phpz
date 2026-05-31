@@ -25,9 +25,9 @@ pub const ClassEntry = opaque {
     }
 
     /// Get the class name as a byte slice
-    pub fn name(self: *ClassEntry) []const u8 {
+    pub fn name(self: *ClassEntry) [:0]const u8 {
         const n = self.ptr().*.name;
-        return n.*.val()[0..n.*.len];
+        return n.*.val()[0..n.*.len :0];
     }
 
     /// Get the parent class entry, or null if no parent

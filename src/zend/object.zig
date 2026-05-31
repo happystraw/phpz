@@ -195,7 +195,7 @@ pub const Object = opaque {
     }
 
     /// Check if object is an instance of a class
-    pub fn instanceof(self: *Object, ce: *ClassEntry) bool {
+    pub inline fn instanceof(self: *Object, ce: *ClassEntry) bool {
         return c.instanceof_function(self.class().ptr(), ce.ptr());
     }
 
