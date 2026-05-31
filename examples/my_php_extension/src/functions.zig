@@ -12,8 +12,10 @@ fn hello() void {
 }
 
 fn greet(ctx: phpz.Ctx) !void {
-    var name: []u8 = undefined;
-    try ctx.call.parse("s", .{ &name.ptr, &name.len });
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .string },
+    });
+    const name = args[0];
 
     var buffer: [4096]u8 = undefined;
     const result: []const u8 = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
@@ -22,8 +24,10 @@ fn greet(ctx: phpz.Ctx) !void {
 }
 
 fn increment(ctx: phpz.Ctx) !void {
-    var zv: *c.zval = undefined;
-    try ctx.call.parse("z", .{&zv});
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .mixed },
+    });
+    const zv = args[0];
 
     const raw = if (Zval.native.is(zv, .reference))
         Zval.native.asUnchecked(zv, .reference).val()
@@ -56,9 +60,9 @@ fn listStatuses(ctx: phpz.Ctx) !void {
 
     var ret = phpz.Zval.Array.empty(ctx.ret.ptr());
     var cases = phpz.Zval.native.asUnchecked(&cases_zv, .array);
-    var it = cases.iterator();
-    while (it.next()) |entry| {
-        const entry_obj = phpz.Zval.native.asUnchecked(entry.value, .object);
+    var it = cases.fastValueIterator();
+    while (it.next()) |zv| {
+        const entry_obj = phpz.Zval.native.asUnchecked(zv, .object);
         const name = entry_obj.enumCaseName();
         const value = phpz.Zval.native.asUnchecked(entry_obj.enumCaseValue().?, .int);
         ret.set(.int, name, value);
@@ -68,11 +72,12 @@ fn listStatuses(ctx: phpz.Ctx) !void {
 fn map(ctx: phpz.Ctx) !void {
     var arr_zv: *c.zval = undefined;
     var cb: phpz.zend.Callable = undefined;
+    // TODO: callable expect arg supports
     try ctx.call.parse("af", .{ &arr_zv, &cb.fci, &cb.fcc });
 
     var result = phpz.Zval.Array.empty(ctx.ret.ptr());
     const ht = Zval.native.asUnchecked(arr_zv, .array);
-    var it = ht.iterator();
+    var it = ht.fastIterator();
     while (it.next()) |entry| {
         var rv = Zval.native.undef;
         try cb.withRetval(&rv).call(.{entry.value.*});

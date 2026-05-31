@@ -16,10 +16,11 @@ const ArrayLike = extern struct {
     }
 
     pub fn construct(self: *ArrayLike, ctx: phpz.Ctx) !void {
-        var ht: ?*c.HashTable = null;
-        try ctx.call.parse("|h", .{&ht});
-        if (ht) |arr| {
-            self.data.copy(.from(arr));
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .array, .optional = true },
+        });
+        if (args[0]) |arr| {
+            self.data.copy(arr);
         }
     }
 

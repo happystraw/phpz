@@ -2,21 +2,24 @@ pub const Counter = extern struct {
     n: i64,
 
     pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
-        var n: i64 = 0;
-        try ctx.call.parse("|l", .{&n});
-        self.n = n;
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .int, .optional = true },
+        });
+        self.n = args[0] orelse 0;
     }
 
     pub fn add(self: *Counter, ctx: phpz.Ctx) !void {
-        var n: i64 = 0;
-        try ctx.call.parse("l", .{&n});
-        self.n +|= n;
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .int },
+        });
+        self.n +|= args[0];
     }
 
     pub fn dec(self: *Counter, ctx: phpz.Ctx) !void {
-        var n: i64 = 0;
-        try ctx.call.parse("l", .{&n});
-        self.n -|= n;
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .int },
+        });
+        self.n -|= args[0];
     }
 
     pub fn value(self: Counter, ctx: phpz.Ctx) void {

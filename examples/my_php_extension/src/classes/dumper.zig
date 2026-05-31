@@ -35,7 +35,7 @@ fn dumpValue(val: *phpz.Zval, depth: usize) void {
             const zarr = val.asUnchecked(.array);
             indent(depth);
             _ = phpz.printf("array(%d) {\n", .{zarr.len()});
-            var it = zarr.iterator();
+            var it = zarr.fastIterator();
             while (it.next()) |entry| {
                 indent(depth + 1);
                 switch (entry.key) {
@@ -95,7 +95,7 @@ fn dumpValue(val: *phpz.Zval, depth: usize) void {
             indent(depth);
             _ = phpz.printf("class %.*s#%d (%d) {\n", .{ class_name.len, class_name.ptr, obj.handle(), prop_count });
             if (obj.properties()) |props| {
-                var it = props.iterator();
+                var it = props.fastIterator();
                 while (it.next()) |entry| {
                     indent(depth + 1);
                     printPropertyVisibility(entry.key.string);

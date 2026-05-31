@@ -26,8 +26,10 @@ fn hello() void {
 }
 
 fn greet(ctx: phpz.Ctx) !void {
-    var name: []u8 = undefined;
-    try ctx.call.parse("s", .{ &name.ptr, &name.len });
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .string },
+    });
+    const name = args[0];
 
     var buffer: [256]u8 = undefined;
     const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});

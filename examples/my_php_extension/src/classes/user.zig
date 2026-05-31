@@ -4,23 +4,26 @@ const User = extern struct {
     }
 
     pub fn construct(self: *User, ctx: phpz.Ctx) !void {
-        var name: []u8 = undefined;
-        var age: phpz.Zval.Optional = .init;
-        try ctx.call.parse("s|z!", .{ &name.ptr, &name.len, &age.ptr });
+        const name, const age = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .string },
+            .{ .expect_type = .mixed, .optional = true },
+        });
 
         const user: *Class = .from(.impl, self);
         try user.updateProperty(.string, "name", name);
-        if (age.unwrap()) |zv| {
-            if (zv.is(.int)) {
-                try user.updateProperty(.int, "age", zv.asUnchecked(.int));
+        if (age) |zv| {
+            if (phpz.Zval.native.is(zv, .int)) {
+                try user.updateProperty(.int, "age", phpz.Zval.native.asUnchecked(zv, .int));
             }
         }
         try user.call("onload", null, .{});
     }
 
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
-        var zv: *c.zval = undefined;
-        try ctx.call.parse("z", .{&zv});
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .mixed },
+        });
+        const zv = args[0];
 
         const user: *Class = .from(.impl, self);
         const name = blk: {
