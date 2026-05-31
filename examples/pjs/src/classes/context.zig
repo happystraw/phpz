@@ -1,20 +1,26 @@
 pub const Context = extern struct {
-    rt: *runtime.Class,
-    inner: *quickjs.Context,
+    rt: ?*runtime.Class,
+    inner: ?*quickjs.Context,
+
+    pub fn init(self: *Context) void {
+        self.rt = null;
+        self.inner = null;
+    }
 
     pub fn deinit(self: *Context) void {
-        self.inner.deinit();
-        self.rt.delref();
+        if (self.inner) |inner| inner.deinit();
+        if (self.rt) |rt| rt.release();
     }
 
     pub fn construct(self: *Context, ctx: phpz.Ctx) !void {
-        var rt_zv: *c.zval = undefined;
-        try ctx.call.parse("O", .{ &rt_zv, runtime.Class.entry.ptr() });
+        const args = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .object, .class = runtime.Class },
+        });
 
-        self.rt = .fromObjectZval(try .from(rt_zv));
-        self.rt.addref();
+        self.rt = .from(.std, args[0].ptr());
+        self.rt.?.addref();
 
-        self.inner = try .init(self.rt.impl.inner);
+        self.inner = try .init(self.rt.?.impl.inner);
     }
 
     pub fn eval(self: *Context, ctx: phpz.Ctx) !void {
@@ -22,15 +28,15 @@ pub const Context = extern struct {
         try ctx.call.parse("s", .{ &code.ptr, &code.len });
         if (code.len == 0) return error.NoJavaScriptCode;
 
-        const inner = self.inner;
+        const inner = self.inner.?;
         var result = inner.eval(code, "<main>", .{});
         errdefer result.deinit(inner);
 
         if (result.isException()) {
-            const exc = self.inner.getException();
-            defer exc.deinit(self.inner);
-            if (exc.toZigSlice(self.inner)) |msg| {
-                defer self.inner.freeCString(msg.ptr);
+            const exc = inner.getException();
+            defer exc.deinit(inner);
+            if (exc.toZigSlice(inner)) |msg| {
+                defer inner.freeCString(msg.ptr);
                 exception.throw(msg);
             } else {
                 exception.throw("unknown error");

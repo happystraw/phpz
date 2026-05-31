@@ -1,5 +1,5 @@
 pub const Value = extern struct {
-    ctx: *context.Class,
+    ctx: ?*context.Class,
     inner: quickjs.Value,
 
     pub fn register(impl: anytype) *phpz.ClassEntry {
@@ -11,29 +11,40 @@ pub const Value = extern struct {
     }
 
     pub fn deinit(self: *Value) void {
-        self.inner.deinit(self.ctx.impl.inner);
-        self.ctx.delref();
+        if (self.ctx) |ctx_obj| {
+            if (ctx_obj.impl.inner) |js_ctx| self.inner.deinit(js_ctx);
+            ctx_obj.release();
+        }
     }
 
     pub fn construct(self: *Value, ctx: phpz.Ctx) !void {
-        var ctx_zv: *c.zval = undefined;
-        var value_zv: phpz.Zval.Optional = .init;
-        try ctx.call.parse("O|z", .{ &ctx_zv, context.Class.entry.ptr(), &value_zv.ptr });
+        self.ctx = null;
 
-        self.ctx = .fromObjectZval((try .from(ctx_zv)));
-        self.ctx.addref();
+        const ctx_obj: *phpz.zend.Object, const value_zv: ?*c.zval = try ctx.call.expectArgs(&.{
+            .{ .expect_type = .object, .class = context.Class },
+            .{ .expect_type = .mixed, .optional = true },
+        });
 
-        if (value_zv.unwrap()) |value| {
-            self.updateValue(value) catch return errors.argumentTypeError(
+        self.ctx = .from(.std, ctx_obj.ptr());
+        self.ctx.?.addref();
+
+        if (value_zv) |value| {
+            self.updateValue(.from(value)) catch return errors.argumentTypeError(
                 2,
                 "must be int|float|string|bool|null, unsupported value type '%s'",
-                .{@tagName(value.kind()).ptr},
+                .{phpz.Zval.native.kind(value).cstr()},
             );
         } else {
             const php_obj: *Class = .from(.impl, self);
             try php_obj.updateProperty(.null, "value", {});
             self.inner = .null;
         }
+    }
+
+    /// Returns the inner quickjs Context from the linked Pjs\Context object.
+    /// Only valid for fully-constructed Value instances.
+    fn innerCtx(self: *Value) *quickjs.Context {
+        return self.ctx.?.impl.inner.?;
     }
 
     fn updateValue(self: *Value, zv: *phpz.Zval) !void {
@@ -57,7 +68,7 @@ pub const Value = extern struct {
             },
             .string => {
                 try php_obj.updateProperty(.string, "value", zv.asUnchecked(.string));
-                self.inner = .initStringLen(self.ctx.impl.inner, zv.asUnchecked(.string));
+                self.inner = .initStringLen(self.innerCtx(), zv.asUnchecked(.string));
             },
             // TODO: more types
             else => return error.Unsupported,
@@ -71,31 +82,33 @@ pub const Value = extern struct {
             return;
         }
         if (js_value.isNumber()) {
-            try php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.ctx.impl.inner));
+            try php_obj.updateProperty(.float, "value", try js_value.toFloat64(self.innerCtx()));
             return;
         }
 
         if (js_value.isBool()) {
-            try php_obj.updateProperty(.bool, "value", try js_value.toBool(self.ctx.impl.inner));
+            try php_obj.updateProperty(.bool, "value", try js_value.toBool(self.innerCtx()));
             return;
         }
 
         // fallback to string
         // TODO: more type...
-        var str_val = js_value.toStringValue(self.ctx.impl.inner);
-        defer str_val.deinit(self.ctx.impl.inner);
-        if (str_val.toZigSlice(self.ctx.impl.inner)) |msg| {
-            defer self.ctx.impl.inner.freeCString(msg.ptr);
+        const js_ctx = self.innerCtx();
+        var str_val = js_value.toStringValue(js_ctx);
+        defer str_val.deinit(js_ctx);
+        if (str_val.toZigSlice(js_ctx)) |msg| {
+            defer js_ctx.freeCString(msg.ptr);
             try php_obj.updateProperty(.string, "value", msg);
         }
     }
 
     pub fn toString(self: *Value, ctx: phpz.Ctx) !void {
-        var str_val = self.inner.toStringValue(self.ctx.impl.inner);
-        defer str_val.deinit(self.ctx.impl.inner);
+        const js_ctx = self.innerCtx();
+        var str_val = self.inner.toStringValue(js_ctx);
+        defer str_val.deinit(js_ctx);
 
-        if (str_val.toZigSlice(self.ctx.impl.inner)) |msg| {
-            defer self.ctx.impl.inner.freeCString(msg.ptr);
+        if (str_val.toZigSlice(js_ctx)) |msg| {
+            defer js_ctx.freeCString(msg.ptr);
             ctx.ret.set(.string, msg);
             return;
         }
