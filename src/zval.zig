@@ -75,6 +75,10 @@ pub const Zval = opaque {
 
         /// Mixed type, fallback to raw zval access (use with caution)
         mixed,
+
+        pub inline fn cstr(self: Kind) [*:0]const u8 {
+            return @tagName(self).ptr;
+        }
     };
 
     /// Get the corresponding Zig type for a PHP value kind.

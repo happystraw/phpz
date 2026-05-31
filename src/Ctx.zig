@@ -90,11 +90,10 @@ pub const Call = opaque {
 
     /// Validate the total number of arguments against expected min/max.
     /// Call once at the top of each function, before accessing individual args.
-    /// max = 0 means unlimited.
-    pub inline fn expectArgCount(self: *Call, comptime min: u32, comptime max: u32) errors.WrongParameterCountError!void {
+    pub inline fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
         const count = self.numArgs();
-        if (count < min or (max > 0 and count > max)) {
-            return errors.wrongParameterCount(min, @max(count, max));
+        if (count < min or count > max) {
+            return errors.wrongParameterCount(min, max);
         }
     }
 
@@ -168,8 +167,7 @@ pub const Call = opaque {
         return result;
     }
 
-    /// Error set for `expectArg` / `expectArgs`: missing required argument or type mismatch.
-    pub const ExpectArgError = errors.ArgumentCountError || errors.ArgumentTypeError;
+    pub const ExpectArgError = errors.ArgumentTypeError || errors.ArgumentValueError;
 
     /// Configuration for a single argument in `expectArg` / `expectArgs`.
     pub const ExpectArgDefinition = struct {
@@ -184,6 +182,9 @@ pub const Call = opaque {
         nullable: bool = false,
         /// When true, returns the raw zval pointer instead of converting to a Zig type (cannot be .mixed).
         zval: bool = false,
+        /// Expected class type, must be defined via `phpz.Class` / `phpz.SimpleClass`,
+        /// or a container which has a `entry` decl as the class entry.
+        class: ?type = null,
     };
 
     /// Returned when `nullable` is set: distinguishes "null was passed" (.null) from "argument omitted" (?T).
@@ -216,15 +217,25 @@ pub const Call = opaque {
     ) ExpectArgError!ExpectArgType(def) {
         comptime {
             if (def.expect_type == .mixed and (def.nullable or def.zval)) {
-                @compileError("arg[" ++ n ++ "] invalid ExpectArgDefinition: 'mixed' cannot be nullable or a raw zval");
+                @compileError("nullable and zval options are not valid when expect_type is .mixed");
+            }
+            if (def.class) |cls| {
+                if (def.expect_type != .object) {
+                    @compileError("class option is only valid when expect_type is .object");
+                }
+                if (!@hasDecl(cls, "entry") or @TypeOf(cls.entry) != *ClassEntry) {
+                    @compileError("class option must be a phpz.Class or phpz.SimpleClass with an entry field of type *ClassEntry");
+                }
             }
         }
 
         if (n > self.numArgs()) {
-            return if (comptime def.optional)
-                null
-            else
-                errors.argumentCountError("missing required argument #%d", .{n});
+            if (comptime def.optional)
+                return null
+            else {
+                @branchHint(.cold);
+                return errors.argumentValueError(n, "required, was not passed", .{});
+            }
         }
 
         const zv = self.arg(n);
@@ -233,21 +244,43 @@ pub const Call = opaque {
             return zv; // no type checking for 'mixed'
         }
 
-        // Nullable
-        if (comptime def.nullable) {
-            if (native.is(zv, .null)) return .null; // early return for null case
-            if (native.is(zv, def.expect_type)) {
-                return .{ .value = if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type) };
-            } else {
-                return errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ @tagName(def.expect_type).ptr, @tagName(native.kind(zv)).ptr });
+        // Nullable type check
+        {
+            if (comptime def.nullable) {
+                if (native.is(zv, .null)) return .null; // early return for null case
+                if (comptime def.class) |cls| {
+                    const obj: *zend.Object = native.as(zv, .object) catch
+                        return errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ cls.entry.name().ptr, native.kind(zv).cstr() });
+                    return if (obj.instanceof(cls.entry))
+                        .{ .value = if (comptime def.zval) zv else obj }
+                    else
+                        errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ cls.entry.name().ptr, obj.class().name().ptr });
+                }
+
+                return if (native.is(zv, def.expect_type))
+                    .{ .value = if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type) }
+                else
+                    errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ def.expect_type.cstr(), native.kind(zv).cstr() });
             }
         }
 
-        // Regular type check
-        if (native.is(zv, def.expect_type)) {
-            return if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type);
-        } else {
-            return errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(def.expect_type).ptr, @tagName(native.kind(zv)).ptr });
+        // Non-nullable type check
+        {
+            // Class check
+            if (comptime def.class) |cls| {
+                const obj: *zend.Object = native.as(zv, .object) catch
+                    return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ cls.entry.name().ptr, native.kind(zv).cstr() });
+                return if (obj.instanceof(cls.entry))
+                    if (comptime def.zval) zv else obj
+                else
+                    return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ cls.entry.name().ptr, obj.class().name().ptr });
+            }
+
+            // Regular type check
+            return if (native.is(zv, def.expect_type))
+                if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type)
+            else
+                errors.argumentTypeError(n, "must be of type %s, %s given", .{ def.expect_type.cstr(), native.kind(zv).cstr() });
         }
     }
 

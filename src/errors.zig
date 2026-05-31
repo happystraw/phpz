@@ -41,7 +41,7 @@ pub const Level = enum(c_int) {
 pub const ArgumentTypeError = error{PhpArgumentTypeError};
 
 /// Return an argument type error
-pub inline fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentTypeError {
+pub inline fn argumentTypeError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentTypeError {
     @branchHint(.cold);
     @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentTypeError;
@@ -50,7 +50,7 @@ pub inline fn argumentTypeError(arg_num: comptime_int, comptime format: [:0]cons
 pub const ArgumentValueError = error{PhpArgumentValueError};
 
 /// Return an argument value error
-pub inline fn argumentValueError(arg_num: comptime_int, comptime format: [:0]const u8, args: anytype) ArgumentValueError {
+pub inline fn argumentValueError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentValueError {
     @branchHint(.cold);
     @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentValueError;
