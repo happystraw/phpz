@@ -1,0 +1,48 @@
+name: Benchmark
+
+on:
+  push:
+    branches: ["dev"]
+    paths:
+      - "bench/**"
+      - "src/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/workflows/bench.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "bench/**"
+      - "src/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/workflows/bench.yml"
+  workflow_dispatch:
+
+jobs:
+  bench:
+    name: bench (PHP ${{ matrix.php }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        php: ["8.2", "8.3", "8.4", "8.5"]
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            os: ubuntu-latest
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: php-config
+
+      - name: Run benchmark
+        run: bench/run.sh

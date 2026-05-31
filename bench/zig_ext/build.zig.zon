@@ -1,0 +1,19 @@
+.{
+    .name = .bench_zig,
+    .version = "0.1.0",
+    .fingerprint = 0x5dddb3f44fe50dfa,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .phpz = .{
+            .path = "../..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "bench_zig.h",
+        "bench_zig.stub.php",
+        "bench_zig_arginfo.h",
+    },
+}
