@@ -35,7 +35,7 @@ pub const String = opaque {
     }
 
     /// Release the string
-    pub fn deinit(self: *String) void {
+    pub fn release(self: *String) void {
         c.zend_string_release(self.ptr());
     }
 

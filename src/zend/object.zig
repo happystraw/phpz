@@ -35,8 +35,8 @@ pub const Object = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Release the object (decrement refcount)
-    pub fn deinit(self: *Object) void {
+    /// Release the object (decrement refcount, destroy if zero).
+    pub inline fn release(self: *Object) void {
         c.zend_object_release(self.ptr());
     }
 
@@ -92,7 +92,7 @@ pub const Object = opaque {
     /// and respects inheritance. Use `findMethod` for a direct table lookup.
     pub fn resolveMethod(self: *Object, method_name: []const u8) ?*Function {
         const zstr = String.init(method_name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         var obj_ptr = self.ptr();
         const fn_ptr = c.zend_std_get_method(@ptrCast(&obj_ptr), zstr.ptr(), null);
@@ -121,7 +121,7 @@ pub const Object = opaque {
         name: []const u8,
     ) Function.Error!?*c.zval {
         const zstr = String.init(name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         var rv: c.zval = undefined;
         const result = c.zend_std_read_property(
@@ -144,7 +144,7 @@ pub const Object = opaque {
         value: *c.zval,
     ) Function.Error!?*c.zval {
         const zstr = String.init(name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         const result = c.zend_std_write_property(
             self.ptr(),
@@ -176,7 +176,7 @@ pub const Object = opaque {
         comptime check: PropertyCheck,
     ) Function.Error!bool {
         const zstr = String.init(name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @intFromEnum(check), null);
         if (errors.hasException()) return error.PhpException;
@@ -188,7 +188,7 @@ pub const Object = opaque {
     /// Returns `error.PhpException` if a magic `__unset` handler throws.
     pub fn unsetProperty(self: *Object, name: []const u8) Function.Error!void {
         const zstr = String.init(name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         c.zend_std_unset_property(self.ptr(), zstr.ptr(), null);
         if (errors.hasException()) return error.PhpException;
@@ -252,7 +252,7 @@ pub const Object = opaque {
         params: []c.zval,
     ) CallIfExistsError!void {
         const zstr = String.init(method_name);
-        defer zstr.deinit();
+        defer zstr.release();
 
         const result = c.zend_call_method_if_exists(
             self.ptr(),

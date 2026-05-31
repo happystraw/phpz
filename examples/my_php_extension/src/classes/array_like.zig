@@ -12,7 +12,7 @@ const ArrayLike = extern struct {
     }
 
     pub fn deinit(self: *ArrayLike) void {
-        self.data.deinit();
+        self.data.release();
     }
 
     pub fn construct(self: *ArrayLike, ctx: phpz.Ctx) !void {

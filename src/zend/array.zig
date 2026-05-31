@@ -27,7 +27,7 @@ pub const Array = opaque {
     }
 
     /// Release the array (decrement refcount, destroy if zero).
-    pub fn deinit(self: *Array) void {
+    pub inline fn release(self: *Array) void {
         c.zend_array_release(self.ptr());
     }
 

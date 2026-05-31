@@ -327,13 +327,18 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         }
 
         /// Increments the reference count of the object.
-        pub fn addref(self: *Self) void {
-            _ = c.zend_gc_addref(&self.std.gc);
+        pub inline fn addref(self: *Self) void {
+            zend.Object.addref(.from(&self.std));
         }
 
         /// Decrements the reference count of the object.
-        pub fn delref(self: *Self) void {
-            _ = c.zend_gc_delref(&self.std.gc);
+        pub inline fn delref(self: *Self) void {
+            zend.Object.delref(.from(&self.std));
+        }
+
+        /// Release the object (decrement refcount, destroy if zero).
+        pub inline fn release(self: *Self) void {
+            zend.Object.release(.from(&self.std));
         }
 
         /// Retrieves the parent struct pointer from a field pointer.
