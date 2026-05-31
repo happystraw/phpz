@@ -46,6 +46,18 @@ namespace MyPHPExt {
     {
     }
 
+    function testExpectArgScalars(string $str, int $int, float $float, bool $flag = true, ?string $nullable_str = null, int $opt_int = 0): array
+    {
+    }
+
+    function testExpectArgArrayObject(array $data, \MyPHPExt\User $user, ?\MyPHPExt\User $nullable_user = null): array
+    {
+    }
+
+    function testExpectArgMixed(mixed $value): mixed
+    {
+    }
+
     interface Identifiable
     {
         public function getId(): int;

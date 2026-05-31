@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: afc8564d787ebe713841cb20adae91dd3a1317b1 */
+ * Stub hash: 35f6c359a91e2c9b49577f556da4128aac22d838 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -25,6 +25,25 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_map, 0, 2, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, arr, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, cb, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_testExpectArgScalars, 0, 3, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, str, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, int, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, float, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flag, _IS_BOOL, 0, "true")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, nullable_str, IS_STRING, 1, "null")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, opt_int, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_testExpectArgArrayObject, 0, 2, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, data, IS_ARRAY, 0)
+	ZEND_ARG_OBJ_INFO(0, user, MyPHPExt\\\125ser, 0)
+	ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, nullable_user, MyPHPExt\\\125ser, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_testExpectArgMixed, 0, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
@@ -109,6 +128,9 @@ ZEND_FUNCTION(MyPHPExt_findById);
 ZEND_FUNCTION(MyPHPExt_getDefaultUser);
 ZEND_FUNCTION(MyPHPExt_listStatuses);
 ZEND_FUNCTION(MyPHPExt_map);
+ZEND_FUNCTION(MyPHPExt_testExpectArgScalars);
+ZEND_FUNCTION(MyPHPExt_testExpectArgArrayObject);
+ZEND_FUNCTION(MyPHPExt_testExpectArgMixed);
 ZEND_METHOD(MyPHPExt_AbstractEntity, onLoad);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, getId);
@@ -141,6 +163,9 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_NS_FALIAS("MyPHPExt", getDefaultUser, MyPHPExt_getDefaultUser, arginfo_MyPHPExt_getDefaultUser)
 	ZEND_NS_FALIAS("MyPHPExt", listStatuses, MyPHPExt_listStatuses, arginfo_MyPHPExt_listStatuses)
 	ZEND_NS_FALIAS("MyPHPExt", map, MyPHPExt_map, arginfo_MyPHPExt_map)
+	ZEND_NS_FALIAS("MyPHPExt", testExpectArgScalars, MyPHPExt_testExpectArgScalars, arginfo_MyPHPExt_testExpectArgScalars)
+	ZEND_NS_FALIAS("MyPHPExt", testExpectArgArrayObject, MyPHPExt_testExpectArgArrayObject, arginfo_MyPHPExt_testExpectArgArrayObject)
+	ZEND_NS_FALIAS("MyPHPExt", testExpectArgMixed, MyPHPExt_testExpectArgMixed, arginfo_MyPHPExt_testExpectArgMixed)
 	ZEND_FE_END
 };
 

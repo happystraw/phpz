@@ -69,6 +69,113 @@ fn listStatuses(ctx: phpz.Ctx) !void {
     }
 }
 
+/// Test expectArgs with all scalar types: .string, .int, .float, .bool.
+/// Covers: required, optional, nullable, and zval flag.
+fn testExpectArgScalars(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .string },
+        .{ .expect_type = .int },
+        .{ .expect_type = .float },
+        .{ .expect_type = .bool, .optional = true },
+        .{ .expect_type = .string, .optional = true, .nullable = true },
+        .{ .expect_type = .int, .optional = true, .zval = true },
+    });
+
+    const str: []const u8 = args[0];
+    const int_val: i64 = args[1];
+    const float_val: f64 = args[2];
+    const flag: bool = args[3] orelse true;
+    const nullable_str: ?phpz.Ctx.Call.Nullable([]const u8) = args[4];
+    const opt_int_zv: ?*c.zval = args[5];
+
+    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    result.set(.string, "str", str);
+    result.set(.int, "int", int_val);
+    result.set(.float, "float", float_val);
+    result.set(.bool, "flag", flag);
+
+    if (nullable_str) |ns| {
+        switch (ns) {
+            .null => result.set(.null, "nullable_str", {}),
+            .value => |s| result.set(.string, "nullable_str", s),
+        }
+    } else {
+        result.set(.null, "nullable_str", {});
+    }
+
+    if (opt_int_zv) |zv| {
+        if (Zval.native.is(zv, .int)) {
+            result.set(.int, "opt_int", Zval.native.asUnchecked(zv, .int));
+        } else {
+            result.set(.null, "opt_int", {});
+        }
+    } else {
+        result.set(.int, "opt_int", 0);
+    }
+}
+
+/// Test expectArgs with .array and .object+class (required and nullable optional).
+/// Covers: class instanceof checks, nullable class with null passed.
+fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .array },
+        .{ .expect_type = .object, .class = UserClass },
+        .{ .expect_type = .object, .class = UserClass, .optional = true, .nullable = true },
+    });
+
+    const data: *phpz.zend.Array = args[0];
+    const user: *phpz.zend.Object = args[1];
+    const nullable_user: ?phpz.Ctx.Call.Nullable(*phpz.zend.Object) = args[2];
+
+    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    result.set(.int, "data_count", @intCast(data.len()));
+
+    // Extract user name via readProperty
+    const user_name_zv = try user.readProperty("name");
+    if (user_name_zv) |zv| {
+        if (Zval.native.is(zv, .string)) {
+            result.set(.string, "user_name", Zval.native.asUnchecked(zv, .string));
+        } else {
+            result.set(.string, "user_name", "not_a_string");
+        }
+    } else {
+        result.set(.string, "user_name", "?");
+    }
+
+    if (nullable_user) |nu| {
+        switch (nu) {
+            .null => result.set(.null, "nullable_user", {}),
+            .value => |obj| {
+                const nu_name_zv = try obj.readProperty("name");
+                if (nu_name_zv) |zv| {
+                    if (Zval.native.is(zv, .string)) {
+                        result.set(.string, "nullable_user", Zval.native.asUnchecked(zv, .string));
+                    } else {
+                        result.set(.string, "nullable_user", "not_a_string");
+                    }
+                } else {
+                    result.set(.string, "nullable_user", "?");
+                }
+            },
+        }
+    } else {
+        result.set(.null, "nullable_user", {});
+    }
+}
+
+/// Test expectArgs with .mixed type — returns the raw zval pointer directly.
+fn testExpectArgMixed(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .expect_type = .mixed },
+    });
+
+    const zv: *c.zval = args[0];
+
+    // Return the value back to PHP as-is (add refcount to prevent double-free)
+    ctx.ret.ptr().* = zv.*;
+    Zval.native.addref(ctx.ret.ptr());
+}
+
 fn map(ctx: phpz.Ctx) !void {
     var arr_zv: *c.zval = undefined;
     var cb: phpz.zend.Callable = undefined;
@@ -97,4 +204,7 @@ comptime {
     phpz.function("MyPHPExt\\getDefaultUser", getDefaultUser);
     phpz.function("MyPHPExt\\listStatuses", listStatuses);
     phpz.function("MyPHPExt\\map", map);
+    phpz.function("MyPHPExt\\testExpectArgScalars", testExpectArgScalars);
+    phpz.function("MyPHPExt\\testExpectArgArrayObject", testExpectArgArrayObject);
+    phpz.function("MyPHPExt\\testExpectArgMixed", testExpectArgMixed);
 }
