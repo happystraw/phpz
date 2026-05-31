@@ -13,7 +13,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 
 - **Module** — `phpz.module()` w/ `module_startup`, `module_shutdown`, `request_startup`, `request_shutdown`, `info` lifecycle hooks
 - **Class & OOP** — `phpz.Class` (Zig `extern struct` ↦ PHP class, `init`/`deinit`), `phpz.SimpleClass` (interfaces, traits, enums, exceptions), methods, properties (static & instance), inheritance via `register()` hook
-- **Functions** — `phpz.function()` with type-safe `Ctx.Call.parse()`, `Ctx` return values, `$this` / scope access
+- **Functions** — `phpz.function()` with type-safe `Ctx` argument for `expectArgs`/`expectArg` parameter extraction (optional, nullable, raw zval) and `parse()` for complex type specs
 - **Constants** — global and class constants via `const` in stub files, auto-registered during MINIT by `register_{name}_symbols`
 - **Type-safe Zval** — checked conversions (`is`/`as`/`asOrDefault`), `Zval.Array` / `Zval.Object` builders, `Zval.Optional` nullable params, `Zval.native` raw pointer ops
 - **Zend APIs** — `zend.Array` (HashTable CRUD, iterators, sort), `zend.String` (concat, hash), `zend.Object` (properties, calls, enum), `zend.ClassEntry`, `zend.Function`, `zend.Callable` (type-safe fci/fcc), `zend.PropertyInfo`, `zend.Reference`, `zend.Resource`

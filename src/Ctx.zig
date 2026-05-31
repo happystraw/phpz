@@ -6,6 +6,7 @@ const errors = @import("errors.zig");
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const zend = @import("zend/object.zig");
 const Zval = @import("zval.zig").Zval;
+const native = Zval.native;
 
 /// Provides access to the current call frame and return value.
 /// Passed as `Ctx` to user-defined PHP function/method bindings.
@@ -67,7 +68,7 @@ pub const Call = opaque {
         return self.ptr().This.u2.num_args;
     }
 
-    /// Get the Nth argument (1-indexed) as a raw zval pointer.
+    /// Unsafe: Get the Nth argument (1-indexed) as a raw zval pointer.
     ///
     /// Parameters:
     ///   - n: Argument number (1-based)
@@ -90,10 +91,10 @@ pub const Call = opaque {
     /// Validate the total number of arguments against expected min/max.
     /// Call once at the top of each function, before accessing individual args.
     /// max = 0 means unlimited.
-    pub inline fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
+    pub inline fn expectArgCount(self: *Call, comptime min: u32, comptime max: u32) errors.WrongParameterCountError!void {
         const count = self.numArgs();
         if (count < min or (max > 0 and count > max)) {
-            return errors.wrongParameterCount(min, max);
+            return errors.wrongParameterCount(min, @max(count, max));
         }
     }
 
@@ -104,34 +105,43 @@ pub const Call = opaque {
         }
     }
 
-    fn ExpectArgsType(comptime opts: []const ExpectArgOption) type {
-        var types: [opts.len]type = undefined;
-        for (opts, 0..) |opt, i| {
-            const T = Zval.Type(opt.expect_type);
-            types[i] = if (opt.optional) ?T else T;
+    /// Error set for `expectArgs`: argument count mismatch, missing required argument, or type mismatch.
+    pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError;
+
+    fn ExpectArgsType(comptime defs: []const ExpectArgDefinition) type {
+        comptime {
+            var types: [defs.len]type = undefined;
+            for (defs, 0..) |def, i| {
+                types[i] = ExpectArgType(def);
+            }
+            return @Tuple(&types);
         }
-        return std.meta.Tuple(&types);
     }
 
     /// Extract all arguments with compile-time validation.
     /// Optionals must come after required args. min/max derived automatically.
+    ///
+    /// Each entry is an `ExpectArgDefinition`; beyond `expect_type` and `optional`,
+    /// you can set `nullable` (accept null) or `zval` (return raw zval pointer).
     ///
     /// Example:
     /// ```zig
     /// const args = try self.expectArgs(&.{
     ///     .{ .expect_type = .string },
     ///     .{ .expect_type = .int, .optional = true },
+    ///     .{ .expect_type = .int, .nullable = true },
     /// });
     /// const name: []const u8 = args[0];
     /// const age: ?i64 = args[1];
+    /// const count: Nullable(i64) = args[2];
     /// ```
     pub inline fn expectArgs(
         self: *Call,
-        comptime opts: []const ExpectArgOption,
-    ) (ExpectArgError || errors.WrongParameterCountError)!ExpectArgsType(opts) {
+        comptime defs: []const ExpectArgDefinition,
+    ) ExpectArgsError!ExpectArgsType(defs) {
         comptime {
             var seen_optional = false;
-            for (opts) |opt| {
+            for (defs) |opt| {
                 if (seen_optional and !opt.optional) {
                     @compileError("required argument after optional");
                 }
@@ -141,18 +151,18 @@ pub const Call = opaque {
 
         const min = comptime min: {
             var count: u32 = 0;
-            for (opts) |opt| {
+            for (defs) |opt| {
                 if (!opt.optional) count += 1;
             }
             break :min count;
         };
-        const max: u32 = @intCast(opts.len);
+        const max: u32 = @intCast(defs.len);
 
         try self.expectArgCount(min, max);
 
-        const Result = ExpectArgsType(opts);
+        const Result = ExpectArgsType(defs);
         var result: Result = undefined;
-        inline for (opts, 0..) |opt, i| {
+        inline for (defs, 0..) |opt, i| {
             result[i] = try self.expectArg(@intCast(i + 1), opt);
         }
         return result;
@@ -162,36 +172,83 @@ pub const Call = opaque {
     pub const ExpectArgError = errors.ArgumentCountError || errors.ArgumentTypeError;
 
     /// Configuration for a single argument in `expectArg` / `expectArgs`.
-    pub const ExpectArgOption = struct {
+    pub const ExpectArgDefinition = struct {
         /// Expected PHP type for this argument.
-        expect_type: Zval.Kind = .mixed,
+        expect_type: Zval.Kind,
         /// When true, argument may be omitted (returns null).
         optional: bool = false,
+
+        // These options are only valid when expect_type != .mixed:
+
+        /// When true, allows null in addition to the expected type (cannot be .mixed).
+        nullable: bool = false,
+        /// When true, returns the raw zval pointer instead of converting to a Zig type (cannot be .mixed).
+        zval: bool = false,
     };
 
-    fn ExpectArgType(comptime opt: ExpectArgOption) type {
-        const T = Zval.Type(opt.expect_type);
-        return if (opt.optional) ?T else T;
+    /// Returned when `nullable` is set: distinguishes "null was passed" (.null) from "argument omitted" (?T).
+    pub fn Nullable(comptime T: type) type {
+        return union(enum) { null, value: T };
+    }
+
+    /// Compute the Zig return type for a single argument definition.
+    fn ExpectArgType(comptime def: ExpectArgDefinition) type {
+        comptime {
+            const T = if (def.zval)
+                *c.zval
+            else if (def.expect_type != .mixed and def.nullable)
+                Nullable(Zval.Type(def.expect_type))
+            else
+                Zval.Type(def.expect_type);
+            return if (def.optional) ?T else T;
+        }
     }
 
     /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
     /// When optional is true, returns null if the argument was not passed.
+    ///
+    /// See `ExpectArgDefinition` for the full set of options (`nullable`, `zval`).
+    /// When using `expectArgs`, this is called automatically — prefer `expectArgs` for multi-arg cases.
     pub inline fn expectArg(
         self: *Call,
         n: u32,
-        comptime opt: ExpectArgOption,
-    ) ExpectArgError!ExpectArgType(opt) {
+        comptime def: ExpectArgDefinition,
+    ) ExpectArgError!ExpectArgType(def) {
+        comptime {
+            if (def.expect_type == .mixed and (def.nullable or def.zval)) {
+                @compileError("arg[" ++ n ++ "] invalid ExpectArgDefinition: 'mixed' cannot be nullable or a raw zval");
+            }
+        }
+
         if (n > self.numArgs()) {
-            @branchHint(.cold);
-            return if (comptime opt.optional)
+            return if (comptime def.optional)
                 null
             else
                 errors.argumentCountError("missing required argument #%d", .{n});
         }
 
         const zv = self.arg(n);
-        return Zval.native.as(zv, opt.expect_type) catch
-            errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(opt.expect_type).ptr, @tagName(Zval.native.kind(zv)).ptr });
+
+        if (comptime def.expect_type == .mixed) {
+            return zv; // no type checking for 'mixed'
+        }
+
+        // Nullable
+        if (comptime def.nullable) {
+            if (native.is(zv, .null)) return .null; // early return for null case
+            if (native.is(zv, def.expect_type)) {
+                return .{ .value = if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type) };
+            } else {
+                return errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ @tagName(def.expect_type).ptr, @tagName(native.kind(zv)).ptr });
+            }
+        }
+
+        // Regular type check
+        if (native.is(zv, def.expect_type)) {
+            return if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type);
+        } else {
+            return errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(def.expect_type).ptr, @tagName(native.kind(zv)).ptr });
+        }
     }
 
     /// Parse function parameters according to a type specification.
