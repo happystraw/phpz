@@ -107,11 +107,11 @@ pub const Call = opaque {
     /// Error set for `expectArgs`: argument count mismatch, missing required argument, or type mismatch.
     pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError;
 
-    fn ExpectArgsType(comptime defs: []const ExpectArgDefinition) type {
+    fn ExpectArgsType(comptime metas: []const ExpectArgKind.Meta) type {
         comptime {
-            var types: [defs.len]type = undefined;
-            for (defs, 0..) |def, i| {
-                types[i] = ExpectArgType(def);
+            var types: [metas.len]type = undefined;
+            for (metas, 0..) |meta, i| {
+                types[i] = ExpectArgType(meta);
             }
             return @Tuple(&types);
         }
@@ -120,15 +120,14 @@ pub const Call = opaque {
     /// Extract all arguments with compile-time validation.
     /// Optionals must come after required args. min/max derived automatically.
     ///
-    /// Each entry is an `ExpectArgDefinition`; beyond `expect_type` and `optional`,
-    /// you can set `nullable` (accept null) or `zval` (return raw zval pointer).
+    /// Each entry is an `ExpectArgKind.Meta` tagged union literal:
     ///
     /// Example:
     /// ```zig
     /// const args = try self.expectArgs(&.{
-    ///     .{ .expect_type = .string },
-    ///     .{ .expect_type = .int, .optional = true },
-    ///     .{ .expect_type = .int, .nullable = true },
+    ///     .{ .string = .{} },
+    ///     .{ .int = .{ .optional = true } },
+    ///     .{ .int = .{ .nullable = true } },
     /// });
     /// const name: []const u8 = args[0];
     /// const age: ?i64 = args[1];
@@ -136,93 +135,165 @@ pub const Call = opaque {
     /// ```
     pub inline fn expectArgs(
         self: *Call,
-        comptime defs: []const ExpectArgDefinition,
-    ) ExpectArgsError!ExpectArgsType(defs) {
+        comptime metas: []const ExpectArgKind.Meta,
+    ) ExpectArgsError!ExpectArgsType(metas) {
         comptime {
             var seen_optional = false;
-            for (defs) |opt| {
-                if (seen_optional and !opt.optional) {
+            for (metas) |meta| {
+                if (seen_optional and !meta.isOptional()) {
                     @compileError("required argument after optional");
                 }
-                if (opt.optional) seen_optional = true;
+                if (meta.isOptional()) seen_optional = true;
             }
         }
 
         const min = comptime min: {
             var count: u32 = 0;
-            for (defs) |opt| {
-                if (!opt.optional) count += 1;
+            for (metas) |meta| {
+                if (!meta.isOptional()) count += 1;
             }
             break :min count;
         };
-        const max: u32 = @intCast(defs.len);
+        const max: u32 = @intCast(metas.len);
 
         try self.expectArgCount(min, max);
 
-        const Result = ExpectArgsType(defs);
+        const Result = ExpectArgsType(metas);
         var result: Result = undefined;
-        inline for (defs, 0..) |opt, i| {
-            result[i] = try self.expectArg(@intCast(i + 1), opt);
+        inline for (metas, 0..) |meta, i| {
+            result[i] = try self.expectArg(@intCast(i + 1), meta);
         }
         return result;
     }
 
     pub const ExpectArgError = errors.ArgumentTypeError || errors.ArgumentValueError;
 
-    /// Configuration for a single argument in `expectArg` / `expectArgs`.
-    pub const ExpectArgDefinition = struct {
-        /// Expected PHP type for this argument.
-        expect_type: Zval.Kind,
-        /// When true, argument may be omitted (returns null).
-        optional: bool = false,
+    /// Argument parsing type tags, aligned with ZPP (fast zend_parse_parameters).
+    ///
+    /// Each member maps to a ZPP type spec and macro:
+    ///
+    ///   ExpectArgKind    ZPP spec    ZPP macro
+    ///   ─────────────    ────────    ─────────
+    ///   .int             'l'         Z_PARAM_LONG
+    ///   .float           'd'         Z_PARAM_DOUBLE
+    ///   .string          's'/'S'     Z_PARAM_STR
+    ///   .bool            'b'         Z_PARAM_BOOL
+    ///   .array           'a'/'h'     Z_PARAM_ARRAY / Z_PARAM_ARRAY_HT
+    ///   .object          'o'         Z_PARAM_OBJECT
+    ///   .resource        'r'         Z_PARAM_RESOURCE
+    ///   .reference       —           (internal zval type, no ZPP macro)
+    ///   .mixed           'z'         Z_PARAM_ZVAL
+    ///
+    /// TODO: .callable ('f' / Z_PARAM_FUNC), .iterable (Z_PARAM_ITERABLE)
+    ///
+    /// null is handled via the `nullable` flag, not as a standalone type.
+    pub const ExpectArgKind = enum {
+        int,
+        float,
+        string,
+        bool,
+        array,
+        object,
+        resource,
+        reference,
+        mixed,
 
-        // These options are only valid when expect_type != .mixed:
+        // TODO: support these in expectArg / expectArgs:
+        // callable,
+        // iterable,
 
-        /// When true, allows null in addition to the expected type (cannot be .mixed).
-        nullable: bool = false,
-        /// When true, returns the raw zval pointer instead of converting to a Zig type (cannot be .mixed).
-        zval: bool = false,
-        /// Expected class type, must be defined via `phpz.Class` / `phpz.SimpleClass`,
-        /// or a container which has a `entry` decl as the class entry.
-        class: ?type = null,
+        fn BuildMeta(ak: ExpectArgKind) type {
+            return switch (ak) {
+                .mixed => struct { optional: bool = false }, // TODO: union types?
+                .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, class: ?type = null },
+                else => struct { optional: bool = false, nullable: bool = false, zval: bool = false },
+            };
+        }
+
+        pub const Meta = union(ExpectArgKind) {
+            int: BuildMeta(.int),
+            float: BuildMeta(.float),
+            string: BuildMeta(.string),
+            bool: BuildMeta(.bool),
+            array: BuildMeta(.array),
+            object: BuildMeta(.object),
+            resource: BuildMeta(.resource),
+            reference: BuildMeta(.reference),
+            mixed: BuildMeta(.mixed),
+
+            pub fn isOptional(self: Meta) bool {
+                return switch (self) {
+                    inline else => |m| m.optional,
+                };
+            }
+        };
+
+        pub fn toZvalKind(self: ExpectArgKind) Zval.Kind {
+            return switch (self) {
+                .int => .int,
+                .float => .float,
+                .string => .string,
+                .bool => .bool,
+                .array => .array,
+                .object => .object,
+                .resource => .resource,
+                .reference => .reference,
+                .mixed => .mixed,
+            };
+        }
+
+        pub fn InnerType(self: ExpectArgKind) type {
+            return switch (self) {
+                inline else => Zval.Type(self.toZvalKind()),
+            };
+        }
     };
+
+    pub fn ExpectArgType(meta: ExpectArgKind.Meta) type {
+        return switch (meta) {
+            .mixed => |m| if (m.optional) ?*c.zval else *c.zval,
+            inline else => |m| {
+                const tag: ExpectArgKind = meta;
+                const T = if (m.zval)
+                    *c.zval
+                else if (m.nullable)
+                    Nullable(tag.InnerType())
+                else
+                    tag.InnerType();
+                return if (m.optional) ?T else T;
+            },
+        };
+    }
 
     /// Returned when `nullable` is set: distinguishes "null was passed" (.null) from "argument omitted" (?T).
     pub fn Nullable(comptime T: type) type {
-        return union(enum) { null, value: T };
-    }
+        return union(enum) {
+            null,
+            value: T,
 
-    /// Compute the Zig return type for a single argument definition.
-    fn ExpectArgType(comptime def: ExpectArgDefinition) type {
-        comptime {
-            const T = if (def.zval)
-                *c.zval
-            else if (def.expect_type != .mixed and def.nullable)
-                Nullable(Zval.Type(def.expect_type))
-            else
-                Zval.Type(def.expect_type);
-            return if (def.optional) ?T else T;
-        }
+            pub fn asOptional(self: @This()) ?T {
+                return switch (self) {
+                    .null => null,
+                    .value => |v| v,
+                };
+            }
+        };
     }
 
     /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
-    /// When optional is true, returns null if the argument was not passed.
     ///
-    /// See `ExpectArgDefinition` for the full set of options (`nullable`, `zval`).
-    /// When using `expectArgs`, this is called automatically — prefer `expectArgs` for multi-arg cases.
+    /// Accepts an `ExpectArgKind.Meta` tagged union specifying the expected type
+    /// and options (optional, nullable, zval, class for .object).
+    ///
+    /// Prefer `expectArgs` for multi-arg cases.
     pub inline fn expectArg(
         self: *Call,
         n: u32,
-        comptime def: ExpectArgDefinition,
-    ) ExpectArgError!ExpectArgType(def) {
+        comptime meta: ExpectArgKind.Meta,
+    ) ExpectArgError!ExpectArgType(meta) {
         comptime {
-            if (def.expect_type == .mixed and (def.nullable or def.zval)) {
-                @compileError("nullable and zval options are not valid when expect_type is .mixed");
-            }
-            if (def.class) |cls| {
-                if (def.expect_type != .object) {
-                    @compileError("class option is only valid when expect_type is .object");
-                }
+            if (meta == .object and meta.object.class != null) {
+                const cls: type = meta.object.class.?;
                 if (!@hasDecl(cls, "entry") or @TypeOf(cls.entry) != *ClassEntry) {
                     @compileError("class option must be a phpz.Class or phpz.SimpleClass with an entry field of type *ClassEntry");
                 }
@@ -230,7 +301,7 @@ pub const Call = opaque {
         }
 
         if (n > self.numArgs()) {
-            if (comptime def.optional)
+            if (comptime meta.isOptional())
                 return null
             else {
                 @branchHint(.cold);
@@ -239,48 +310,48 @@ pub const Call = opaque {
         }
 
         const zv = self.arg(n);
+        const tag: ExpectArgKind = meta;
+        switch (comptime meta) {
+            .mixed => return zv,
+            inline else => |m| {
+                if (comptime m.nullable) {
+                    // Branch: Nullable
+                    if (native.is(zv, .null)) return .null;
+                    if (comptime meta == .object) if (comptime m.class) |cls| {
+                        const ce: *ClassEntry = cls.entry;
+                        const obj: *zend.Object = native.as(zv, .object) catch
+                            return errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ ce.name().ptr, native.kind(zv).cstr() });
 
-        if (comptime def.expect_type == .mixed) {
-            return zv; // no type checking for 'mixed'
-        }
+                        return if (obj.instanceof(ce))
+                            .{ .value = if (comptime m.zval) zv else obj }
+                        else
+                            errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ ce.name().ptr, obj.class().name().ptr });
+                    };
 
-        // Nullable type check
-        {
-            if (comptime def.nullable) {
-                if (native.is(zv, .null)) return .null; // early return for null case
-                if (comptime def.class) |cls| {
-                    const obj: *zend.Object = native.as(zv, .object) catch
-                        return errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ cls.entry.name().ptr, native.kind(zv).cstr() });
-                    return if (obj.instanceof(cls.entry))
-                        .{ .value = if (comptime def.zval) zv else obj }
+                    const zk = comptime tag.toZvalKind();
+                    return if (native.is(zv, zk))
+                        .{ .value = if (comptime m.zval) zv else native.asUnchecked(zv, zk) }
                     else
-                        errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ cls.entry.name().ptr, obj.class().name().ptr });
+                        errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ @tagName(tag).ptr, native.kind(zv).cstr() });
+                } else {
+                    // Branch: Non-nullable
+                    if (comptime meta == .object) if (comptime m.class) |cls| {
+                        const ce: *ClassEntry = cls.entry;
+                        const obj: *zend.Object = native.as(zv, .object) catch
+                            return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ ce.name().ptr, native.kind(zv).cstr() });
+
+                        return if (obj.instanceof(ce))
+                            if (comptime m.zval) zv else obj
+                        else
+                            errors.argumentTypeError(n, "must be instance of %s, %s given", .{ ce.name().ptr, obj.class().name().ptr });
+                    };
+                    const zk = comptime tag.toZvalKind();
+                    return if (native.is(zv, zk))
+                        if (comptime m.zval) zv else native.asUnchecked(zv, zk)
+                    else
+                        errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(tag).ptr, native.kind(zv).cstr() });
                 }
-
-                return if (native.is(zv, def.expect_type))
-                    .{ .value = if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type) }
-                else
-                    errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ def.expect_type.cstr(), native.kind(zv).cstr() });
-            }
-        }
-
-        // Non-nullable type check
-        {
-            // Class check
-            if (comptime def.class) |cls| {
-                const obj: *zend.Object = native.as(zv, .object) catch
-                    return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ cls.entry.name().ptr, native.kind(zv).cstr() });
-                return if (obj.instanceof(cls.entry))
-                    if (comptime def.zval) zv else obj
-                else
-                    return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ cls.entry.name().ptr, obj.class().name().ptr });
-            }
-
-            // Regular type check
-            return if (native.is(zv, def.expect_type))
-                if (comptime def.zval) zv else native.asUnchecked(zv, def.expect_type)
-            else
-                errors.argumentTypeError(n, "must be of type %s, %s given", .{ def.expect_type.cstr(), native.kind(zv).cstr() });
+            },
         }
     }
 
@@ -558,6 +629,65 @@ pub const Call = opaque {
         return if (raw) |ce| .from(ce) else null;
     }
 };
+
+test "ExpectArgKind.toZvalKind" {
+    try std.testing.expectEqual(Zval.Kind.int, Call.ExpectArgKind.int.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.float, Call.ExpectArgKind.float.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.string, Call.ExpectArgKind.string.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.bool, Call.ExpectArgKind.bool.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.array, Call.ExpectArgKind.array.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.object, Call.ExpectArgKind.object.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.resource, Call.ExpectArgKind.resource.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.reference, Call.ExpectArgKind.reference.toZvalKind());
+    try std.testing.expectEqual(Zval.Kind.mixed, Call.ExpectArgKind.mixed.toZvalKind());
+}
+
+test "ExpectArgKind.InnerType" {
+    try std.testing.expectEqual(i64, Call.ExpectArgKind.int.InnerType());
+    try std.testing.expectEqual(f64, Call.ExpectArgKind.float.InnerType());
+    try std.testing.expectEqual([]const u8, Call.ExpectArgKind.string.InnerType());
+    try std.testing.expectEqual(bool, Call.ExpectArgKind.bool.InnerType());
+}
+
+test "ExpectArgKind.Meta common fields" {
+    const meta_int: Call.ExpectArgKind.Meta = .{ .int = .{ .optional = true } };
+    const meta_str: Call.ExpectArgKind.Meta = .{ .string = .{ .optional = false } };
+
+    try std.testing.expect(meta_int.isOptional());
+    try std.testing.expect(!meta_str.isOptional());
+}
+
+test "ExpectArgType" {
+    try std.testing.expectEqual(i64, Call.ExpectArgType(.{ .int = .{} }));
+    try std.testing.expectEqual(f64, Call.ExpectArgType(.{ .float = .{ .optional = true } }));
+    try std.testing.expectEqual(Call.Nullable(i64), Call.ExpectArgType(.{ .int = .{ .nullable = true } }));
+    try std.testing.expectEqual(*c.zval, Call.ExpectArgType(.{ .int = .{ .zval = true } }));
+    try std.testing.expectEqual(?*c.zval, Call.ExpectArgType(.{ .int = .{ .zval = true, .optional = true } }));
+    try std.testing.expectEqual(*c.zval, Call.ExpectArgType(.{ .mixed = .{} }));
+    try std.testing.expectEqual(?*c.zval, Call.ExpectArgType(.{ .mixed = .{ .optional = true } }));
+}
+
+test "Nullable" {
+    const n: Call.Nullable(i64) = .null;
+    try std.testing.expect(n == .null);
+
+    const v: Call.Nullable(i64) = .{ .value = 42 };
+    try std.testing.expectEqual(42, v.value);
+}
+
+test "ExpectArgCount" {
+    const IntMeta = Call.ExpectArgKind.BuildMeta(.int);
+    const int_meta: IntMeta = .{};
+    try std.testing.expectEqual(false, int_meta.optional);
+    try std.testing.expectEqual(false, int_meta.nullable);
+    try std.testing.expectEqual(false, int_meta.zval);
+
+    const ObjMeta = Call.ExpectArgKind.BuildMeta(.object);
+    const obj_meta: ObjMeta = .{};
+    try std.testing.expectEqual(false, obj_meta.optional);
+    try std.testing.expectEqual(false, obj_meta.nullable);
+    try std.testing.expectEqual(false, obj_meta.zval);
+}
 
 test {
     @import("std").testing.refAllDecls(Ctx);

@@ -3,6 +3,7 @@ const std = @import("std");
 const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const native = @import("../zval.zig").Zval.native;
+const Object = @import("object.zig").Object;
 
 /// Parsed callable ready for invocation.
 ///
@@ -23,6 +24,41 @@ pub const Callable = extern struct {
         CallFailed,
         PhpException,
     };
+
+    /// Parse a zval into this Callable (fills fci and fcc).
+    ///
+    /// Equivalent to PHP's `zend_parse_arg_func()` — resolves a zval containing
+    /// a function name, closure, `['class','method']` array, or invocable object
+    /// into a `zend_fcall_info`/`zend_fcall_info_cache` pair ready for `call()`.
+    ///
+    /// Call trampolines are released after parsing for leak safety
+    /// (`zend_call_function` re-fetches them automatically).
+    ///
+    /// When `nullable` is true and the zval is null, the callable is zeroed:
+    /// `fci.size` is set to 0 and `fcc.function_handler` to null.
+    /// `isCallable()` returns false for such a callable.
+    ///
+    /// Returns `true` if the zval contained a valid callable (or null when allowed).
+    /// Returns `false` if the zval is not callable (a PHP error may be pending).
+    ///
+    /// `error_str` optionally receives the error message from `zend_fcall_info_init`
+    /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
+    pub fn parse(self: *Callable, zv: *c.zval, nullable: bool, err: ?*[*:0]u8) bool {
+        if (nullable and native.is(zv, .null)) {
+            self.fci.size = 0;
+            self.fcc.function_handler = null;
+            return true;
+        }
+        if (c.zend_fcall_info_init(zv, 0, &self.fci, &self.fcc, null, @ptrCast(err)) != c.SUCCESS) {
+            @branchHint(.unlikely);
+            return false;
+        }
+        // Release call trampolines: the function may not get called, in which case
+        // the trampoline will leak. Force it to be refetched during
+        // zend_call_function instead.
+        c.zend_release_fcall_info_cache(&self.fcc);
+        return true;
+    }
 
     /// Check whether a zval contains a callable.
     pub fn isCallable(zv: *c.zval) bool {
@@ -77,15 +113,13 @@ pub const Callable = extern struct {
     /// Prevents premature destruction when the callable is retained.
     pub inline fn addref(self: *Callable) void {
         native.tryAddref(&self.fci.function_name);
-        if (self.fcc.object) |obj|
-            _ = c.zend_gc_addref(&obj.*.gc);
+        if (self.fcc.object) |obj| Object.addref(.from(obj));
     }
 
     /// Decrement refcounts on `function_name` and `fcc.object`.
     pub inline fn delref(self: *Callable) void {
         native.dtor(&self.fci.function_name);
-        if (self.fcc.object) |obj|
-            _ = c.zend_gc_delref(&obj.*.gc);
+        if (self.fcc.object) |obj| Object.release(.from(obj));
     }
 
     /// Release call trampoline from the cache.

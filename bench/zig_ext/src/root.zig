@@ -31,14 +31,14 @@ fn benchEmpty() void {}
 
 fn benchParseMulti(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .int },
-        .{ .expect_type = .string },
-        .{ .expect_type = .float },
-        .{ .expect_type = .bool },
-        .{ .expect_type = .array },
-        .{ .expect_type = .object },
-        .{ .expect_type = .mixed },
-        .{ .expect_type = .int, .optional = true, .nullable = true },
+        .{ .int = .{} },
+        .{ .string = .{} },
+        .{ .float = .{} },
+        .{ .bool = .{} },
+        .{ .array = .{} },
+        .{ .object = .{} },
+        .{ .mixed = .{} },
+        .{ .int = .{ .optional = true, .nullable = true } },
     });
     _ = &args;
 }
@@ -71,7 +71,7 @@ fn benchParseMultiPp(ctx: phpz.Ctx) !void {
 // ── 3. Array sum expect ─────────────────────────────────────────────
 
 fn benchArraySumExpect(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{.{ .expect_type = .array }});
+    const args = try ctx.call.expectArgs(&.{.{ .array = .{} }});
     const arr = args[0];
 
     var sum: i64 = 0;

@@ -5,8 +5,8 @@ const User = extern struct {
 
     pub fn construct(self: *User, ctx: phpz.Ctx) !void {
         const name, const age = try ctx.call.expectArgs(&.{
-            .{ .expect_type = .string },
-            .{ .expect_type = .mixed, .optional = true },
+            .{ .string = .{} },
+            .{ .mixed = .{ .optional = true } },
         });
 
         const user: *Class = .from(.impl, self);
@@ -21,7 +21,7 @@ const User = extern struct {
 
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
-            .{ .expect_type = .mixed },
+            .{ .mixed = .{} },
         });
         const zv = args[0];
 

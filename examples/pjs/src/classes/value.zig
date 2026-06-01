@@ -21,8 +21,8 @@ pub const Value = extern struct {
         self.ctx = null;
 
         const ctx_obj: *phpz.zend.Object, const value_zv: ?*c.zval = try ctx.call.expectArgs(&.{
-            .{ .expect_type = .object, .class = context.Class },
-            .{ .expect_type = .mixed, .optional = true },
+            .{ .object = .{ .class = context.Class } },
+            .{ .mixed = .{ .optional = true } },
         });
 
         self.ctx = .from(.std, ctx_obj.ptr());

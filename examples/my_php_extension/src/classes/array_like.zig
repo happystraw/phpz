@@ -17,7 +17,7 @@ const ArrayLike = extern struct {
 
     pub fn construct(self: *ArrayLike, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
-            .{ .expect_type = .array, .optional = true },
+            .{ .array = .{ .optional = true } },
         });
         if (args[0]) |arr| {
             self.data.copy(arr);

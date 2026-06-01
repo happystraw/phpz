@@ -13,7 +13,7 @@ fn hello() void {
 
 fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .string },
+        .{ .string = .{} },
     });
     const name = args[0];
 
@@ -25,7 +25,7 @@ fn greet(ctx: phpz.Ctx) !void {
 
 fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .mixed },
+        .{ .mixed = .{} },
     });
     const zv = args[0];
 
@@ -73,12 +73,12 @@ fn listStatuses(ctx: phpz.Ctx) !void {
 /// Covers: required, optional, nullable, and zval flag.
 fn testExpectArgScalars(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .string },
-        .{ .expect_type = .int },
-        .{ .expect_type = .float },
-        .{ .expect_type = .bool, .optional = true },
-        .{ .expect_type = .string, .optional = true, .nullable = true },
-        .{ .expect_type = .int, .optional = true, .zval = true },
+        .{ .string = .{} },
+        .{ .int = .{} },
+        .{ .float = .{} },
+        .{ .bool = .{ .optional = true } },
+        .{ .string = .{ .optional = true, .nullable = true } },
+        .{ .int = .{ .optional = true, .zval = true } },
     });
 
     const str: []const u8 = args[0];
@@ -118,9 +118,9 @@ fn testExpectArgScalars(ctx: phpz.Ctx) !void {
 /// Covers: class instanceof checks, nullable class with null passed.
 fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .array },
-        .{ .expect_type = .object, .class = UserClass },
-        .{ .expect_type = .object, .class = UserClass, .optional = true, .nullable = true },
+        .{ .array = .{} },
+        .{ .object = .{ .class = UserClass } },
+        .{ .object = .{ .class = UserClass, .optional = true, .nullable = true } },
     });
 
     const data: *phpz.zend.Array = args[0];
@@ -166,7 +166,7 @@ fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
 /// Test expectArgs with .mixed type — returns the raw zval pointer directly.
 fn testExpectArgMixed(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .expect_type = .mixed },
+        .{ .mixed = .{} },
     });
 
     const zv: *c.zval = args[0];
