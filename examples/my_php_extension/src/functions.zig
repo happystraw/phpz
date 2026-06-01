@@ -25,15 +25,10 @@ fn greet(ctx: phpz.Ctx) !void {
 
 fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .mixed = .{} },
+        .{ .reference = .{} },
     });
     const zv = args[0];
-
-    const raw = if (Zval.native.is(zv, .reference))
-        Zval.native.asUnchecked(zv, .reference).val()
-    else
-        zv;
-
+    const raw = zv.val();
     const current = Zval.native.asUnchecked(raw, .int);
     Zval.native.set(raw, .int, current + 1);
 }
@@ -177,13 +172,15 @@ fn testExpectArgMixed(ctx: phpz.Ctx) !void {
 }
 
 fn map(ctx: phpz.Ctx) !void {
-    var arr_zv: *c.zval = undefined;
-    var cb: phpz.zend.Callable = undefined;
-    // TODO: callable expect arg supports
-    try ctx.call.parse("af", .{ &arr_zv, &cb.fci, &cb.fcc });
+    var cb: phpz.zend.Callable = .nil;
+    // TODO: more simple way to parse a callable arg without defining a target struct?
+    const ht, const cb_zv = try ctx.call.expectArgs(&.{
+        .{ .array = .{} },
+        .{ .callable = .{} },
+    });
+    _ = cb.parse(cb_zv, false, null); // parse twice !
 
     var result = phpz.Zval.Array.empty(ctx.ret.ptr());
-    const ht = Zval.native.asUnchecked(arr_zv, .array);
     var it = ht.fastIterator();
     while (it.next()) |entry| {
         var rv = Zval.native.undef;

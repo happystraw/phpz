@@ -25,6 +25,13 @@ pub const Callable = extern struct {
         PhpException,
     };
 
+    pub const nil: Callable = blk: {
+        var tmp: Callable = undefined;
+        tmp.fci.size = 0;
+        tmp.fcc.function_handler = null;
+        break :blk tmp;
+    };
+
     /// Parse a zval into this Callable (fills fci and fcc).
     ///
     /// Equivalent to PHP's `zend_parse_arg_func()` — resolves a zval containing
