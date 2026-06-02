@@ -205,7 +205,6 @@ pub const Call = opaque {
             return switch (ak) {
                 .mixed => struct { optional: bool = false }, // TODO: union types?
                 .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, class: ?type = null },
-                .callable => struct { optional: bool = false, nullable: bool = false, target: ?type = null },
                 else => struct { optional: bool = false, nullable: bool = false, zval: bool = false },
             };
         }
@@ -300,11 +299,6 @@ pub const Call = opaque {
                 if (!@hasDecl(cls, "entry") or @TypeOf(cls.entry) != *ClassEntry) {
                     @compileError("object class option must be a phpz.Class or phpz.SimpleClass with an entry field of type *ClassEntry");
                 }
-            } else if (meta == .callable and meta.callable.target != null) {
-                const target: type = meta.callable.target.?;
-                if (!@hasDecl(target, "cb") or @TypeOf(target.cb) != *zend.Callable) {
-                    @compileError("callable target option must be a type with a cb field of type *zend.Callable");
-                }
             }
         }
 
@@ -322,19 +316,17 @@ pub const Call = opaque {
         switch (comptime meta) {
             .mixed => return zv,
             .callable => |m| {
-                var cb: *zend.Callable = if (comptime m.target) |t| t.cb else blk: {
-                    var discard: zend.Callable = undefined;
-                    break :blk &discard;
-                };
-                var err: [*:0]u8 = undefined;
-                if (!cb.parse(zv, comptime m.nullable, &err)) {
-                    return errors.argumentTypeError(
-                        n,
-                        "must be a valid callback" ++ (if (comptime m.nullable) " or null" else "") ++ ", %s",
-                        .{err},
-                    );
-                }
-                return if (comptime m.nullable) .{ .value = zv } else zv;
+                // var err: ?[*:0]u8 = null;
+                // if (!t.cb.parse(zv, comptime m.nullable, &err)) {
+                //     if (err) |e| {
+                //         defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
+                //         return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else "") ++ ", %s", .{e});
+                //     }
+                //     return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else ""), .{});
+                // }
+                if (!zend.Callable.isCallable(zv, comptime m.nullable))
+                    return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else ""), .{});
+                return zv;
             },
             inline else => |m| {
                 if (comptime m.nullable) {
@@ -355,7 +347,7 @@ pub const Call = opaque {
                     return if (native.is(zv, zk))
                         .{ .value = if (comptime m.zval) zv else native.asUnchecked(zv, zk) }
                     else
-                        errors.argumentTypeError(n, "must be of type %s or null, %s given", .{ @tagName(tag).ptr, native.kind(zv).cstr() });
+                        errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ " or null, %s given", .{native.kind(zv).cstr()});
                 } else {
                     // Branch: Non-nullable
                     if (comptime meta == .object) if (comptime m.class) |cls| {
@@ -372,7 +364,7 @@ pub const Call = opaque {
                     return if (native.is(zv, zk))
                         if (comptime m.zval) zv else native.asUnchecked(zv, zk)
                     else
-                        errors.argumentTypeError(n, "must be of type %s, %s given", .{ @tagName(tag).ptr, native.kind(zv).cstr() });
+                        errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ ", %s given", .{native.kind(zv).cstr()});
                 }
             },
         }
@@ -652,66 +644,6 @@ pub const Call = opaque {
         return if (raw) |ce| .from(ce) else null;
     }
 };
-
-test "ExpectArgKind.toZvalKind" {
-    try std.testing.expectEqual(Zval.Kind.int, Call.ExpectArgKind.int.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.float, Call.ExpectArgKind.float.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.string, Call.ExpectArgKind.string.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.bool, Call.ExpectArgKind.bool.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.array, Call.ExpectArgKind.array.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.object, Call.ExpectArgKind.object.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.resource, Call.ExpectArgKind.resource.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.reference, Call.ExpectArgKind.reference.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.mixed, Call.ExpectArgKind.mixed.toZvalKind());
-    try std.testing.expectEqual(Zval.Kind.mixed, Call.ExpectArgKind.callable.toZvalKind());
-}
-
-test "ExpectArgKind.InnerType" {
-    try std.testing.expectEqual(i64, Call.ExpectArgKind.int.InnerType());
-    try std.testing.expectEqual(f64, Call.ExpectArgKind.float.InnerType());
-    try std.testing.expectEqual([]const u8, Call.ExpectArgKind.string.InnerType());
-    try std.testing.expectEqual(bool, Call.ExpectArgKind.bool.InnerType());
-}
-
-test "ExpectArgKind.Meta common fields" {
-    const meta_int: Call.ExpectArgKind.Meta = .{ .int = .{ .optional = true } };
-    const meta_str: Call.ExpectArgKind.Meta = .{ .string = .{ .optional = false } };
-
-    try std.testing.expect(meta_int.isOptional());
-    try std.testing.expect(!meta_str.isOptional());
-}
-
-test "ExpectArgType" {
-    try std.testing.expectEqual(i64, Call.ExpectArgType(.{ .int = .{} }));
-    try std.testing.expectEqual(f64, Call.ExpectArgType(.{ .float = .{ .optional = true } }));
-    try std.testing.expectEqual(Call.Nullable(i64), Call.ExpectArgType(.{ .int = .{ .nullable = true } }));
-    try std.testing.expectEqual(*c.zval, Call.ExpectArgType(.{ .int = .{ .zval = true } }));
-    try std.testing.expectEqual(?*c.zval, Call.ExpectArgType(.{ .int = .{ .zval = true, .optional = true } }));
-    try std.testing.expectEqual(*c.zval, Call.ExpectArgType(.{ .mixed = .{} }));
-    try std.testing.expectEqual(?*c.zval, Call.ExpectArgType(.{ .mixed = .{ .optional = true } }));
-}
-
-test "Nullable" {
-    const n: Call.Nullable(i64) = .null;
-    try std.testing.expect(n == .null);
-
-    const v: Call.Nullable(i64) = .{ .value = 42 };
-    try std.testing.expectEqual(42, v.value);
-}
-
-test "ExpectArgCount" {
-    const IntMeta = Call.ExpectArgKind.BuildMeta(.int);
-    const int_meta: IntMeta = .{};
-    try std.testing.expectEqual(false, int_meta.optional);
-    try std.testing.expectEqual(false, int_meta.nullable);
-    try std.testing.expectEqual(false, int_meta.zval);
-
-    const ObjMeta = Call.ExpectArgKind.BuildMeta(.object);
-    const obj_meta: ObjMeta = .{};
-    try std.testing.expectEqual(false, obj_meta.optional);
-    try std.testing.expectEqual(false, obj_meta.nullable);
-    try std.testing.expectEqual(false, obj_meta.zval);
-}
 
 test {
     @import("std").testing.refAllDecls(Ctx);

@@ -50,7 +50,8 @@ pub const Callable = extern struct {
     ///
     /// `error_str` optionally receives the error message from `zend_fcall_info_init`
     /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
-    pub fn parse(self: *Callable, zv: *c.zval, nullable: bool, err: ?*[*:0]u8) bool {
+    pub fn parse(self: *Callable, zv: *c.zval, comptime nullable: bool, err: ?*?[*:0]u8) bool {
+        if (err) |e| e.* = null;
         if (nullable and native.is(zv, .null)) {
             self.fci.size = 0;
             self.fcc.function_handler = null;
@@ -68,7 +69,9 @@ pub const Callable = extern struct {
     }
 
     /// Check whether a zval contains a callable.
-    pub fn isCallable(zv: *c.zval) bool {
+    /// When `nullable` is true, a null zval is also accepted.
+    pub fn isCallable(zv: *c.zval, comptime nullable: bool) bool {
+        if (comptime nullable) if (native.is(zv, .null)) return true;
         return c.zend_is_callable(zv, 0, null);
     }
 
