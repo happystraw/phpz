@@ -20,16 +20,15 @@ pub const Callable = extern struct {
     /// Cache: resolved function handler, scope, object.
     fcc: c.zend_fcall_info_cache,
 
-    pub const Error = error{
-        CallFailed,
-        PhpException,
-    };
-
     pub const nil: Callable = blk: {
         var tmp: Callable = undefined;
         tmp.fci.size = 0;
         tmp.fcc.function_handler = null;
         break :blk tmp;
+    };
+
+    pub const ParseError = error{
+        NotCallable,
     };
 
     /// Parse a zval into this Callable (fills fci and fcc).
@@ -45,27 +44,26 @@ pub const Callable = extern struct {
     /// `fci.size` is set to 0 and `fcc.function_handler` to null.
     /// `isCallable()` returns false for such a callable.
     ///
-    /// Returns `true` if the zval contained a valid callable (or null when allowed).
-    /// Returns `false` if the zval is not callable (a PHP error may be pending).
+    /// Returns `error.NotCallable` if the zval is not callable
+    /// (a PHP error may be pending in `err`).
+    /// On success the `fci` and `fcc` fields are populated and ready for `call()`.
     ///
     /// `error_str` optionally receives the error message from `zend_fcall_info_init`
     /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
-    pub fn parse(self: *Callable, zv: *c.zval, comptime nullable: bool, err: ?*?[*:0]u8) bool {
+    pub fn parse(self: *Callable, zv: *c.zval, comptime nullable: bool, err: ?*?[*:0]u8) ParseError!void {
         if (err) |e| e.* = null;
         if (nullable and native.is(zv, .null)) {
             self.fci.size = 0;
             self.fcc.function_handler = null;
-            return true;
+            return;
         }
         if (c.zend_fcall_info_init(zv, 0, &self.fci, &self.fcc, null, @ptrCast(err)) != c.SUCCESS) {
-            @branchHint(.unlikely);
-            return false;
+            return error.NotCallable;
         }
         // Release call trampolines: the function may not get called, in which case
         // the trampoline will leak. Force it to be refetched during
         // zend_call_function instead.
         c.zend_release_fcall_info_cache(&self.fcc);
-        return true;
     }
 
     /// Check whether a zval contains a callable.
@@ -81,11 +79,13 @@ pub const Callable = extern struct {
         return self;
     }
 
+    pub const CallError = error{ CallFailed, PhpException };
+
     /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
     ///
     /// Returns `error.CallFailed` if the executor is inactive.
     /// Returns `error.PhpException` if the callable throws a PHP exception.
-    pub fn call(self: *Callable, args: anytype) Error!void {
+    pub fn call(self: *Callable, args: anytype) CallError!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("call: args must be a tuple, e.g. .{} or .{a, b}");
