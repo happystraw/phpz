@@ -7,7 +7,7 @@ const User = extern struct {
         const name, const age = try ctx.call.expectArgs(&.{
             .{ .string = .{} },
             .{ .mixed = .{ .optional = true } },
-        });
+        }, {});
 
         const user: *Class = .from(.impl, self);
         try user.updateProperty(.string, "name", name);
@@ -22,7 +22,7 @@ const User = extern struct {
     pub fn handle(self: *User, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .mixed = .{} },
-        });
+        }, {});
         const zv = args[0];
 
         const user: *Class = .from(.impl, self);

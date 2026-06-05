@@ -14,7 +14,7 @@ fn hello() void {
 fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
-    });
+    }, {});
     const name = args[0];
 
     var buffer: [4096]u8 = undefined;
@@ -26,7 +26,7 @@ fn greet(ctx: phpz.Ctx) !void {
 fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .reference = .{} },
-    });
+    }, {});
     const zv = args[0];
     const raw = zv.val();
     const current = Zval.native.asUnchecked(raw, .int);
@@ -74,7 +74,7 @@ fn testExpectArgScalars(ctx: phpz.Ctx) !void {
         .{ .bool = .{ .optional = true } },
         .{ .string = .{ .optional = true, .nullable = true } },
         .{ .int = .{ .optional = true, .zval = true } },
-    });
+    }, {});
 
     const str: []const u8 = args[0];
     const int_val: i64 = args[1];
@@ -114,8 +114,12 @@ fn testExpectArgScalars(ctx: phpz.Ctx) !void {
 fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .array = .{} },
-        .{ .object = .{ .class = UserClass } },
-        .{ .object = .{ .class = UserClass, .optional = true, .nullable = true } },
+        .{ .object = .{ .instanceof = true } },
+        .{ .object = .{ .instanceof = true, .optional = true, .nullable = true } },
+    }, .{
+        {},
+        .{ .class = UserClass.entry },
+        .{ .class = UserClass.entry },
     });
 
     const data: *phpz.zend.Array = args[0];
@@ -162,7 +166,7 @@ fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
 fn testExpectArgMixed(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .mixed = .{} },
-    });
+    }, {});
 
     const zv: *c.zval = args[0];
 
@@ -174,11 +178,17 @@ fn testExpectArgMixed(ctx: phpz.Ctx) !void {
 fn map(ctx: phpz.Ctx) !void {
     var cb: phpz.zend.Callable = .nil;
     // TODO: more simple way to parse a callable arg without defining a target struct?
-    const ht, const cb_zv = try ctx.call.expectArgs(&.{
-        .{ .array = .{} },
-        .{ .callable = .{} },
-    });
-    _ = cb.parse(cb_zv, false, null); // parse twice !
+    const ht, _ = try ctx.call.expectArgs(
+        &.{
+            .{ .array = .{} },
+            .{ .callable = .{ .target = true } },
+        },
+        .{
+            {},
+            .{ .cb = &cb },
+        },
+    );
+    // _ = cb.parse(cb_zv, false, null); // parse twice !
 
     var result = phpz.Zval.Array.empty(ctx.ret.ptr());
     var it = ht.fastIterator();

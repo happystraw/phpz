@@ -39,7 +39,7 @@ fn benchParseMulti(ctx: phpz.Ctx) !void {
         .{ .object = .{} },
         .{ .mixed = .{} },
         .{ .int = .{ .optional = true, .nullable = true } },
-    });
+    }, {});
     _ = &args;
 }
 
@@ -71,7 +71,7 @@ fn benchParseMultiPp(ctx: phpz.Ctx) !void {
 // ── 3. Array sum expect ─────────────────────────────────────────────
 
 fn benchArraySumExpect(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{.{ .array = .{} }});
+    const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
     const arr = args[0];
 
     var sum: i64 = 0;

@@ -28,7 +28,7 @@ fn hello() void {
 fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
-    });
+    }, {});
     const name = args[0];
 
     var buffer: [256]u8 = undefined;

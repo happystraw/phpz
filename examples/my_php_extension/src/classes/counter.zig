@@ -4,21 +4,21 @@ pub const Counter = extern struct {
     pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{ .optional = true } },
-        });
+        }, {});
         self.n = args[0] orelse 0;
     }
 
     pub fn add(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{} },
-        });
+        }, {});
         self.n +|= args[0];
     }
 
     pub fn dec(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{} },
-        });
+        }, {});
         self.n -|= args[0];
     }
 

@@ -107,61 +107,87 @@ pub const Call = opaque {
     /// Error set for `expectArgs`: argument count mismatch, missing required argument, or type mismatch.
     pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError;
 
-    fn ExpectArgsType(comptime metas: []const ExpectArgKind.Meta) type {
+    fn ExpectArgResults(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
-            var types: [metas.len]type = undefined;
-            for (metas, 0..) |meta, i| {
-                types[i] = ExpectArgType(meta);
+            var types: [specs.len]type = undefined;
+            for (specs, 0..) |spec, i| {
+                types[i] = ExpectArgResult(spec);
             }
             return @Tuple(&types);
+        }
+    }
+
+    fn ExpectArgWiths(comptime specs: []const ExpectArgKind.Spec) type {
+        comptime {
+            var types: [specs.len]type = undefined;
+            var is_all_void = true;
+            for (specs, 0..) |spec, i| {
+                types[i] = ExpectArgKind.With(spec);
+                if (is_all_void and types[i] != void) is_all_void = false;
+            }
+            return if (is_all_void) void else @Tuple(&types);
         }
     }
 
     /// Extract all arguments with compile-time validation.
     /// Optionals must come after required args. min/max derived automatically.
     ///
-    /// Each entry is an `ExpectArgKind.Meta` tagged union literal:
+    /// Each entry is an `ExpectArgKind.Spec` tagged union literal. The `withs`
+    /// parameter is `ExpectArgWiths(specs)` — `{}` when all specs are scalar,
+    /// or a tuple of per-position `With` structs for callable/object bindings.
     ///
     /// Example:
     /// ```zig
+    /// // Scalar only — withs is void, pass {}:
     /// const args = try self.expectArgs(&.{
     ///     .{ .string = .{} },
     ///     .{ .int = .{ .optional = true } },
     ///     .{ .int = .{ .nullable = true } },
-    /// });
+    /// }, {});
     /// const name: []const u8 = args[0];
     /// const age: ?i64 = args[1];
     /// const count: Nullable(i64) = args[2];
+    ///
+    /// // With callable binding:
+    /// var cb: zend.Callable = .nil;
+    /// const args2 = try self.expectArgs(&.{
+    ///     .{ .callable = .{ .target = true } },
+    ///     .{ .int = .{} },
+    /// }, .{ .{ .cb = &cb }, {} });
     /// ```
     pub inline fn expectArgs(
         self: *Call,
-        comptime metas: []const ExpectArgKind.Meta,
-    ) ExpectArgsError!ExpectArgsType(metas) {
+        comptime specs: []const ExpectArgKind.Spec,
+        withs: ExpectArgWiths(specs),
+    ) ExpectArgsError!ExpectArgResults(specs) {
         comptime {
             var seen_optional = false;
-            for (metas) |meta| {
-                if (seen_optional and !meta.isOptional()) {
+            for (specs) |spec| {
+                if (seen_optional and !spec.isOptional()) {
                     @compileError("required argument after optional");
                 }
-                if (meta.isOptional()) seen_optional = true;
+                if (spec.isOptional()) seen_optional = true;
             }
         }
 
         const min = comptime min: {
             var count: u32 = 0;
-            for (metas) |meta| {
-                if (!meta.isOptional()) count += 1;
+            for (specs) |spec| {
+                if (!spec.isOptional()) count += 1;
             }
             break :min count;
         };
-        const max: u32 = @intCast(metas.len);
+        const max: u32 = @intCast(specs.len);
 
         try self.expectArgCount(min, max);
 
-        const Result = ExpectArgsType(metas);
-        var result: Result = undefined;
-        inline for (metas, 0..) |meta, i| {
-            result[i] = try self.expectArg(@intCast(i + 1), meta);
+        const Results = ExpectArgResults(specs);
+        var result: Results = undefined;
+        inline for (specs, 0..) |spec, i| {
+            const with = if (comptime @TypeOf(withs) != void)
+                @field(withs, std.fmt.comptimePrint("{d}", .{i}))
+            else {};
+            result[i] = try self.expectArg(@intCast(i + 1), spec, with);
         }
         return result;
     }
@@ -201,32 +227,47 @@ pub const Call = opaque {
         /// but is parsed via Z_PARAM_FUNC and requires both fci and fcc.
         callable,
 
-        fn BuildMeta(ak: ExpectArgKind) type {
+        fn BuildSpec(ak: ExpectArgKind) type {
             return switch (ak) {
                 .mixed => struct { optional: bool = false }, // TODO: union types?
-                .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, class: ?type = null },
+                .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, instanceof: bool = false },
+                .callable => struct { optional: bool = false, nullable: bool = false, target: bool = false },
                 else => struct { optional: bool = false, nullable: bool = false, zval: bool = false },
             };
         }
 
-        pub const Meta = union(ExpectArgKind) {
-            int: BuildMeta(.int),
-            float: BuildMeta(.float),
-            string: BuildMeta(.string),
-            bool: BuildMeta(.bool),
-            array: BuildMeta(.array),
-            object: BuildMeta(.object),
-            resource: BuildMeta(.resource),
-            reference: BuildMeta(.reference),
-            mixed: BuildMeta(.mixed),
-            callable: BuildMeta(.callable),
+        pub const Spec = union(ExpectArgKind) {
+            int: BuildSpec(.int),
+            float: BuildSpec(.float),
+            string: BuildSpec(.string),
+            bool: BuildSpec(.bool),
+            array: BuildSpec(.array),
+            object: BuildSpec(.object),
+            resource: BuildSpec(.resource),
+            reference: BuildSpec(.reference),
+            mixed: BuildSpec(.mixed),
+            callable: BuildSpec(.callable),
 
-            pub fn isOptional(self: Meta) bool {
+            pub fn isOptional(self: Spec) bool {
                 return switch (self) {
                     inline else => |m| m.optional,
                 };
             }
         };
+
+        /// Runtime value for a single `Spec`.
+        ///   - `.callable` with `.target = true`     → `struct { cb: *zend.Callable }`
+        ///   - `.callable` without target            → `void`
+        ///   - `.object` with `.instanceof = true`   → `struct { class: *zend.ClassEntry }`
+        ///   - `.object` without instanceof          → `void`
+        ///   - scalar types                          → `void` (pass `{}`)
+        pub fn With(comptime spec: Spec) type {
+            return switch (spec) {
+                .callable => |s| if (s.target) struct { cb: *zend.Callable } else void,
+                .object => |s| if (s.instanceof) struct { class: *zend.ClassEntry } else void,
+                else => void,
+            };
+        }
 
         pub fn toZvalKind(self: ExpectArgKind) Zval.Kind {
             return switch (self) {
@@ -250,19 +291,19 @@ pub const Call = opaque {
         }
     };
 
-    pub fn ExpectArgType(meta: ExpectArgKind.Meta) type {
-        return switch (meta) {
-            .mixed => |m| if (m.optional) ?*c.zval else *c.zval,
-            .callable => |m| if (m.optional) ?*c.zval else *c.zval,
-            inline else => |m| {
-                const tag: ExpectArgKind = meta;
-                const T = if (m.zval)
+    pub fn ExpectArgResult(spec: ExpectArgKind.Spec) type {
+        return switch (spec) {
+            .mixed => |s| if (s.optional) ?*c.zval else *c.zval,
+            .callable => |s| if (s.optional) ?*c.zval else *c.zval,
+            inline else => |s| {
+                const tag: ExpectArgKind = spec;
+                const T = if (s.zval)
                     *c.zval
-                else if (m.nullable)
+                else if (s.nullable)
                     Nullable(tag.InnerType())
                 else
                     tag.InnerType();
-                return if (m.optional) ?T else T;
+                return if (s.optional) ?T else T;
             },
         };
     }
@@ -284,26 +325,23 @@ pub const Call = opaque {
 
     /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
     ///
-    /// Accepts an `ExpectArgKind.Meta` tagged union specifying the expected type
-    /// and options (optional, nullable, zval, class for .object).
+    /// Accepts an `ExpectArgKind.Spec` tagged union specifying the expected type
+    /// and options (optional, nullable, zval). Pass runtime bindings via `with`:
+    ///   - `.callable` with `.target = true`     → `.{ .cb = &cb }`
+    ///   - `.callable` without target            → `{}`
+    ///   - `.object` with `.instanceof = true`   → `.{ .class = entry }`
+    ///   - `.object` without instanceof          → `{}`
+    ///   - scalar types → `{}`
     ///
     /// Prefer `expectArgs` for multi-arg cases.
     pub inline fn expectArg(
         self: *Call,
         n: u32,
-        comptime meta: ExpectArgKind.Meta,
-    ) ExpectArgError!ExpectArgType(meta) {
-        comptime {
-            if (meta == .object and meta.object.class != null) {
-                const cls: type = meta.object.class.?;
-                if (!@hasDecl(cls, "entry") or @TypeOf(cls.entry) != *ClassEntry) {
-                    @compileError("object class option must be a phpz.Class or phpz.SimpleClass with an entry field of type *ClassEntry");
-                }
-            }
-        }
-
+        comptime spec: ExpectArgKind.Spec,
+        with: ExpectArgKind.With(spec),
+    ) ExpectArgError!ExpectArgResult(spec) {
         if (n > self.numArgs()) {
-            if (comptime meta.isOptional())
+            if (comptime spec.isOptional())
                 return null
             else {
                 @branchHint(.cold);
@@ -312,57 +350,58 @@ pub const Call = opaque {
         }
 
         const zv = self.arg(n);
-        const tag: ExpectArgKind = meta;
-        switch (comptime meta) {
+        const tag: ExpectArgKind = spec;
+        switch (comptime spec) {
             .mixed => return zv,
-            .callable => |m| {
-                // var err: ?[*:0]u8 = null;
-                // if (!t.cb.parse(zv, comptime m.nullable, &err)) {
-                //     if (err) |e| {
-                //         defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
-                //         return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else "") ++ ", %s", .{e});
-                //     }
-                //     return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else ""), .{});
-                // }
-                if (!zend.Callable.isCallable(zv, comptime m.nullable))
-                    return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime m.nullable) " or null" else ""), .{});
+            .callable => |s| {
+                if (comptime s.target) {
+                    var err: ?[*:0]u8 = null;
+                    with.cb.parse(zv, comptime s.nullable, &err) catch {
+                        if (err) |e| {
+                            defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
+                            return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime s.nullable) " or null" else "") ++ ", %s", .{e});
+                        }
+                        return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime s.nullable) " or null" else ""), .{});
+                    };
+                } else if (!zend.Callable.isCallable(zv, comptime s.nullable)) {
+                    return errors.argumentTypeError(n, "must be a valid callback" ++ (if (comptime s.nullable) " or null" else ""), .{});
+                }
                 return zv;
             },
-            inline else => |m| {
-                if (comptime m.nullable) {
+            inline else => |s| {
+                if (comptime s.nullable) {
                     // Branch: Nullable
                     if (native.is(zv, .null)) return .null;
-                    if (comptime meta == .object) if (comptime m.class) |cls| {
-                        const ce: *ClassEntry = cls.entry;
+                    if (comptime spec == .object and s.instanceof) {
+                        const ce = with.class;
                         const obj: *zend.Object = native.as(zv, .object) catch
                             return errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ ce.name().ptr, native.kind(zv).cstr() });
-
                         return if (obj.instanceof(ce))
-                            .{ .value = if (comptime m.zval) zv else obj }
+                            .{ .value = if (comptime s.zval) zv else obj }
                         else
                             errors.argumentTypeError(n, "must be instance of %s or null, %s given", .{ ce.name().ptr, obj.class().name().ptr });
-                    };
+                    }
 
                     const zk = comptime tag.toZvalKind();
                     return if (native.is(zv, zk))
-                        .{ .value = if (comptime m.zval) zv else native.asUnchecked(zv, zk) }
+                        .{ .value = if (comptime s.zval) zv else native.asUnchecked(zv, zk) }
                     else
                         errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ " or null, %s given", .{native.kind(zv).cstr()});
                 } else {
                     // Branch: Non-nullable
-                    if (comptime meta == .object) if (comptime m.class) |cls| {
-                        const ce: *ClassEntry = cls.entry;
+                    if (comptime spec == .object and s.instanceof) {
+                        const ce = with.class;
                         const obj: *zend.Object = native.as(zv, .object) catch
                             return errors.argumentTypeError(n, "must be instance of %s, %s given", .{ ce.name().ptr, native.kind(zv).cstr() });
 
                         return if (obj.instanceof(ce))
-                            if (comptime m.zval) zv else obj
+                            if (comptime s.zval) zv else obj
                         else
                             errors.argumentTypeError(n, "must be instance of %s, %s given", .{ ce.name().ptr, obj.class().name().ptr });
-                    };
+                    }
                     const zk = comptime tag.toZvalKind();
                     return if (native.is(zv, zk))
-                        if (comptime m.zval) zv else native.asUnchecked(zv, zk)
+                        if (comptime s.zval) zv else native.asUnchecked(zv, zk)
                     else
                         errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ ", %s given", .{native.kind(zv).cstr()});
                 }

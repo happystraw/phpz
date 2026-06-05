@@ -14,7 +14,9 @@ pub const Context = extern struct {
 
     pub fn construct(self: *Context, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
-            .{ .object = .{ .class = runtime.Class } },
+            .{ .object = .{ .instanceof = true } },
+        }, .{
+            .{ .class = runtime.Class.entry },
         });
 
         self.rt = .from(.std, args[0].ptr());
