@@ -12,23 +12,23 @@ Runs: C build + test, Zig build + test, then benchmarks. Default 1,000,000 itera
 
 ## Results
 
-macOS 14, PHP 8.2.31, Zig 0.16.0, 1M iterations, ReleaseFast. Lower is better.
+Linux, PHP 8.5.7, Zig 0.16.0, 1M iterations × 5 runs averaged, ReleaseFast. Lower is better.
 
 | Benchmark | C ns/call | Zig ns/call | Winner |
 |---|---|---|---|
-| Empty function call | 61.6 | 65.7 | — (tie) |
-| Parse 8 params (macro/fast) | 128.4 | 128.6 | — (tie) |
-| Parse 8 params (parse/zpp) | 228.0 | **222.1** | Zig 2.6% |
-| Array sum 1k (macro/fast) | 651.9 | **467.2** | Zig 28.3% |
-| Array sum 1k (parse/zpp) | 677.8 | **484.3** | Zig 28.6% |
-| **TOTAL** | 1747.8 | **1367.8** | **Zig 21.7%** |
+| Empty function call | 29.7 | 30.4 | — (tie) |
+| Parse 8 params (macro/fast) | 62.9 | 63.1 | — (tie) |
+| Parse 8 params (parse/zpp) | 134.3 | **125.7** | Zig 6.4% |
+| Array sum 1k (macro/fast) | 449.7 | **336.2** | Zig 25.2% |
+| Array sum 1k (parse/zpp) | 462.6 | **338.9** | Zig 26.7% |
+| **TOTAL** | 1139.2 | **894.3** | **Zig 21.5%** |
 
 ### Takeaways
 
-- **Function call overhead**: identical (~4ns diff, within noise).
-- **Parameter parsing**: Zig's `expectArgs` matches C's fast `Z_PARAM` macro. The traditional
-  `zend_parse_parameters` path is comparable between languages.
-- **Array iteration**: Zig's inline `eachValue` beats C's `ZEND_HASH_FOREACH_VAL` by ~28%.
+- **Function call overhead**: identical (~1ns diff, within noise).
+- **Parameter parsing**: Zig's `expectArgs` matches C's fast `Z_PARAM` macros (tie).
+  The traditional `zend_parse_parameters` path is ~6% faster in Zig.
+- **Array iteration**: Zig's inline `eachValue` beats C's `ZEND_HASH_FOREACH_VAL` by ~26%.
   The IS_UNDEF check and user type check are in the same compiler scope, eliminating
   redundant branch evaluation.
 
