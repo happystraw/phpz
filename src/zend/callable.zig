@@ -7,11 +7,11 @@ const Object = @import("object.zig").Object;
 
 /// Parsed callable ready for invocation.
 ///
-/// Typically obtained via `ctx.call.parse("f", .{&callable.fci, &callable.fcc})`.
+/// Typically obtained via `ctx.call.parseArgs("f", .{&callable.fci, &callable.fcc})`.
 ///
 /// ```zig
 /// var cb: Callable = undefined;
-/// try ctx.call.parse("f", .{ &cb.fci, &cb.fcc });
+/// try ctx.call.parseArgs("f", .{ &cb.fci, &cb.fcc });
 /// try cb.call(.{ arg1 });
 /// ```
 pub const Callable = extern struct {

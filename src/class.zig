@@ -113,7 +113,7 @@ pub const ObjectHandlers = struct {
 ///
 ///     pub fn construct(self: *Student, ctx: Ctx) !void {
 ///         var name: []u8 = undefined;
-///         try ctx.call.parse("s", .{ &name.ptr, &name.len });
+///         try ctx.call.parseArgs("s", .{ &name.ptr, &name.len });
 ///         self.name = name.ptr;
 ///         self.name_len = name.len;
 ///     }
@@ -124,7 +124,7 @@ pub const ObjectHandlers = struct {
 ///
 ///     pub fn setAge(self: *Student, ctx: Ctx) !void {
 ///         var age: i64 = undefined;
-///         try ctx.call.parse("l", .{&age});
+///         try ctx.call.parseArgs("l", .{&age});
 ///         self.age = @intCast(age);
 ///     }
 /// };
@@ -299,7 +299,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         ///     pub fn construct(self: *Student, ctx: Ctx) !void {
         ///         var name: []u8 = undefined;
-        ///         try ctx.call.parse("s", .{ &name.ptr, &name.len });
+        ///         try ctx.call.parseArgs("s", .{ &name.ptr, &name.len });
         ///         self.name = name;
         ///     }
         ///
@@ -309,7 +309,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         ///     pub fn setAge(self: *Student, ctx: Ctx) !void {
         ///         var age: i64 = undefined;
-        ///         try ctx.call.parse("l", .{&age});
+        ///         try ctx.call.parseArgs("l", .{&age});
         ///         self.age = @intCast(age);
         ///     }
         /// };

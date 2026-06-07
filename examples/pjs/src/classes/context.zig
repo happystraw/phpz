@@ -27,7 +27,7 @@ pub const Context = extern struct {
 
     pub fn eval(self: *Context, ctx: phpz.Ctx) !void {
         var code: []u8 = undefined;
-        try ctx.call.parse("s", .{ &code.ptr, &code.len });
+        try ctx.call.parseArgs("s", .{ &code.ptr, &code.len });
         if (code.len == 0) return error.NoJavaScriptCode;
 
         const inner = self.inner.?;

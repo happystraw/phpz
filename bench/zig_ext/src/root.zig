@@ -56,7 +56,7 @@ fn benchParseMultiPp(ctx: phpz.Ctx) !void {
     var mixed: *phpz.c.zval = undefined;
     var opt: i64 = 0;
     var opt_is_null: bool = undefined;
-    try ctx.call.parse("lsdbaoz|l!", .{ &n, &s.ptr, &s.len, &d, &b, &arr, &obj, &mixed, &opt, &opt_is_null });
+    try ctx.call.parseArgs("lsdbaoz|l!", .{ &n, &s.ptr, &s.len, &d, &b, &arr, &obj, &mixed, &opt, &opt_is_null });
     _ = &n;
     _ = &s;
     _ = &d;
@@ -90,7 +90,7 @@ fn benchArraySumExpect(ctx: phpz.Ctx) !void {
 
 fn benchArraySumParse(ctx: phpz.Ctx) !void {
     var arr_zv: *phpz.c.zval = undefined;
-    try ctx.call.parse("a", .{&arr_zv});
+    try ctx.call.parseArgs("a", .{&arr_zv});
     const arr = phpz.Zval.native.asUnchecked(arr_zv, .array);
 
     var sum: i64 = 0;

@@ -20,7 +20,7 @@ const native = Zval.native;
 /// fn add(ctx: Ctx) !void {
 ///     var a: i64 = undefined;
 ///     var b: i64 = undefined;
-///     try ctx.call.parse("ll", .{ &a, &b });
+///     try ctx.call.parseArgs("ll", .{ &a, &b });
 ///     ctx.ret.set(.int, a + b);
 /// }
 /// ```
@@ -35,12 +35,6 @@ ret: *Zval,
 /// via `expectArgs` / `expectArg` / `expectArgCount`, or the lower-level
 /// `parse()` for complex type specs (callable, object, variadic, etc.).
 pub const Call = opaque {
-    /// Errors that can occur during parameter parsing
-    pub const Error = error{
-        /// Parameter parsing failed (wrong type, missing required param, etc.)
-        ParseFailure,
-    };
-
     /// Initialize a Call from PHP execution data.
     ///
     /// This is typically called automatically by the function/method wrapper.
@@ -64,7 +58,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The argument count
-    pub inline fn numArgs(self: *Call) u32 {
+    pub inline fn argCount(self: *Call) u32 {
         return self.ptr().This.u2.num_args;
     }
 
@@ -76,14 +70,12 @@ pub const Call = opaque {
     /// Returns:
     ///   Pointer to the zval at position n
     pub inline fn arg(self: *Call, n: u32) *c.zval {
-        const base: [*]c.zval = @ptrCast(self.ptr());
-        return &base[c.ZEND_CALL_FRAME_SLOT + n - 1];
+        return &self.args()[n - 1];
     }
 
     /// Get all arguments as a slice of zvals.
     pub inline fn args(self: *Call) []c.zval {
-        const count = self.numArgs();
-        if (count == 0) return &[_]c.zval{};
+        const count = self.argCount();
         const base: [*]c.zval = @ptrCast(self.ptr());
         return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
     }
@@ -91,15 +83,15 @@ pub const Call = opaque {
     /// Validate the total number of arguments against expected min/max.
     /// Call once at the top of each function, before accessing individual args.
     pub inline fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
-        const count = self.numArgs();
+        const count = self.argCount();
         if (count < min or count > max) {
             return errors.wrongParameterCount(min, max);
         }
     }
 
     /// Expect zero arguments. Calls zend_wrong_parameters_none_error on failure.
-    pub inline fn expectNone(self: *Call) errors.WrongParameterCountError!void {
-        if (self.numArgs() != 0) {
+    pub inline fn expectNoArgs(self: *Call) errors.WrongParameterCountError!void {
+        if (self.argCount() != 0) {
             return errors.wrongParametersNone();
         }
     }
@@ -192,7 +184,7 @@ pub const Call = opaque {
             else {};
             const n: u32 = @intCast(i + 1);
             result[i] = if (comptime spec.isOptional())
-                if (n > self.numArgs()) null else try self.extractArg(n, spec, with)
+                if (n > self.argCount()) null else try self.extractArg(n, spec, with)
             else
                 try self.extractArg(n, spec, with);
         }
@@ -355,7 +347,7 @@ pub const Call = opaque {
         comptime spec: ExpectArgKind.Spec,
         with: ExpectArgKind.With(spec),
     ) ExpectArgError!ExpectArgResult(spec) {
-        if (n > self.numArgs()) {
+        if (n > self.argCount()) {
             if (comptime spec.isOptional())
                 return null
             else {
@@ -425,6 +417,8 @@ pub const Call = opaque {
             },
         }
     }
+
+    pub const ParseArgsError = error{ParseFailure};
 
     /// Parse function parameters according to a type specification.
     ///
@@ -499,40 +493,40 @@ pub const Call = opaque {
     ///
     /// // 'l': function(int $n)
     /// var n: i64 = undefined;
-    /// try ctx.call.parse("l", .{&n});
+    /// try ctx.call.parseArgs("l", .{&n});
     ///
     /// // 'd': function(float $x)
     /// var x: f64 = undefined;
-    /// try ctx.call.parse("d", .{&x});
+    /// try ctx.call.parseArgs("d", .{&x});
     ///
     /// // 'b': function(bool $flag)
     /// var flag: bool = undefined;
-    /// try ctx.call.parse("b", .{&flag});
+    /// try ctx.call.parseArgs("b", .{&flag});
     ///
     /// // --- String types ---
     ///
     /// // 's': function(string $msg)  -- requires 2 args: &ptr, &len
     /// var msg: []u8 = undefined;
-    /// try ctx.call.parse("s", .{ &msg.ptr, &msg.len });
+    /// try ctx.call.parseArgs("s", .{ &msg.ptr, &msg.len });
     ///
     /// // 'S': function(string $msg)  -- receives zend_string* directly (1 arg)
     /// var zs: *c.zend_string = undefined;
-    /// try ctx.call.parse("S", .{&zs});
+    /// try ctx.call.parseArgs("S", .{&zs});
     /// const s = zs.val()[0..zs.len];
     ///
     /// // 'p': function(string $path)  -- like 's' but rejects null bytes
     /// var path: []u8 = undefined;
-    /// try ctx.call.parse("p", .{ &path.ptr, &path.len });
+    /// try ctx.call.parseArgs("p", .{ &path.ptr, &path.len });
     ///
     /// // 'P': function(string $path)  -- like 'S' but rejects null bytes
     /// var zp: *c.zend_string = undefined;
-    /// try ctx.call.parse("P", .{&zp});
+    /// try ctx.call.parseArgs("P", .{&zp});
     ///
     /// // --- Raw zval (any type) ---
     ///
     /// // 'z': function(mixed $val)
     /// var raw: *c.zval = undefined;
-    /// try ctx.call.parse("z", .{&raw});
+    /// try ctx.call.parseArgs("z", .{&raw});
     /// const val = Zval.from(raw);
     /// if (val.is(.int)) {
     ///     const num = val.asUnchecked(.int);
@@ -541,72 +535,72 @@ pub const Call = opaque {
     ///
     /// // 'n': function(mixed $val = null)  -- allows null (PHP 8.1+)
     /// var nraw: *c.zval = undefined;
-    /// try ctx.call.parse("n", .{&nraw});
+    /// try ctx.call.parseArgs("n", .{&nraw});
     ///
     /// // --- Array and Hashtable ---
     ///
     /// // 'a': function(array $arr)
     /// var arr_zv: *c.zval = undefined;
-    /// try ctx.call.parse("a", .{&arr_zv});
+    /// try ctx.call.parseArgs("a", .{&arr_zv});
     /// const arr = arr_zv.value.arr; // extract zend_array*
     ///
     /// // 'A': function(array $arr)  -- like 'a', already dereferenced
     /// var arr_zv2: *c.zval = undefined;
-    /// try ctx.call.parse("A", .{&arr_zv2});
+    /// try ctx.call.parseArgs("A", .{&arr_zv2});
     ///
     /// // 'h': function(array $map)  -- receives HashTable* directly
     /// var ht: *c.HashTable = undefined;
-    /// try ctx.call.parse("h", .{&ht});
+    /// try ctx.call.parseArgs("h", .{&ht});
     ///
     /// // 'H': function(array $map)  -- like 'h', already dereferenced
     /// var ht2: *c.HashTable = undefined;
-    /// try ctx.call.parse("H", .{&ht2});
+    /// try ctx.call.parseArgs("H", .{&ht2});
     ///
     /// // --- Object / Class ---
     ///
     /// // 'o': function(object $obj)  -- any object
     /// var obj: *c.zval = undefined;
-    /// try ctx.call.parse("o", .{&obj});
+    /// try ctx.call.parseArgs("o", .{&obj});
     ///
     /// // 'O': function(MyClass $obj)  -- specific class, requires 2 args: &ptr, class_entry
     /// var typed_obj: *c.zval = undefined;
-    /// try ctx.call.parse("O", .{ &typed_obj, my_class_entry });
+    /// try ctx.call.parseArgs("O", .{ &typed_obj, my_class_entry });
     ///
     /// // 'C': function(string $class)  -- receives zend_class_entry* directly
     /// var ce: *c.zend_class_entry = undefined;
-    /// try ctx.call.parse("C", .{&ce});
+    /// try ctx.call.parseArgs("C", .{&ce});
     ///
     /// // --- Callable ---
     ///
     /// // 'f': function(callable $cb)  -- requires 2 args
     /// var fci: c.zend_fcall_info = undefined;
     /// var fcc: c.zend_fcall_info_cache = undefined;
-    /// try ctx.call.parse("f", .{ &fci, &fcc });
+    /// try ctx.call.parseArgs("f", .{ &fci, &fcc });
     ///
     /// // --- Resource ---
     ///
     /// // 'r': function(resource $handle)
     /// var res: *c.zval = undefined;
-    /// try ctx.call.parse("r", .{&res});
+    /// try ctx.call.parseArgs("r", .{&res});
     ///
     /// // --- Mixed types ---
     ///
     /// // 'sl': function(string $name, int $count)
     /// var name: []u8 = undefined;
     /// var count: i64 = undefined;
-    /// try ctx.call.parse("sl", .{ &name.ptr, &name.len, &count });
+    /// try ctx.call.parseArgs("sl", .{ &name.ptr, &name.len, &count });
     ///
     /// // --- Optional and nullable ---
     ///
     /// // 's|l': function(string $key, int $ttl = 0)  -- caller sets default
     /// var key: []u8 = undefined;
     /// var ttl: i64 = 0;
-    /// try ctx.call.parse("s|l", .{ &key.ptr, &key.len, &ttl });
+    /// try ctx.call.parseArgs("s|l", .{ &key.ptr, &key.len, &ttl });
     ///
     /// // 's|z!': function(string $name, ?int $age = null)
     /// var person_name: []u8 = undefined;
     /// var age_opt: Zval.Optional = .init;
-    /// try ctx.call.parse("s|z!", .{ &person_name.ptr, &person_name.len, &age_opt.ptr });
+    /// try ctx.call.parseArgs("s|z!", .{ &person_name.ptr, &person_name.len, &age_opt.ptr });
     /// if (age_opt.unwrap()) |age_zval| {
     ///     if (age_zval.is(.int)) {
     ///         const age = age_zval.asUnchecked(.int);
@@ -618,7 +612,7 @@ pub const Call = opaque {
     ///
     /// // 's/': function(string $msg)  -- string will be separated
     /// var cow_msg: []u8 = undefined;
-    /// try ctx.call.parse("s/", .{ &cow_msg.ptr, &cow_msg.len });
+    /// try ctx.call.parseArgs("s/", .{ &cow_msg.ptr, &cow_msg.len });
     ///
     /// // --- Variadic ---
     ///
@@ -626,23 +620,23 @@ pub const Call = opaque {
     /// var first: *c.zval = undefined;
     /// var rest: [*]c.zval = undefined;
     /// var rest_count: u32 = undefined;
-    /// try ctx.call.parse("z*", .{ &first, &rest, &rest_count });
+    /// try ctx.call.parseArgs("z*", .{ &first, &rest, &rest_count });
     ///
     /// // '+': function(mixed $first, mixed ...$args)  -- 1 or more variadic arguments
     /// var fst: [*]c.zval = undefined;
     /// var rst_count: u32 = undefined;
-    /// try ctx.call.parse("+", .{ &fst, &rst_count });
+    /// try ctx.call.parseArgs("+", .{ &fst, &rst_count });
     /// ```
-    pub fn parse(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) Error!void {
+    pub fn parseArgs(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) ParseArgsError!void {
         if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
             @compileError("parse: args must be a tuple (use .{} syntax)");
         }
         const result = @call(
             .auto,
             c.zend_parse_parameters,
-            .{ self.numArgs(), type_spec.ptr } ++ type_args,
+            .{ self.argCount(), type_spec.ptr } ++ type_args,
         );
-        if (result == c.FAILURE) return Error.ParseFailure;
+        if (result == c.FAILURE) return ParseArgsError.ParseFailure;
     }
 
     /// Get the $this object as a zval (for class methods).

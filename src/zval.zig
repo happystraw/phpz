@@ -15,7 +15,7 @@ const zend = @import("zend.zig");
 /// ```zig
 /// fn readValue(ctx: Ctx) !void {
 ///     var input: i64 = undefined;
-///     try ctx.call.parse("l", .{&input});
+///     try ctx.call.parseArgs("l", .{&input});
 ///
 ///     // Return a value to PHP
 ///     ctx.ret.set(.int, input * 2);
@@ -314,7 +314,7 @@ pub const Zval = opaque {
     ///     var optional_age: Zval.Optional = .init;
     ///
     ///     // 's' = required string, '|' = following params optional, 'z!' = nullable zval
-    ///     try ctx.call.parse("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
+    ///     try ctx.call.parseArgs("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
     ///
     ///     // Check if the optional parameter was provided
     ///     if (optional_age.unwrap()) |age_zval| {
@@ -387,7 +387,7 @@ pub const Zval = opaque {
     /// Example:
     /// ```zig
     /// var raw: *c.zval = undefined;
-    /// try ctx.call.parse("z", .{&raw});
+    /// try ctx.call.parseArgs("z", .{&raw});
     ///
     /// if (Zval.native.is(raw, .int)) {
     ///     const n = Zval.native.asUnchecked(raw, .int);

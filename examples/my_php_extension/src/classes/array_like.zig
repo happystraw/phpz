@@ -32,7 +32,7 @@ const ArrayLike = extern struct {
 
     pub fn offsetExists(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
-        try ctx.call.parse("z", .{&offset});
+        try ctx.call.parseArgs("z", .{&offset});
         ctx.ret.set(.bool, switch (phpz.Zval.native.kind(offset)) {
             .int => self.data.hasIndex(@intCast(phpz.Zval.native.asUnchecked(offset, .int))),
             .string => self.data.has(phpz.Zval.native.asUnchecked(offset, .string)),
@@ -42,7 +42,7 @@ const ArrayLike = extern struct {
 
     pub fn offsetGet(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
-        try ctx.call.parse("z", .{&offset});
+        try ctx.call.parseArgs("z", .{&offset});
         const zv = switch (phpz.Zval.native.kind(offset)) {
             .int => self.data.findIndex(@intCast(phpz.Zval.native.asUnchecked(offset, .int))),
             .string => self.data.find(phpz.Zval.native.asUnchecked(offset, .string)),
@@ -59,7 +59,7 @@ const ArrayLike = extern struct {
     pub fn offsetSet(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: ?*c.zval = null;
         var value: *c.zval = undefined;
-        try ctx.call.parse("z!z", .{ &offset, &value });
+        try ctx.call.parseArgs("z!z", .{ &offset, &value });
         phpz.Zval.native.tryAddref(value);
         if (offset) |o| {
             switch (phpz.Zval.native.kind(o)) {
@@ -75,7 +75,7 @@ const ArrayLike = extern struct {
 
     pub fn offsetUnset(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
-        try ctx.call.parse("z", .{&offset});
+        try ctx.call.parseArgs("z", .{&offset});
         switch (phpz.Zval.native.kind(offset)) {
             .int => self.data.deleteIndex(@intCast(phpz.Zval.native.asUnchecked(offset, .int))) catch {},
             .string => self.data.delete(phpz.Zval.native.asUnchecked(offset, .string)) catch {},

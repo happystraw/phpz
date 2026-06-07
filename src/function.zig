@@ -31,13 +31,13 @@ const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(.c) void;
 /// fn add(ctx: Ctx) !void {
 ///     var a: i64 = undefined;
 ///     var b: i64 = undefined;
-///     try ctx.call.parse("ll", .{ &a, &b });
+///     try ctx.call.parseArgs("ll", .{ &a, &b });
 ///     ctx.ret.set(.int, a + b);
 /// }
 ///
 /// fn greet(ctx: Ctx) !void {
 ///     var name: []u8 = undefined;
-///     try ctx.call.parse("s", .{ &name.ptr, &name.len });
+///     try ctx.call.parseArgs("s", .{ &name.ptr, &name.len });
 ///     const greeting = try std.fmt.allocPrint(allocator, "Hello, {s}!", .{name});
 ///     defer allocator.free(greeting);
 ///     ctx.ret.set(.string, greeting);
@@ -96,7 +96,7 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
             const args = switch (Args) {
                 @Tuple(&.{Ctx}) => .{ctx},
                 @Tuple(&.{}) => blk: {
-                    ctx.call.expectNone() catch return;
+                    ctx.call.expectNoArgs() catch return;
                     break :blk .{};
                 },
                 else => @compileError(std.fmt.comptimePrint("unsupported function signature for {s}: expected fn(Ctx) or fn()", .{func_desc})),
@@ -133,7 +133,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
                     else
                         @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: expected Ctx", .{func_desc}))
                 else if (rest_count == 0) blk: {
-                    ctx.call.expectNone() catch return;
+                    ctx.call.expectNoArgs() catch return;
                     break :blk .{};
                 } else {
                     @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: {any}", .{ func_desc, Args }));
