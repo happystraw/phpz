@@ -33,7 +33,7 @@ ret: *Zval,
 ///
 /// Wraps `zend_execute_data` to provide type-safe argument extraction
 /// via `expectArgs` / `expectArg` / `expectArgCount`, or the lower-level
-/// `parse()` for complex type specs (callable, object, variadic, etc.).
+/// `parseArgs()` for complex type specs (callable, object, variadic, etc.).
 pub const Call = opaque {
     /// Initialize a Call from PHP execution data.
     ///
@@ -70,7 +70,8 @@ pub const Call = opaque {
     /// Returns:
     ///   Pointer to the zval at position n
     pub inline fn arg(self: *Call, n: u32) *c.zval {
-        return &self.args()[n - 1];
+        const base: [*]c.zval = @ptrCast(self.ptr());
+        return &base[c.ZEND_CALL_FRAME_SLOT + n - 1];
     }
 
     /// Get all arguments as a slice of zvals.
@@ -149,7 +150,7 @@ pub const Call = opaque {
     ///     .{ .object = .{ .instanceof = true } },
     /// }, .{
     ///     .{ .cb = &cb },
-    ///     .{ .class: UserClass.entry },
+    ///     .{ .class = UserClass.entry },
     /// });
     ///
     /// // .mixed with union types:
@@ -291,24 +292,13 @@ pub const Call = opaque {
 
         inline fn toZvalKind(self: ExpectArgKind) Zval.Kind {
             return switch (self) {
-                .null => .null,
-                .int => .int,
-                .float => .float,
-                .string => .string,
-                .bool => .bool,
-                .array => .array,
-                .object => .object,
-                .resource => .resource,
-                .reference => .reference,
-                .mixed => .mixed,
-                .callable => .mixed,
+                .reference, .mixed, .callable => unreachable,
+                inline else => |k| @field(Zval.Kind, @tagName(k)),
             };
         }
 
         inline fn InnerType(self: ExpectArgKind) type {
-            return switch (self) {
-                inline else => Zval.Type(self.toZvalKind()),
-            };
+            return Zval.Type(self.toZvalKind());
         }
     };
 
@@ -318,14 +308,16 @@ pub const Call = opaque {
             .mixed => |s| {
                 if (s.unions) |u| {
                     if (u.len <= 1) @compileError("invalid .mixed specification: unions array must contain at least 2 types");
-                    const FieldTagType = @typeInfo(ExpectArgKind).@"enum".tag_type;
+                    const TagInt = @typeInfo(ExpectArgKind).@"enum".tag_type;
                     var field_names: [u.len][]const u8 = undefined;
                     var field_types: [u.len]type = undefined;
                     var field_attrs: [u.len]std.builtin.Type.UnionField.Attributes = undefined;
-                    var field_values: [u.len]FieldTagType = undefined;
+                    var field_values: [u.len]TagInt = undefined;
                     inline for (u, 0..) |kind, i| {
                         if (kind == .mixed) @compileError("invalid .mixed specification: unions cannot contain .mixed");
                         if (kind == .reference) @compileError("invalid .mixed specification: unions cannot contain .reference");
+                        if (kind == .callable) @compileError("invalid .mixed specification: unions cannot contain .callable");
+                        for (u[0..i]) |prev| if (prev == kind) @compileError("invalid .mixed specification: unions contains duplicate type ." ++ @tagName(kind));
                         field_names[i] = @tagName(kind);
                         field_types[i] = kind.InnerType();
                         field_attrs[i] = .{};
@@ -334,7 +326,7 @@ pub const Call = opaque {
 
                     const PhpUnionType = @Union(
                         .auto,
-                        @Enum(FieldTagType, .exhaustive, &field_names, &field_values),
+                        @Enum(TagInt, .exhaustive, &field_names, &field_values),
                         &field_names,
                         &field_types,
                         &field_attrs,
@@ -401,8 +393,7 @@ pub const Call = opaque {
             if (comptime spec.isOptional())
                 return null
             else {
-                @branchHint(.cold);
-                return errors.argumentValueError(n, "required, was not passed", .{});
+                return errors.argumentValueError(n, "must be provided", .{});
             }
         }
         return self.extractArg(n, spec, with);
@@ -420,13 +411,14 @@ pub const Call = opaque {
             .mixed => |s| {
                 if (comptime s.unions) |unions| {
                     const Result = ExpectArgResult(spec);
+                    const Union = if (comptime s.optional) @typeInfo(Result).optional.child else Result;
                     comptime var php_union_type: []const u8 = "";
                     inline for (unions) |kind| {
                         if (php_union_type.len > 0) php_union_type = php_union_type ++ "|";
                         php_union_type = php_union_type ++ @tagName(kind);
                         const zk = comptime kind.toZvalKind();
                         if (native.is(zv, zk)) {
-                            return @unionInit(Result, @tagName(kind), if (zk == .null) {} else native.asUnchecked(zv, zk));
+                            return @unionInit(Union, @tagName(kind), if (zk == .null) {} else native.asUnchecked(zv, zk));
                         }
                     }
                     return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{native.kind(zv).cstr()});
@@ -696,7 +688,7 @@ pub const Call = opaque {
     /// ```
     pub fn parseArgs(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) ParseArgsError!void {
         if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
-            @compileError("parse: args must be a tuple (use .{} syntax)");
+            @compileError("parseArgs: args must be a tuple (use .{} syntax)");
         }
         const result = @call(
             .auto,
