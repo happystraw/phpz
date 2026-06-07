@@ -3,6 +3,7 @@ const AbstractEntity = extern struct {
         return .from(impl(Identifiable.entry.ptr()));
     }
 
+    /// protected onLoad(): void
     pub fn onLoad(ctx: phpz.Ctx) !void {
         const this = ctx.call.thisObject().?;
 

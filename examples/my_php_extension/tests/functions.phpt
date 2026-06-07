@@ -11,8 +11,9 @@ $n = 41;
 \MyPHPExt\increment($n);
 echo $n, PHP_EOL;
 
-echo 'findById: ';
+echo 'findById:', PHP_EOL;
 var_dump(\MyPHPExt\findById(1));
+var_dump(\MyPHPExt\findById("abc"));
 
 echo 'getDefaultUser: ';
 echo \MyPHPExt\getDefaultUser(), PHP_EOL;
@@ -25,7 +26,9 @@ var_dump(\MyPHPExt\listStatuses());
 Hello from ZIG!
 Hello, Alice!
 increment(41): 42
-findById: NULL
+findById:
+Found user with ID 1: NULL
+Found user with name abc: NULL
 getDefaultUser: AbstractEntity::onLoad: getId() = 9527
 User(Default)
 listStatuses: array(2) {

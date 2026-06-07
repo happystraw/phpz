@@ -199,8 +199,8 @@ pub const Zval = opaque {
     ///     return err;
     /// };
     /// ```
-    pub fn as(self: *Zval, comptime zt: Kind) Error!Type(zt) {
-        return native.as(self.ptr(), zt);
+    pub fn as(self: *Zval, comptime zk: Kind) Error!Type(zk) {
+        return native.as(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value without type checking.
@@ -478,9 +478,9 @@ pub const Zval = opaque {
         }
 
         /// Convert a raw zval to a Zig value with type checking.
-        pub fn as(zv: *c.zval, comptime zt: Kind) Error!Type(zt) {
-            if (!native.is(zv, zt)) return Error.TypeMismatch;
-            return native.asUnchecked(zv, zt);
+        pub fn as(zv: *c.zval, comptime zk: Kind) Error!Type(zk) {
+            if (!native.is(zv, zk)) return Error.TypeMismatch;
+            return native.asUnchecked(zv, zk);
         }
 
         /// Convert a raw zval to a Zig value without type checking.

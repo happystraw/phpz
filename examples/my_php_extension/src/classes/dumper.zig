@@ -2,6 +2,7 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 
+/// static dump(mixed... $value): void
 fn dump(ctx: phpz.Ctx) !void {
     for (ctx.call.args()) |*zv| {
         dumpValue(.from(zv), 0);

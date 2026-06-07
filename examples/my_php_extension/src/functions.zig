@@ -7,10 +7,12 @@ const Zval = phpz.Zval;
 const StatusEnum = @import("classes.zig").status.Enum;
 const UserClass = @import("classes.zig").user.Class;
 
+/// hello(): void
 fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
 }
 
+/// greet(string $name): string
 fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
@@ -23,6 +25,7 @@ fn greet(ctx: phpz.Ctx) !void {
     ctx.ret.set(.string, result);
 }
 
+/// increment(int &$value): void
 fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .reference = .{} },
@@ -33,10 +36,19 @@ fn increment(ctx: phpz.Ctx) !void {
     Zval.native.set(raw, .int, current + 1);
 }
 
+/// findById(string|int $id): ?User
 fn findById(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .mixed = .{ .unions = &.{ .int, .string } } },
+    }, {});
+    switch (args[0]) {
+        .int => |id| _ = phpz.printf("Found user with ID %d: ", .{id}),
+        .string => |name| _ = phpz.printf("Found user with name %s: ", .{name.ptr}),
+    }
     ctx.ret.set(.null, {});
 }
 
+/// getDefaultUser(): User
 fn getDefaultUser(ctx: phpz.Ctx) !void {
     var name_zv = Zval.native.init(.string, "Default");
     defer Zval.native.dtor(&name_zv);
@@ -46,6 +58,7 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
     ctx.ret.set(.object, .from(&user.std));
 }
 
+/// listStatuses(): array
 fn listStatuses(ctx: phpz.Ctx) !void {
     const cases_fn = StatusEnum.entry.findMethod("cases").?;
 
@@ -64,8 +77,7 @@ fn listStatuses(ctx: phpz.Ctx) !void {
     }
 }
 
-/// Test expectArgs with all scalar types: .string, .int, .float, .bool.
-/// Covers: required, optional, nullable, and zval flag.
+/// testExpectArgScalars(string $str, int $int, float $float, bool $flag = true, ?string $nullable_str = null, int $opt_int = 0): array
 fn testExpectArgScalars(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
@@ -109,8 +121,7 @@ fn testExpectArgScalars(ctx: phpz.Ctx) !void {
     }
 }
 
-/// Test expectArgs with .array and .object+class (required and nullable optional).
-/// Covers: class instanceof checks, nullable class with null passed.
+/// testExpectArgArrayObject(array $data, \MyPHPExt\User $user, ?\MyPHPExt\User $nullable_user = null): array
 fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .array = .{} },
@@ -162,7 +173,7 @@ fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
     }
 }
 
-/// Test expectArgs with .mixed type — returns the raw zval pointer directly.
+/// testExpectArgMixed(mixed $value): mixed
 fn testExpectArgMixed(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .mixed = .{} },
@@ -175,6 +186,7 @@ fn testExpectArgMixed(ctx: phpz.Ctx) !void {
     Zval.native.addref(ctx.ret.ptr());
 }
 
+/// map(array $arr, callable $cb): array
 fn map(ctx: phpz.Ctx) !void {
     var cb: phpz.zend.Callable = .nil;
     // TODO: more simple way to parse a callable arg without defining a target struct?

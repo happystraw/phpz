@@ -131,21 +131,36 @@ pub const Call = opaque {
     /// Example:
     /// ```zig
     /// // Scalar only — withs is void, pass {}:
+    /// // (string $name, int $age = 0, ?int $count = null)
     /// const args = try self.expectArgs(&.{
     ///     .{ .string = .{} },
     ///     .{ .int = .{ .optional = true } },
-    ///     .{ .int = .{ .nullable = true } },
+    ///     .{ .int = .{ .optional = true, .nullable = true } },
     /// }, {});
     /// const name: []const u8 = args[0];
     /// const age: ?i64 = args[1];
-    /// const count: Nullable(i64) = args[2];
+    /// const count: ?Nullable(i64) = args[2];
     ///
-    /// // With callable binding:
+    /// // With callable/object binding:
+    /// // (callable $cb, \User $user)
     /// var cb: zend.Callable = .nil;
     /// const args2 = try self.expectArgs(&.{
     ///     .{ .callable = .{ .target = true } },
-    ///     .{ .int = .{} },
-    /// }, .{ .{ .cb = &cb }, {} });
+    ///     .{ .object = .{ .instanceof = true } },
+    /// }, .{
+    ///     .{ .cb = &cb },
+    ///     .{ .class: UserClass.entry },
+    /// });
+    ///
+    /// // .mixed with union types:
+    /// // (int|string $id_or_name)
+    /// const args3 = try self.expectArgs(&.{
+    ///     .{ .mixed = .{ .unions = &.{ .int, .string } } },
+    /// }, {});
+    /// switch (args3[0]) {
+    ///     .int => |id| _ = id,
+    ///     .string => |name| _ = name,
+    /// }
     /// ```
     pub inline fn expectArgs(
         self: *Call,
@@ -199,6 +214,7 @@ pub const Call = opaque {
     ///
     ///   ExpectArgKind    ZPP spec    ZPP macro
     ///   ─────────────    ────────    ─────────
+    ///   .null            -           -
     ///   .int             'l'         Z_PARAM_LONG
     ///   .float           'd'         Z_PARAM_DOUBLE
     ///   .string          's'/'S'     Z_PARAM_STR
@@ -206,12 +222,13 @@ pub const Call = opaque {
     ///   .array           'a'/'h'     Z_PARAM_ARRAY / Z_PARAM_ARRAY_HT
     ///   .object          'o'         Z_PARAM_OBJECT
     ///   .resource        'r'         Z_PARAM_RESOURCE
-    ///   .reference       —           (internal zval type, no ZPP macro)
+    ///   .reference       -           (internal zval type, no ZPP macro)
     ///   .mixed           'z'         Z_PARAM_ZVAL
     ///   .callable        'f'         Z_PARAM_FUNC
     ///
-    /// null is handled via the `nullable` flag, not as a standalone type.
+    /// `.null` exists for use in `.mixed` unions; it cannot be used as a standalone argument type.
     pub const ExpectArgKind = enum {
+        null,
         int,
         float,
         string,
@@ -228,7 +245,8 @@ pub const Call = opaque {
 
         fn BuildSpec(ak: ExpectArgKind) type {
             return switch (ak) {
-                .mixed => struct { optional: bool = false }, // TODO: union types?
+                .null => unreachable,
+                .mixed => struct { optional: bool = false, unions: ?[]const ExpectArgKind = null },
                 .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, instanceof: bool = false },
                 .callable => struct { optional: bool = false, nullable: bool = false, target: bool = false },
                 .reference => struct { optional: bool = false, zval: bool = false },
@@ -237,6 +255,7 @@ pub const Call = opaque {
         }
 
         pub const Spec = union(ExpectArgKind) {
+            null,
             int: BuildSpec(.int),
             float: BuildSpec(.float),
             string: BuildSpec(.string),
@@ -250,6 +269,7 @@ pub const Call = opaque {
 
             pub fn isOptional(self: Spec) bool {
                 return switch (self) {
+                    .null => false,
                     inline else => |m| m.optional,
                 };
             }
@@ -269,8 +289,9 @@ pub const Call = opaque {
             };
         }
 
-        pub fn toZvalKind(self: ExpectArgKind) Zval.Kind {
+        inline fn toZvalKind(self: ExpectArgKind) Zval.Kind {
             return switch (self) {
+                .null => .null,
                 .int => .int,
                 .float => .float,
                 .string => .string,
@@ -284,16 +305,45 @@ pub const Call = opaque {
             };
         }
 
-        pub fn InnerType(self: ExpectArgKind) type {
+        inline fn InnerType(self: ExpectArgKind) type {
             return switch (self) {
                 inline else => Zval.Type(self.toZvalKind()),
             };
         }
     };
 
-    pub fn ExpectArgResult(comptime spec: ExpectArgKind.Spec) type {
+    fn ExpectArgResult(comptime spec: ExpectArgKind.Spec) type {
         return switch (spec) {
-            .mixed => |s| if (s.optional) ?*c.zval else *c.zval,
+            .null => @compileError(".null cannot be used as a standalone type; use another type with the `nullable` flag or use .mixed with unions to allow null as a distinct case"),
+            .mixed => |s| {
+                if (s.unions) |u| {
+                    if (u.len <= 1) @compileError("invalid .mixed specification: unions array must contain at least 2 types");
+                    const FieldTagType = @typeInfo(ExpectArgKind).@"enum".tag_type;
+                    var field_names: [u.len][]const u8 = undefined;
+                    var field_types: [u.len]type = undefined;
+                    var field_attrs: [u.len]std.builtin.Type.UnionField.Attributes = undefined;
+                    var field_values: [u.len]FieldTagType = undefined;
+                    inline for (u, 0..) |kind, i| {
+                        if (kind == .mixed) @compileError("invalid .mixed specification: unions cannot contain .mixed");
+                        if (kind == .reference) @compileError("invalid .mixed specification: unions cannot contain .reference");
+                        field_names[i] = @tagName(kind);
+                        field_types[i] = kind.InnerType();
+                        field_attrs[i] = .{};
+                        field_values[i] = @intFromEnum(kind);
+                    }
+
+                    const PhpUnionType = @Union(
+                        .auto,
+                        @Enum(FieldTagType, .exhaustive, &field_names, &field_values),
+                        &field_names,
+                        &field_types,
+                        &field_attrs,
+                    );
+                    return if (s.optional) ?PhpUnionType else PhpUnionType;
+                } else {
+                    return if (s.optional) ?*c.zval else *c.zval;
+                }
+            },
             .callable => |s| {
                 const T = if (s.nullable) Nullable(*c.zval) else *c.zval;
                 return if (s.optional) ?T else T;
@@ -366,7 +416,24 @@ pub const Call = opaque {
     ) ExpectArgError!ExpectArgResult(spec) {
         const zv = self.arg(n);
         switch (comptime spec) {
-            .mixed => return zv,
+            .null => @compileError(".null cannot be used as a standalone type; use another type with the `nullable` flag or use .mixed with unions to allow null as a distinct case"),
+            .mixed => |s| {
+                if (comptime s.unions) |unions| {
+                    const Result = ExpectArgResult(spec);
+                    comptime var php_union_type: []const u8 = "";
+                    inline for (unions) |kind| {
+                        if (php_union_type.len > 0) php_union_type = php_union_type ++ "|";
+                        php_union_type = php_union_type ++ @tagName(kind);
+                        const zk = comptime kind.toZvalKind();
+                        if (native.is(zv, zk)) {
+                            return @unionInit(Result, @tagName(kind), if (zk == .null) {} else native.asUnchecked(zv, zk));
+                        }
+                    }
+                    return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{native.kind(zv).cstr()});
+                } else {
+                    return zv;
+                }
+            },
             .callable => |s| {
                 const or_null = comptime if (s.nullable) " or null" else "";
                 if (comptime s.nullable) if (native.is(zv, .null)) return .null;

@@ -21,10 +21,12 @@ comptime {
 
 // --- Functions ---
 
+/// function hello(): void
 fn hello() void {
     _ = phpz.printf("Hello from Zig!\n", .{});
 }
 
+/// function greet(string $name): string
 fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },

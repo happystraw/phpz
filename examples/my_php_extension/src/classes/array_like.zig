@@ -15,6 +15,7 @@ const ArrayLike = extern struct {
         self.data.release();
     }
 
+    /// __construct(array $data = [])
     pub fn construct(self: *ArrayLike, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .array = .{ .optional = true } },
@@ -24,12 +25,14 @@ const ArrayLike = extern struct {
         }
     }
 
+    /// toArray(): array
     pub fn toArray(self: ArrayLike, ctx: phpz.Ctx) void {
         ctx.ret.set(.array, self.data.duplicate());
     }
 
     // ── ArrayAccess ──────────────────────────────────────────────
 
+    /// offsetExists(mixed $offset): bool
     pub fn offsetExists(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
         try ctx.call.parseArgs("z", .{&offset});
@@ -40,6 +43,7 @@ const ArrayLike = extern struct {
         });
     }
 
+    /// offsetGet(mixed $offset): mixed
     pub fn offsetGet(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
         try ctx.call.parseArgs("z", .{&offset});
@@ -56,6 +60,7 @@ const ArrayLike = extern struct {
         }
     }
 
+    /// offsetSet(mixed $offset, mixed $value): void
     pub fn offsetSet(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: ?*c.zval = null;
         var value: *c.zval = undefined;
@@ -73,6 +78,7 @@ const ArrayLike = extern struct {
         self.iter.reset();
     }
 
+    /// offsetUnset(mixed $offset): void
     pub fn offsetUnset(self: *ArrayLike, ctx: phpz.Ctx) !void {
         var offset: *c.zval = undefined;
         try ctx.call.parseArgs("z", .{&offset});
@@ -86,12 +92,14 @@ const ArrayLike = extern struct {
 
     // ── Countable ─────────────────────────────────────────────────
 
+    /// count(): int
     pub fn count(self: ArrayLike, ctx: phpz.Ctx) void {
         ctx.ret.set(.int, @intCast(self.data.len()));
     }
 
     // ── Iterator ──────────────────────────────────────────────────
 
+    /// current(): mixed
     pub fn current(self: *ArrayLike, ctx: phpz.Ctx) void {
         if (self.iter.currentValue()) |zv| {
             phpz.Zval.native.tryAddref(zv);
@@ -101,6 +109,7 @@ const ArrayLike = extern struct {
         }
     }
 
+    /// key(): mixed
     pub fn key(self: *ArrayLike, ctx: phpz.Ctx) void {
         if (self.iter.currentKey()) |k| {
             switch (k) {
@@ -112,14 +121,17 @@ const ArrayLike = extern struct {
         }
     }
 
+    /// next(): void
     pub fn next(self: *ArrayLike) void {
         self.iter.advance();
     }
 
+    /// rewind(): void
     pub fn rewind(self: *ArrayLike) void {
         self.iter.reset();
     }
 
+    /// valid(): bool
     pub fn valid(self: *ArrayLike, ctx: phpz.Ctx) void {
         ctx.ret.set(.bool, self.iter.current() != null);
     }

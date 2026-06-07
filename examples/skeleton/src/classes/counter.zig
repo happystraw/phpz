@@ -1,8 +1,10 @@
 const phpz = @import("phpz");
 
+/// class Counter
 pub const Counter = extern struct {
     n: i64,
 
+    /// public function __construct(int $n = 0): void
     pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{ .optional = true } },
@@ -10,6 +12,7 @@ pub const Counter = extern struct {
         self.n = args[0] orelse 0;
     }
 
+    /// public function add(int $n): void
     pub fn add(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{} },
@@ -17,6 +20,7 @@ pub const Counter = extern struct {
         self.n +|= args[0];
     }
 
+    /// public function dec(int $n): void
     pub fn dec(self: *Counter, ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{} },
@@ -24,6 +28,7 @@ pub const Counter = extern struct {
         self.n -|= args[0];
     }
 
+    /// public function value(): int
     pub fn value(self: Counter, ctx: phpz.Ctx) void {
         ctx.ret.set(.int, self.n);
     }
