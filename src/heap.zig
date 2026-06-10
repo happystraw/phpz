@@ -185,4 +185,10 @@ const DebugSourceLocation = if (c.ZEND_DEBUG == 1) struct {
         return std.mem.indexOf(u8, path, "/lib/std/") != null or
             std.mem.indexOf(u8, path, "\\lib\\std\\") != null;
     }
+
+    test {
+        _ = &resolve;
+        _ = &writeTrace;
+        _ = &isStdLibPath;
+    }
 } else void;

@@ -55,3 +55,7 @@ fn assertTuple(comptime T: type) void {
         @compileError("expected a tuple, e.g. .{ \"col1\", \"col2\" }, got " ++ @typeName(T));
     }
 }
+test {
+    const std = @import("std");
+    std.testing.refAllDecls(table);
+}

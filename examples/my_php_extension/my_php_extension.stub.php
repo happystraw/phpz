@@ -16,6 +16,18 @@ namespace {
     {
     }
 
+    function iniGetGreeting(): string
+    {
+    }
+
+    function iniGetMaxUsers(): int
+    {
+    }
+
+    function iniGetDebug(): bool
+    {
+    }
+
     /** @var string */
     const MY_EXT_VERSION = "1.0.0";
 }

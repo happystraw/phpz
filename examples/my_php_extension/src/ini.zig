@@ -1,26 +1,7 @@
 const phpz = @import("phpz");
 
-var greeting: []const u8 = "Hello";
-var max_users: i64 = 100;
-var debug_enabled: bool = false;
+pub const greeting = phpz.ini.string.new("my_php_extension.greeting", "Hello", .all);
+pub const max_users = phpz.ini.int.new("my_php_extension.max_users", 100, .system);
+pub const debug = phpz.ini.boolean.new("my_php_extension.debug", false, .user);
 
-pub const entries = [_]phpz.ini.Entry{
-    .{
-        .name = "my_php_extension.greeting",
-        .value = "Hello",
-        .access = .all,
-        .on_modify = phpz.ini.onUpdateString(&greeting),
-    },
-    .{
-        .name = "my_php_extension.max_users",
-        .value = "100",
-        .access = .system,
-        .on_modify = phpz.ini.onUpdateLong(&max_users),
-    },
-    .{
-        .name = "my_php_extension.debug",
-        .value = "0",
-        .access = .user,
-        .on_modify = phpz.ini.onUpdateBool(&debug_enabled),
-    },
-};
+pub const defs = phpz.ini.collect(.{ greeting, max_users, debug });

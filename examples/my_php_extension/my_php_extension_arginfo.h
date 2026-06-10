@@ -1,11 +1,20 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 35f6c359a91e2c9b49577f556da4128aac22d838 */
+ * Stub hash: 67dd9be1cad424fbc5e2128c5504e246826948f9 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_greet, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetGreeting, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetMaxUsers, 0, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetDebug, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_increment, 0, 1, IS_VOID, 0)
@@ -46,8 +55,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_testExpectArgMixed, 0, 
 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_class_MyPHPExt_Identifiable_getId arginfo_iniGetMaxUsers
 
 #define arginfo_class_MyPHPExt_AbstractEntity_onLoad arginfo_hello
 
@@ -60,12 +68,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_User___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_User_getId arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_User_getId arginfo_iniGetMaxUsers
 
 #define arginfo_class_MyPHPExt_User_handle arginfo_class_MyPHPExt_AbstractEntity_handle
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_User___toString, 0, 0, IS_STRING, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_class_MyPHPExt_User___toString arginfo_iniGetGreeting
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Dumper_dump, 0, 0, IS_VOID, 0)
 	ZEND_ARG_VARIADIC_TYPE_INFO(0, value, IS_MIXED, 0)
@@ -81,7 +88,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Counter_dec arginfo_class_MyPHPExt_Counter_add
 
-#define arginfo_class_MyPHPExt_Counter_value arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Counter_value arginfo_iniGetMaxUsers
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ArrayLike___construct, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, data, IS_ARRAY, 0, "[]")
@@ -106,7 +113,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetU
 	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_ArrayLike_count arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_ArrayLike_count arginfo_iniGetMaxUsers
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_current, 0, 0, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -117,12 +124,14 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_ArrayLike_rewind arginfo_hello
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_valid, 0, 0, _IS_BOOL, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_class_MyPHPExt_ArrayLike_valid arginfo_iniGetDebug
 
 
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
+ZEND_FUNCTION(iniGetGreeting);
+ZEND_FUNCTION(iniGetMaxUsers);
+ZEND_FUNCTION(iniGetDebug);
 ZEND_FUNCTION(MyPHPExt_increment);
 ZEND_FUNCTION(MyPHPExt_findById);
 ZEND_FUNCTION(MyPHPExt_getDefaultUser);
@@ -158,6 +167,9 @@ ZEND_METHOD(MyPHPExt_ArrayLike, valid);
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
+	ZEND_FE(iniGetGreeting, arginfo_iniGetGreeting)
+	ZEND_FE(iniGetMaxUsers, arginfo_iniGetMaxUsers)
+	ZEND_FE(iniGetDebug, arginfo_iniGetDebug)
 	ZEND_NS_FALIAS("MyPHPExt", increment, MyPHPExt_increment, arginfo_MyPHPExt_increment)
 	ZEND_NS_FALIAS("MyPHPExt", findById, MyPHPExt_findById, arginfo_MyPHPExt_findById)
 	ZEND_NS_FALIAS("MyPHPExt", getDefaultUser, MyPHPExt_getDefaultUser, arginfo_MyPHPExt_getDefaultUser)

@@ -42,6 +42,6 @@ comptime {
         // .request_startup_fn = active,
         // .request_shutdown_fn = deactivate,
         .info_fn = info,
-        .ini_entries = &ini_config.entries,
+        .ini_defs = &ini_config.defs,
     });
 }

@@ -4,6 +4,7 @@ const phpz = @import("phpz");
 const c = phpz.c;
 const Zval = phpz.Zval;
 
+const ini_config = @import("ini.zig");
 const StatusEnum = @import("classes.zig").status.Enum;
 const UserClass = @import("classes.zig").user.Class;
 
@@ -215,6 +216,21 @@ fn map(ctx: phpz.Ctx) !void {
     }
 }
 
+/// iniGetGreeting(): string
+fn iniGetGreeting(ctx: phpz.Ctx) !void {
+    ctx.ret.set(.string, ini_config.greeting.value);
+}
+
+/// iniGetMaxUsers(): int
+fn iniGetMaxUsers(ctx: phpz.Ctx) !void {
+    ctx.ret.set(.int, ini_config.max_users.value);
+}
+
+/// iniGetDebug(): bool
+fn iniGetDebug(ctx: phpz.Ctx) !void {
+    ctx.ret.set(.bool, ini_config.debug.value);
+}
+
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
@@ -226,4 +242,7 @@ comptime {
     phpz.function("MyPHPExt\\testExpectArgScalars", testExpectArgScalars);
     phpz.function("MyPHPExt\\testExpectArgArrayObject", testExpectArgArrayObject);
     phpz.function("MyPHPExt\\testExpectArgMixed", testExpectArgMixed);
+    phpz.function("iniGetGreeting", iniGetGreeting);
+    phpz.function("iniGetMaxUsers", iniGetMaxUsers);
+    phpz.function("iniGetDebug", iniGetDebug);
 }
