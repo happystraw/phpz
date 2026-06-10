@@ -83,7 +83,7 @@ pub inline fn wrongParametersNone() WrongParameterCountError {
 }
 
 /// Throw a PHP Error
-pub fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: anytype) void {
+pub inline fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: anytype) void {
     @call(.auto, c.zend_throw_error, .{ if (ce) |e| e.ptr() else null, format.ptr } ++ args);
 }
 
@@ -108,22 +108,22 @@ pub inline fn hasException() bool {
 pub const clearException = c.zend_clear_exception;
 
 /// Trigger a PHP error
-pub fn err(level: Level, comptime format: [:0]const u8, args: anytype) void {
+pub inline fn err(level: Level, comptime format: [:0]const u8, args: anytype) void {
     @call(.auto, c.zend_error, .{ @intFromEnum(level), format.ptr } ++ args);
 }
 
 /// Trigger a deprecation warning
-pub fn deprecated(comptime format: [:0]const u8, args: anytype) void {
+pub inline fn deprecated(comptime format: [:0]const u8, args: anytype) void {
     err(.deprecated, format, args);
 }
 
 /// Trigger a warning
-pub fn warning(comptime format: [:0]const u8, args: anytype) void {
+pub inline fn warning(comptime format: [:0]const u8, args: anytype) void {
     err(.warning, format, args);
 }
 
 /// Trigger a notice
-pub fn notice(comptime format: [:0]const u8, args: anytype) void {
+pub inline fn notice(comptime format: [:0]const u8, args: anytype) void {
     err(.notice, format, args);
 }
 
