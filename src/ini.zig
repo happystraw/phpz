@@ -76,7 +76,7 @@ pub fn onUpdateLong(comptime global: *i64) OnModifyFn {
         fn cb(_: *c.zend_ini_entry, new_value: ?*c.zend_string, _: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
             if (new_value) |nv| {
                 const s = nv.*.val()[0..nv.*.len];
-                global.* = std.fmt.parseInt(i64, s, 10) catch 0;
+                global.* = std.fmt.parseInt(i64, s, 10) catch return c.FAILURE;
             }
             return c.SUCCESS;
         }
@@ -89,7 +89,7 @@ pub fn onUpdateDouble(comptime global: *f64) OnModifyFn {
         fn cb(_: *c.zend_ini_entry, new_value: ?*c.zend_string, _: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
             if (new_value) |nv| {
                 const s = nv.*.val()[0..nv.*.len];
-                global.* = std.fmt.parseFloat(f64, s) catch 0.0;
+                global.* = std.fmt.parseFloat(f64, s) catch return c.FAILURE;
             }
             return c.SUCCESS;
         }
