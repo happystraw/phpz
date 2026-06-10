@@ -54,45 +54,61 @@ pub const String = opaque {
         return self.len() == 0;
     }
 
+    /// Copy the string (increment refcount)
+    pub fn copy(self: *String) *String {
+        return .from(c.zend_string_copy(self.ptr()));
+    }
+
     /// Concatenate two strings
     pub fn concat(s1: []const u8, s2: []const u8) *String {
-        const result = c.zend_string_concat2(s1.ptr, s1.len, s2.ptr, s2.len);
-        return .from(result);
+        return .from(c.zend_string_concat2(s1.ptr, s1.len, s2.ptr, s2.len));
     }
 
     /// Concatenate three strings
     pub fn concat3(s1: []const u8, s2: []const u8, s3: []const u8) *String {
-        const result = c.zend_string_concat3(
+        return .from(c.zend_string_concat3(
             s1.ptr,
             s1.len,
             s2.ptr,
             s2.len,
             s3.ptr,
             s3.len,
-        );
-        return .from(result);
+        ));
     }
 
     /// Convert to lowercase
     pub fn toLower(self: *String) *String {
-        const result = c.zend_string_tolower_ex(self.ptr(), false);
-        return .from(result);
+        return .from(c.zend_string_tolower_ex(self.ptr(), false));
     }
 
     /// Convert to uppercase
     pub fn toUpper(self: *String) *String {
-        const result = c.zend_string_toupper_ex(self.ptr(), false);
-        return .from(result);
+        return .from(c.zend_string_toupper_ex(self.ptr(), false));
     }
 
-    /// Compare two strings for equality
-    pub fn equals(self: *String, other: *String) bool {
-        return c.zend_string_equal_val(self.ptr(), other.ptr());
+    /// Compare string to a string literal
+    pub fn equals(self: *String, other: []const u8) bool {
+        return c.zend_string_equals_cstr(self.ptr(), other.ptr, other.len);
+    }
+
+    /// Compare string to another string
+    pub fn equalsString(self: *String, other: *String) bool {
+        return c.zend_string_equals(self.ptr(), other.ptr());
     }
 
     /// Calculate string hash
     pub fn hash(self: *String) u64 {
         return c.zend_string_hash_func(self.ptr());
+    }
+
+    /// Check if string starts with a prefix
+    pub fn startsWith(self: *String, prefix: []const u8) bool {
+        return c.zend_string_starts_with_cstr(self.ptr(), prefix.ptr, prefix.len);
+    }
+
+    /// Check if string starts with another string
+    pub fn startsWithString(self: *String, prefix: *String) bool {
+        return c.zend_string_starts_with(self.ptr(), prefix.ptr());
     }
 
     /// Get refcount
