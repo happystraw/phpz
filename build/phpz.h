@@ -32,6 +32,7 @@
 #include "Zend/zend_API.h"
 #include "Zend/zend_exceptions.h"
 #include "Zend/zend_enum.h"
+#include "ext/standard/info.h"
 
 static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, bool dtor_src) {
     ZVAL_ZVAL(z, src, copy, dtor_src);

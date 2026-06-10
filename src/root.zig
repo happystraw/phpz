@@ -4,6 +4,7 @@ pub const c = @import("c.zig").c;
 
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
+pub const info = @import("info.zig");
 
 const mod_helper = @import("module.zig");
 pub const module = mod_helper.module;
@@ -35,6 +36,8 @@ test {
     _ = @import("errors.zig");
     _ = @import("function.zig");
     _ = @import("heap.zig");
+    _ = @import("ini.zig");
+    _ = @import("info.zig");
     _ = @import("module.zig");
     _ = @import("zend.zig");
     _ = @import("zval.zig");

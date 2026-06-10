@@ -1,5 +1,4 @@
 const phpz = @import("phpz");
-const c = phpz.c;
 
 const allocator = @import("allocator.zig");
 const classes = @import("classes.zig");
@@ -26,10 +25,10 @@ fn shutdown() !void {
 // fn deactivate() !void {}
 
 fn info(entry: *phpz.ModuleEntry) void {
-    c.php_info_print_table_start();
-    c.php_info_print_table_row(2, "MyPHPExtension support", "enabled");
-    c.php_info_print_table_row(2, "Version", entry.version);
-    c.php_info_print_table_end();
+    phpz.info.table.start();
+    phpz.info.table.row(.{ "MyPHPExtension support", "enabled" });
+    phpz.info.table.row(.{ "Version", entry.version });
+    phpz.info.table.end();
 }
 
 comptime {
