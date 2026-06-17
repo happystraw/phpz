@@ -4,23 +4,19 @@
 //! It handles C header translation, PHP include paths setup, and module creation.
 const Phpz = @This();
 
-/// The compiled Phpz module with PHP extension support
+/// The compiled Phpz module with PHP extension support.
 mod: *Build.Module,
+
+/// Advanced access to the translator used to produce the PHP C bindings.
+c: Translator,
 
 options: Options,
 
 /// Configuration options for building PHP extensions with Zig
 pub const Options = struct {
-    /// Path to the C header file that includes PHP headers.
-    /// This file will be processed by translate-c to generate Zig bindings.
-    /// Example: b.path("my_extension.h")
-    c_source_file: Build.LazyPath,
-
-    /// Target platform configuration (cross-compilation support)
-    target: Build.ResolvedTarget,
-
-    /// Optimization mode (Debug, ReleaseSafe, ReleaseFast, ReleaseSmall)
-    optimize: std.builtin.OptimizeMode,
+    /// Options passed to the PHP C translator.
+    /// Phpz forces `strict_flex_arrays` to `.@"1"`.
+    translator: Translator.Options,
 
     /// Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
     ///   Linux:   /usr/include/php
@@ -48,13 +44,14 @@ pub fn init(phpz_dep: *Build.Dependency, options: Options) Phpz {
 }
 
 pub fn initInner(b: *Build, options: Options) Phpz {
+    const c = createPhpCTranslator(b, options);
     const mod = b.createModule(.{
-        .target = options.target,
-        .optimize = options.optimize,
+        .target = options.translator.target,
+        .optimize = options.translator.optimize,
         .root_source_file = b.path("src/root.zig"),
         .imports = &.{
             // Import PHP C bindings as "php_c"
-            .{ .name = "php_c", .module = createPhpCModule(b, options) },
+            .{ .name = "php_c", .module = c.mod },
         },
     });
 
@@ -64,12 +61,45 @@ pub fn initInner(b: *Build, options: Options) Phpz {
     mod_opts.addOption(usize, "debug_leak_trace_frames", options.debug_leak_trace_frames);
     mod.addOptions("phpz_options", mod_opts);
 
-    return .{ .mod = mod, .options = options };
+    return .{ .mod = mod, .c = c, .options = options };
+}
+
+fn createPhpCTranslator(b: *Build, options: Options) Translator {
+    const translate_c_dep = b.dependency("translate_c", .{});
+    var translator_options = options.translator;
+    translator_options.strict_flex_arrays = .@"1";
+
+    const c: Translator = .init(translate_c_dep, translator_options);
+    if (translator_options.target.query.isNative() and translator_options.target.result.os.tag == .linux) {
+        // FIXME: remove in zig 0.17.0
+        // Add Zig's C include path (for stdint.h, stddef.h, etc.)
+        if (b.graph.zig_lib_directory.path) |path| {
+            c.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
+        }
+    }
+    // phpz.h
+    c.addIncludePath(b.path("build"));
+
+    // Configure PHP include paths for the C preprocessor
+    if (options.php_include_dir) |root| {
+        c.addIncludePath(root);
+        c.addIncludePath(root.path(b, "main"));
+        c.addIncludePath(root.path(b, "Zend"));
+        c.addIncludePath(root.path(b, "TSRM"));
+        c.addIncludePath(root.path(b, "ext"));
+        if (translator_options.target.result.os.tag == .windows) {
+            c.defineCMacro("ZEND_WIN32", "1");
+            c.defineCMacro("PHP_WIN32", "1");
+            c.defineCMacro("WINDOWS", "1");
+        }
+    }
+
+    return c;
 }
 
 /// Apply OS-specific linker settings to a PHP extension shared library.
 pub fn apply(self: Phpz, lib: *Build.Step.Compile) void {
-    switch (self.options.target.result.os.tag) {
+    switch (self.options.translator.target.result.os.tag) {
         // macOS: allows undefined symbols to be resolved at runtime by PHP
         .macos => lib.linker_allow_shlib_undefined = true,
         // Windows: links against php8.lib in the PHP SDK
@@ -81,40 +111,6 @@ pub fn apply(self: Phpz, lib: *Build.Step.Compile) void {
         },
         else => {},
     }
-}
-
-fn createPhpCModule(b: *Build, options: Options) *Build.Module {
-    // This method uses an external dependency for C translation.
-    const translate_c_dep = b.dependency("translate_c", .{});
-    const php_c: Translator = .init(translate_c_dep, .{
-        .c_source_file = options.c_source_file,
-        .target = options.target,
-        .optimize = options.optimize,
-        .strict_flex_arrays = .@"1",
-    });
-    if (options.target.query.isNative() and options.target.result.os.tag == .linux) {
-        // Add Zig's C include path (for stdint.h, stddef.h, etc.)
-        if (b.graph.zig_lib_directory.path) |path| {
-            php_c.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
-        }
-    }
-    // phpz.h
-    php_c.addIncludePath(b.path("build"));
-
-    // Configure PHP include paths for the C preprocessor
-    if (options.php_include_dir) |root| {
-        php_c.addIncludePath(root);
-        php_c.addIncludePath(root.path(b, "main"));
-        php_c.addIncludePath(root.path(b, "Zend"));
-        php_c.addIncludePath(root.path(b, "TSRM"));
-        php_c.addIncludePath(root.path(b, "ext"));
-        if (options.target.result.os.tag == .windows) {
-            php_c.defineCMacro("ZEND_WIN32", "1");
-            php_c.defineCMacro("PHP_WIN32", "1");
-            php_c.defineCMacro("WINDOWS", "1");
-        }
-    }
-    return php_c.mod;
 }
 
 const std = @import("std");

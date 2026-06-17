@@ -11,9 +11,11 @@ pub fn build(b: *std.Build) void {
 
     const phpz_dep = b.dependency("phpz", .{});
     const phpz = Phpz.init(phpz_dep, .{
-        .c_source_file = b.path("skeleton.h"),
-        .target = target,
-        .optimize = optimize,
+        .translator = .{
+            .c_source_file = b.path("skeleton.h"),
+            .target = target,
+            .optimize = optimize,
+        },
         .php_include_dir = .{ .cwd_relative = php_include_dir },
         .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
     });

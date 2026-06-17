@@ -85,10 +85,12 @@ const Phpz = @import("phpz").Phpz;
 const phpz_dep = b.dependency("phpz", .{});
 // Initialize Phpz: translates PHP C headers into Zig bindings
 const phpz = Phpz.init(phpz_dep, .{
-    .target = target,
-    .optimize = optimize,
-    // C header for translate-c
-    .c_source_file = b.path("my_php_extension.h"),
+    .translator = .{
+        .target = target,
+        .optimize = optimize,
+        // C header for translate-c
+        .c_source_file = b.path("my_php_extension.h"),
+    },
     // Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
     .php_include_dir = .{ .cwd_relative = "/usr/include/php" },
 });

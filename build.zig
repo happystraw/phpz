@@ -27,10 +27,12 @@ pub fn build(b: *std.Build) void {
 
 fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
     return Phpz.initInner(b, .{
+        .translator = .{
+            .c_source_file = b.path("build/phpz.h"),
+            .target = options.target,
+            .optimize = options.optimize,
+        },
         .php_include_dir = .{ .cwd_relative = options.php_include_dir },
-        .c_source_file = b.path("build/phpz.h"),
-        .target = options.target,
-        .optimize = options.optimize,
         .php_lib_dir = if (options.php_lib_dir) |d| .{ .cwd_relative = d } else null,
     }).mod;
 }
