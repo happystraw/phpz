@@ -1,0 +1,40 @@
+name: phpz_skel Test
+
+on:
+  push:
+    branches: ["dev"]
+    paths:
+      - "tools/phpz_skel.php"
+      - ".github/scripts/test-phpz-skel.sh"
+      - ".github/workflows/test-phpz-skel.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "tools/phpz_skel.php"
+      - ".github/scripts/test-phpz-skel.sh"
+      - ".github/workflows/test-phpz-skel.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, PHP 8.2)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+          tools: php-config
+      - name: Run phpz_skel tests
+        shell: bash
+        env:
+          PHPZ_REF: ${{ github.head_ref || github.ref_name || 'dev' }}
+        run: bash .github/scripts/test-phpz-skel.sh

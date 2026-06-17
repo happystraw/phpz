@@ -536,7 +536,7 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
         ++ result ++
             \\
             \\ You need to generate arginfo header file and include it in your C code:
-            \\ 1. Generate the arginfo header: php gen_stub.php your_extension.stub.php
+            \\ 1. Generate the arginfo header: php build/gen_stub.php your_extension.stub.php
             \\ 2. Include in your extension: #include "your_extension_arginfo.h"
         );
     }

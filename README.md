@@ -22,7 +22,21 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Memory** — Zig `Allocator` backed by PHP's `emalloc`, with DWARF leak tracing for debug builds
 - **Auto-Registration** — stub-file-driven: functions (`ext_functions`) and constants (`const` in stub → `register_{name}_symbols`) are automatically registered at module startup; classes require an explicit `Class.register()` call in `module_startup_fn`
 
-## Usage
+## Quick Start
+
+Generate a PHP extension skeleton:
+
+```bash
+# Generate a new PHP extension skeleton
+curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php \
+  | php -- --ext my_php_extension
+
+# Run tests
+cd my_php_extension
+zig build test
+```
+
+## Manual Setup
 
 > **💡 Tip**: For complete working examples, see the [`examples/`](./examples/) directory.
 
@@ -34,7 +48,7 @@ Add `phpz` to your `build.zig.zon`
 zig fetch --save git+https://github.com/happystraw/phpz
 ```
 
-### 2. Generate arginfo.h (Recommended)
+### 2. Generate arginfo.h
 
 For PHP 8.0+, it's recommended to use stub files to generate arginfo headers:
 
