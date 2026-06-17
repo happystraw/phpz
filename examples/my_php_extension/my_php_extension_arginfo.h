@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 67dd9be1cad424fbc5e2128c5504e246826948f9 */
+ * Stub hash: 4f71fe9ade534fb419c5f4f766b7bf7eec595b83 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -54,6 +54,14 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_testExpectArgMixed, 0, 1, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_inspectObjectProperty, 0, 2, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, obj, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, silent, _IS_BOOL, 0, "false")
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_tryCreateInvalidUser arginfo_hello
 
 #define arginfo_class_MyPHPExt_Identifiable_getId arginfo_iniGetMaxUsers
 
@@ -140,6 +148,8 @@ ZEND_FUNCTION(MyPHPExt_map);
 ZEND_FUNCTION(MyPHPExt_testExpectArgScalars);
 ZEND_FUNCTION(MyPHPExt_testExpectArgArrayObject);
 ZEND_FUNCTION(MyPHPExt_testExpectArgMixed);
+ZEND_FUNCTION(MyPHPExt_inspectObjectProperty);
+ZEND_FUNCTION(MyPHPExt_tryCreateInvalidUser);
 ZEND_METHOD(MyPHPExt_AbstractEntity, onLoad);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, getId);
@@ -178,6 +188,8 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_NS_FALIAS("MyPHPExt", testExpectArgScalars, MyPHPExt_testExpectArgScalars, arginfo_MyPHPExt_testExpectArgScalars)
 	ZEND_NS_FALIAS("MyPHPExt", testExpectArgArrayObject, MyPHPExt_testExpectArgArrayObject, arginfo_MyPHPExt_testExpectArgArrayObject)
 	ZEND_NS_FALIAS("MyPHPExt", testExpectArgMixed, MyPHPExt_testExpectArgMixed, arginfo_MyPHPExt_testExpectArgMixed)
+	ZEND_NS_FALIAS("MyPHPExt", inspectObjectProperty, MyPHPExt_inspectObjectProperty, arginfo_MyPHPExt_inspectObjectProperty)
+	ZEND_NS_FALIAS("MyPHPExt", tryCreateInvalidUser, MyPHPExt_tryCreateInvalidUser, arginfo_MyPHPExt_tryCreateInvalidUser)
 	ZEND_FE_END
 };
 

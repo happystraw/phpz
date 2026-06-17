@@ -28,11 +28,15 @@ const User = extern struct {
 
         const user: *Class = .from(.impl, self);
         const name = blk: {
-            const prop = try user.property("name", false);
+            var scratch = phpz.Zval.native.undef;
+            const prop = try user.property("name", false, &scratch);
+            defer phpz.Zval.native.tryDtor(&scratch);
             break :blk if (prop.is(.undef)) "" else prop.asUnchecked(.string);
         };
         const age: i64 = blk: {
-            const prop = try user.property("age", false);
+            var scratch = phpz.Zval.native.undef;
+            const prop = try user.property("age", false, &scratch);
+            defer phpz.Zval.native.tryDtor(&scratch);
             break :blk if (prop.is(.undef)) 0 else prop.asUnchecked(.int);
         };
 
@@ -59,8 +63,10 @@ const User = extern struct {
     pub fn toString(self: *const User, ctx: phpz.Ctx) !void {
         const user: *Class = .from(.impl, @constCast(self));
         const name = blk: {
-            const name_zv = try user.property("name", false);
-            break :blk if (name_zv.is(.undef)) "" else name_zv.asUnchecked(.string);
+            var scratch = phpz.Zval.native.undef;
+            const prop = try user.property("name", false, &scratch);
+            defer phpz.Zval.native.tryDtor(&scratch);
+            break :blk if (prop.is(.undef)) "" else prop.asUnchecked(.string);
         };
 
         const result = try std.fmt.allocPrint(gpa, "User({s})", .{name});

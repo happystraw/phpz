@@ -182,8 +182,10 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             if (@hasDecl(T, "init")) {
                 if (comptime @typeInfo(@TypeOf(T.init)).@"fn".params.len == 1) {
                     intern.impl.init();
-                } else comptime {
-                    if (@typeInfo(@TypeOf(T.init)).@"fn".params.len != 2) @compileError("T.init must take 1 or 2 parameters");
+                } else {
+                    comptime {
+                        if (@typeInfo(@TypeOf(T.init)).@"fn".params.len != 2) @compileError("T.init must take 1 or 2 parameters");
+                    }
                     intern.impl.init(entry);
                 }
             }
@@ -359,6 +361,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Creates a new instance of the class.
         ///
+        /// Ownership: caller owns the returned object reference; call
+        /// `release()` unless the object is transferred into a zval/PHP return.
+        ///
         /// Must be called after `register()`, otherwise `entry` is undefined.
         pub fn new() *Self {
             // emalloc never returns null (it aborts on OOM), so `orelse` is unreachable.
@@ -394,10 +399,14 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Must be called after `register()`, otherwise `entry` is undefined.
         ///
+        /// Ownership: caller owns the returned object reference; call
+        /// `release()` unless the object is transferred into a zval/PHP return.
+        ///
         /// Returns `error.AccessDenied` if the constructor is inaccessible.
         /// Returns `error.PhpException` if the constructor throws a PHP exception.
         pub fn newWith(params: anytype) ConstructError!*Self {
             const instance = new();
+            errdefer instance.release();
             try instance.construct(params);
             return instance;
         }
@@ -425,10 +434,16 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 
         /// Read object property.
         ///
+        /// Ownership: returned pointer is either borrowed from the object/runtime
+        /// or points at caller-provided scratch. Never dtor the returned pointer
+        /// directly; use `Zval.native.tryDtor(scratch)` for scratch cleanup.
+        ///
         /// Returns `error.PhpException` if a magic `__get` handler throws.
-        pub fn property(self: *Self, prop_name: []const u8, silent: bool) zend.Function.Error!*Zval {
-            var rv: c.zval = undefined;
-            const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, &rv);
+        ///
+        /// Initialize `scratch` to IS_UNDEF before calling. If `scratch` is no
+        /// longer IS_UNDEF after the call, destroy it when done.
+        pub fn property(self: *Self, prop_name: []const u8, silent: bool, scratch: *c.zval) zend.Function.Error!*Zval {
+            const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, scratch);
             if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
             return .from(val);
         }

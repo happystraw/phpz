@@ -6,27 +6,36 @@ pub const Array = opaque {
         NotFound,
     };
 
-    /// Create an empty array
+    /// Create an empty array.
+    ///
+    /// Ownership: caller owns the returned array; call `release()` when done.
     pub fn empty() *Array {
         return @ptrCast(c.zend_new_array(0));
     }
 
-    /// Create an array with initial capacity
+    /// Create an array with initial capacity.
+    ///
+    /// Ownership: caller owns the returned array; call `release()` when done.
     pub fn init(capacity: u32) *Array {
         return @ptrCast(c.zend_new_array(capacity));
     }
 
-    /// Create array from an existing zend_array pointer
+    /// Create array from an existing zend_array pointer.
+    ///
+    /// Ownership: borrowed wrapper; no refcount change. Use `addref()` if the
+    /// wrapper must outlive the original owner.
     pub inline fn from(zarr: *c.zend_array) *Array {
         return @ptrCast(zarr);
     }
 
-    /// Get the underlying zend_array pointer
+    /// Get the underlying zend_array pointer.
+    ///
+    /// Ownership: borrowed raw pointer.
     pub inline fn ptr(self: *Array) *c.zend_array {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Release the array (decrement refcount, destroy if zero).
+    /// Release one owned array reference (decrement refcount, destroy if zero).
     pub inline fn release(self: *Array) void {
         c.zend_array_release(self.ptr());
     }
@@ -51,42 +60,67 @@ pub const Array = opaque {
         c.zend_hash_clean(self.ptr());
     }
 
-    /// Duplicate the array
+    /// Duplicate the array.
+    ///
+    /// Ownership: caller owns the returned array; call `release()` when done.
     pub fn duplicate(self: *Array) *Array {
         return @ptrCast(c.zend_array_dup(self.ptr()));
     }
 
-    /// Add or update a value by string key
+    /// Add or update a value by string key.
+    ///
+    /// Ownership: the array takes ownership of `value`'s zval contents. If
+    /// `value` is borrowed and must remain independently owned, addref/copy it
+    /// before calling. The returned pointer is borrowed from the array.
     pub fn update(self: *Array, key: []const u8, value: *c.zval) ?*c.zval {
         return c.zend_hash_str_update(self.ptr(), key.ptr, key.len, value);
     }
 
-    /// Add a new value by string key (fails if key exists)
+    /// Add a new value by string key (fails if key exists).
+    ///
+    /// Ownership: on success, the array takes ownership of `value`'s zval
+    /// contents. The returned pointer is borrowed from the array.
     pub fn add(self: *Array, key: []const u8, value: *c.zval) ?*c.zval {
         return c.zend_hash_str_add(self.ptr(), key.ptr, key.len, value);
     }
 
-    /// Add or update a value by index
+    /// Add or update a value by index.
+    ///
+    /// Ownership: the array takes ownership of `value`'s zval contents. If
+    /// `value` is borrowed and must remain independently owned, addref/copy it
+    /// before calling. The returned pointer is borrowed from the array.
     pub fn updateIndex(self: *Array, index: isize, value: *c.zval) ?*c.zval {
         return c.zend_hash_index_update(self.ptr(), @bitCast(index), value);
     }
 
-    /// Add a new value by index (fails if index exists)
+    /// Add a new value by index (fails if index exists).
+    ///
+    /// Ownership: on success, the array takes ownership of `value`'s zval
+    /// contents. The returned pointer is borrowed from the array.
     pub fn addIndex(self: *Array, index: isize, value: *c.zval) ?*c.zval {
         return c.zend_hash_index_add(self.ptr(), @bitCast(index), value);
     }
 
-    /// Append a value to the array (next index)
+    /// Append a value to the array (next index).
+    ///
+    /// Ownership: on success, the array takes ownership of `value`'s zval
+    /// contents. The returned pointer is borrowed from the array.
     pub fn append(self: *Array, value: *c.zval) ?*c.zval {
         return c.zend_hash_next_index_insert(self.ptr(), value);
     }
 
-    /// Find a value by string key
+    /// Find a value by string key.
+    ///
+    /// Ownership: borrowed zval pointer owned by the array; addref/copy before
+    /// storing it beyond the array or mutating the table.
     pub fn find(self: *Array, key: []const u8) ?*c.zval {
         return c.zend_hash_str_find(self.ptr(), key.ptr, key.len);
     }
 
-    /// Find a value by index
+    /// Find a value by index.
+    ///
+    /// Ownership: borrowed zval pointer owned by the array; addref/copy before
+    /// storing it beyond the array or mutating the table.
     pub fn findIndex(self: *Array, index: isize) ?*c.zval {
         return c.zend_hash_index_find(self.ptr(), @bitCast(index));
     }
@@ -120,12 +154,18 @@ pub const Array = opaque {
         c.zend_hash_rehash(self.ptr());
     }
 
-    /// Copy from source array
+    /// Copy from source array.
+    ///
+    /// Ownership: copied elements are shared according to Zend hash copy
+    /// semantics; addref values first if independent ownership is required.
     pub fn copy(self: *Array, source: *Array) void {
         c.zend_hash_copy(self.ptr(), source.ptr(), null);
     }
 
-    /// Merge from source array
+    /// Merge from source array.
+    ///
+    /// Ownership: merged elements are shared according to Zend hash merge
+    /// semantics; addref values first if independent ownership is required.
     pub fn merge(self: *Array, source: *Array, overwrite: bool) void {
         c.zend_hash_merge(self.ptr(), source.ptr(), null, overwrite);
     }
@@ -180,12 +220,14 @@ pub const Array = opaque {
         return c.zend_gc_refcount(&self.ptr().gc);
     }
 
-    /// Increment refcount
+    /// Increment refcount.
+    ///
+    /// Ownership: caller owns the added reference and must release/delref it.
     pub fn addref(self: *Array) void {
         _ = c.zend_gc_addref(&self.ptr().gc);
     }
 
-    /// Decrement refcount
+    /// Decrement refcount.
     pub fn delref(self: *Array) void {
         _ = c.zend_gc_delref(&self.ptr().gc);
     }
@@ -201,11 +243,15 @@ pub const Array = opaque {
     };
 
     pub const Entry = struct {
+        /// Ownership: borrowed key view owned by the array bucket.
         key: Key,
+        /// Ownership: borrowed zval pointer owned by the array bucket.
         value: *c.zval,
     };
 
     /// Iterate values with a comptime callback — IS_UNDEF and user code in same scope.
+    ///
+    /// Ownership: callback values are borrowed from the array.
     ///
     /// Equivalent to C's `ZEND_HASH_FOREACH_VAL`.
     /// Unlike pull-based iterators, this inlines the loop body so the compiler can
@@ -249,6 +295,8 @@ pub const Array = opaque {
     }
 
     /// Iterate key-value pairs with a comptime callback — IS_UNDEF and user code in same scope.
+    ///
+    /// Ownership: callback entries contain borrowed keys and values from the array.
     ///
     /// Equivalent to C's `ZEND_HASH_FOREACH`. Walks the bucket array directly.
     /// Key extraction follows C semantics (before IS_UNDEF check).
@@ -339,21 +387,29 @@ pub const Array = opaque {
         }
 
         /// Return the current key without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed key view owned by the array.
         pub fn currentKey(self: *Iterator) ?Key {
             return if (self.hasMore()) self.peekKey() else null;
         }
 
         /// Return the current value without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn currentValue(self: *Iterator) ?*c.zval {
             return if (self.hasMore()) self.peekValue() else null;
         }
 
         /// Return the current element (key + value) without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed key/value owned by the array.
         pub fn current(self: *Iterator) ?Entry {
             return if (self.hasMore()) self.peek() else null;
         }
 
         /// Return the current element and advance, or null if exhausted.
+        ///
+        /// Ownership: borrowed key/value owned by the array.
         pub fn next(self: *Iterator) ?Entry {
             if (!self.hasMore()) return null;
             defer self.advance();
@@ -366,11 +422,15 @@ pub const Array = opaque {
         }
 
         /// Unsafe: peek key + value without bounds check. Prefer `current()`.
+        ///
+        /// Ownership: borrowed key/value owned by the array.
         pub fn peek(self: *Iterator) Entry {
             return .{ .key = self.peekKey(), .value = self.peekValue() };
         }
 
         /// Unsafe: peek the current key without bounds check. Prefer `currentKey()`.
+        ///
+        /// Ownership: borrowed key view owned by the array.
         pub fn peekKey(self: *Iterator) Key {
             var str_key: ?*c.zend_string = null;
             var num_key: c.zend_ulong = undefined;
@@ -382,6 +442,8 @@ pub const Array = opaque {
         }
 
         /// Unsafe: peek the current value without bounds check. Prefer `currentValue()`.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn peekValue(self: *Iterator) *c.zval {
             return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
         }
@@ -410,11 +472,15 @@ pub const Array = opaque {
         }
 
         /// Return the current key without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed key view owned by the array.
         pub fn current(self: *KeyIterator) ?Key {
             return if (self.hasMore()) self.peek() else null;
         }
 
         /// Return the current key and advance, or null if exhausted.
+        ///
+        /// Ownership: borrowed key view owned by the array.
         pub fn next(self: *KeyIterator) ?Key {
             if (!self.hasMore()) return null;
             defer self.advance();
@@ -427,6 +493,8 @@ pub const Array = opaque {
         }
 
         /// Unsafe: peek without bounds check. Prefer `current()`.
+        ///
+        /// Ownership: borrowed key view owned by the array.
         pub fn peek(self: *KeyIterator) Key {
             var str_key: ?*c.zend_string = null;
             var num_key: c.zend_ulong = undefined;
@@ -461,11 +529,15 @@ pub const Array = opaque {
         }
 
         /// Return the current value without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn current(self: *ValueIterator) ?*c.zval {
             return if (self.hasMore()) self.peek() else null;
         }
 
         /// Return the current value and advance, or null if exhausted.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn next(self: *ValueIterator) ?*c.zval {
             if (!self.hasMore()) return null;
             defer self.advance();
@@ -478,6 +550,8 @@ pub const Array = opaque {
         }
 
         /// Unsafe: peek without bounds check. Prefer `current()`.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn peek(self: *ValueIterator) *c.zval {
             return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
         }
@@ -514,6 +588,8 @@ pub const Array = opaque {
         }
 
         /// Return the current value and advance, or null when exhausted.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         /// Automatically skips IS_UNDEF slots.
         pub inline fn next(self: *FastValueIterator) ?*c.zval {
             while (self.pos < self.count) {
@@ -530,6 +606,8 @@ pub const Array = opaque {
         }
 
         /// Return the current value without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed zval pointer owned by the array.
         pub fn current(self: *FastValueIterator) ?*c.zval {
             var p = self.pos;
             var e = self.el;
@@ -579,6 +657,8 @@ pub const Array = opaque {
         }
 
         /// Return the current entry (key + value) and advance, or null when exhausted.
+        ///
+        /// Ownership: borrowed key/value owned by the array.
         /// Automatically skips IS_UNDEF slots.
         pub inline fn next(self: *FastIterator) ?Entry {
             if (self.is_packed) {
@@ -615,6 +695,8 @@ pub const Array = opaque {
         }
 
         /// Return the current entry without advancing, or null if exhausted.
+        ///
+        /// Ownership: borrowed key/value owned by the array.
         pub fn current(self: *FastIterator) ?Entry {
             var p = self.pos;
             var e = self.el;
@@ -678,11 +760,15 @@ pub const Array = opaque {
             }
 
             /// Return the current element as a typed pointer without advancing.
+            ///
+            /// Ownership: borrowed pointer owned by the array.
             pub fn current(self: *Self) ?*T {
                 return if (self.hasMore()) self.peek() else null;
             }
 
             /// Return the current element and advance, or null when iteration is complete.
+            ///
+            /// Ownership: borrowed pointer owned by the array.
             pub fn next(self: *Self) ?*T {
                 if (!self.hasMore()) return null;
                 defer self.advance();
@@ -695,6 +781,8 @@ pub const Array = opaque {
             }
 
             /// Unsafe: peek without bounds check. Prefer `current()`.
+            ///
+            /// Ownership: borrowed pointer owned by the array.
             pub fn peek(self: *Self) *T {
                 const info = c.zend_hash_get_current_data_ptr_ex(self.ht, &self.pos).?;
                 return @ptrCast(@alignCast(info));

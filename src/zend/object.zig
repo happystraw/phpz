@@ -9,7 +9,9 @@ const String = @import("string.zig").String;
 pub const Object = opaque {
     pub const InitError = error{InitFailed};
 
-    /// Create a standard object (stdClass)
+    /// Create a standard object (stdClass).
+    ///
+    /// Ownership: caller owns the returned object; call `release()` when done.
     pub fn init() InitError!*Object {
         const obj = c.zend_objects_new(c.zend_standard_class_def);
         if (obj == null) return error.InitFailed;
@@ -17,7 +19,9 @@ pub const Object = opaque {
         return @ptrCast(obj);
     }
 
-    /// Create an object from a class entry
+    /// Create an object from a class entry.
+    ///
+    /// Ownership: caller owns the returned object; call `release()` when done.
     pub fn initClass(ce: *ClassEntry) InitError!*Object {
         const obj = c.zend_objects_new(ce.ptr());
         if (obj == null) return error.InitFailed;
@@ -25,32 +29,41 @@ pub const Object = opaque {
         return @ptrCast(obj);
     }
 
-    /// Create an object from an existing zend_object pointer
+    /// Create an object from an existing zend_object pointer.
+    ///
+    /// Ownership: borrowed wrapper; no refcount change. Use `addref()` if the
+    /// wrapper must outlive the original owner.
     pub inline fn from(obj: *c.zend_object) *Object {
         return @ptrCast(obj);
     }
 
-    /// Get the underlying zend_object pointer
+    /// Get the underlying zend_object pointer.
+    ///
+    /// Ownership: borrowed raw pointer.
     pub inline fn ptr(self: *Object) *c.zend_object {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Release the object (decrement refcount, destroy if zero).
+    /// Release one owned object reference (decrement refcount, destroy if zero).
     pub inline fn release(self: *Object) void {
         c.zend_object_release(self.ptr());
     }
 
-    /// Increment refcount
+    /// Increment refcount.
+    ///
+    /// Ownership: caller owns the added reference and must release/delref it.
     pub fn addref(self: *Object) void {
         _ = c.zend_gc_addref(&self.ptr().gc);
     }
 
-    /// Decrement refcount
+    /// Decrement refcount.
     pub fn delref(self: *Object) void {
         _ = c.zend_gc_delref(&self.ptr().gc);
     }
 
-    /// Get the class entry
+    /// Get the class entry.
+    ///
+    /// Ownership: borrowed class entry pointer owned by PHP.
     pub inline fn class(self: *Object) *ClassEntry {
         return ClassEntry.from(self.ptr().ce);
     }
@@ -60,7 +73,9 @@ pub const Object = opaque {
         return self.ptr().handle;
     }
 
-    /// Get object properties
+    /// Get object properties.
+    ///
+    /// Ownership: borrowed properties table owned by the object.
     pub inline fn properties(self: *Object) ?*Array {
         const prop_ptr: ?*c.HashTable = c.zend_std_get_properties(self.ptr());
         return if (prop_ptr) |p| .from(p) else null;
@@ -75,6 +90,8 @@ pub const Object = opaque {
 
     /// Look up the constructor via PHP's standard handler.
     ///
+    /// Ownership: borrowed function pointer owned by the class entry.
+    ///
     /// Returns `null` if the class defines no constructor. Returns
     /// `error.AccessDenied` if the constructor exists but is inaccessible
     /// (private/protected) — in that case a PHP exception is also pending.
@@ -86,6 +103,8 @@ pub const Object = opaque {
     }
 
     /// Resolve a method via PHP's OOP dispatch.
+    ///
+    /// Ownership: borrowed function pointer owned by the class entry/runtime.
     ///
     /// Goes through the full method resolution chain: handles visibility
     /// (private/protected), triggers `__call` when the method is absent,
@@ -101,6 +120,8 @@ pub const Object = opaque {
 
     /// Look up a method directly from the class function table.
     ///
+    /// Ownership: borrowed function pointer owned by the class entry.
+    ///
     /// Unlike `resolveMethod`, this bypasses OOP dispatch (`__call`, visibility checks)
     /// and queries the flattened function table directly. The returned pointer can
     /// be cached and passed to `zend_call_known_instance_method` for repeated calls.
@@ -113,29 +134,56 @@ pub const Object = opaque {
         return self.class().findMethod(method_name);
     }
 
+    /// Property read fetch mode, passed to `readProperty`.
+    pub const PropertyRead = enum(c_int) {
+        /// Normal read: `$obj->prop`.
+        read = c.BP_VAR_R,
+        /// Read for `isset()` / `empty()` style checks.
+        isset = c.BP_VAR_IS,
+        /// Read in write context.
+        write = c.BP_VAR_W,
+        /// Read-modify-write context.
+        read_write = c.BP_VAR_RW,
+        /// Read in unset context.
+        unset = c.BP_VAR_UNSET,
+        _,
+    };
+
     /// Read a property value.
+    ///
+    /// Initialize `scratch` to IS_UNDEF before calling. If `scratch` is no
+    /// longer IS_UNDEF after the call, destroy it when done.
+    ///
+    /// Ownership: returned pointer is either borrowed from the object/runtime or
+    /// points at caller-provided scratch. Never dtor the returned pointer
+    /// directly; use `Zval.native.tryDtor(scratch)` for scratch cleanup.
     ///
     /// Returns `error.PhpException` if a magic `__get` handler throws.
     pub fn readProperty(
         self: *Object,
         name: []const u8,
-    ) Function.Error!?*c.zval {
+        comptime read: PropertyRead,
+        scratch: *c.zval,
+    ) Function.Error!*c.zval {
         const zstr = String.init(name);
         defer zstr.release();
 
-        var rv: c.zval = undefined;
         const result = c.zend_std_read_property(
             self.ptr(),
             zstr.ptr(),
-            c.BP_VAR_R,
+            @intFromEnum(read),
             null,
-            &rv,
+            scratch,
         );
         if (errors.hasException()) return error.PhpException;
         return result;
     }
 
     /// Write a property value.
+    ///
+    /// Ownership: `value` is consumed according to Zend property write
+    /// semantics. If `value` is borrowed and must remain independently owned,
+    /// addref/copy it before calling. The returned pointer is borrowed.
     ///
     /// Returns `error.PhpException` if a magic `__set` handler throws.
     pub fn writeProperty(
@@ -269,6 +317,8 @@ pub const Object = opaque {
 
     /// Clone the object.
     ///
+    /// Ownership: caller owns the returned object; call `release()` when done.
+    ///
     /// Returns `error.CloneFailed` if the object is uncloneable or `__clone` throws.
     /// Check `errors.hasException()` to distinguish.
     pub fn clone(self: *Object) CloneError!*Object {
@@ -287,13 +337,17 @@ pub const Object = opaque {
         return (c.GC_FLAGS(self.ptr()) & c.GC_IMMUTABLE) != 0;
     }
 
-    /// Get the case name from an enum case object
+    /// Get the case name from an enum case object.
+    ///
+    /// Ownership: borrowed string view owned by the enum case object.
     pub fn enumCaseName(self: *Object) []const u8 {
         const zv = c.zend_enum_fetch_case_name(self.ptr());
         return native.asUnchecked(zv, .string);
     }
 
-    /// Get the backing value from a backed enum case, or null if pure enum
+    /// Get the backing value from a backed enum case, or null if pure enum.
+    ///
+    /// Ownership: borrowed zval pointer owned by the enum case object.
     pub fn enumCaseValue(self: *Object) ?*c.zval {
         if (self.enumBackingType() == .undef) return null;
         return c.zend_enum_fetch_case_value(self.ptr());

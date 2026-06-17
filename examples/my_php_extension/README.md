@@ -31,6 +31,22 @@ PHPT tests are located in `tests/`. Run with:
 php run-tests.php
 ```
 
+## Property Scratch Values
+
+Zend property reads may return either a borrowed property zval or a temporary
+value written into caller-provided scratch storage, for example when `__get`
+materializes a value. Initialize the scratch zval to `undef` and destroy it only
+if Zend wrote into it:
+
+```zig
+var scratch = phpz.Zval.native.undef;
+const prop = try object.readProperty("name", .read, &scratch);
+defer phpz.Zval.native.tryDtor(&scratch);
+```
+
+The returned `prop` pointer is borrowed unless it points at scratch. Do not dtor
+the returned pointer directly.
+
 ## Manually
 
 ```bash

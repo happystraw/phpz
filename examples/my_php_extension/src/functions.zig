@@ -141,31 +141,26 @@ fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
     var result = phpz.Zval.Array.empty(ctx.ret.ptr());
     result.set(.int, "data_count", @intCast(data.len()));
 
-    // Extract user name via readProperty
-    const user_name_zv = try user.readProperty("name");
-    if (user_name_zv) |zv| {
-        if (Zval.native.is(zv, .string)) {
-            result.set(.string, "user_name", Zval.native.asUnchecked(zv, .string));
-        } else {
-            result.set(.string, "user_name", "not_a_string");
-        }
+    var user_name_scratch = Zval.native.undef;
+    const user_name_zv = try user.readProperty("name", .read, &user_name_scratch);
+    defer Zval.native.tryDtor(&user_name_scratch);
+    if (Zval.native.is(user_name_zv, .string)) {
+        result.set(.string, "user_name", Zval.native.asUnchecked(user_name_zv, .string));
     } else {
-        result.set(.string, "user_name", "?");
+        result.set(.string, "user_name", "not_a_string");
     }
 
     if (nullable_user) |nu| {
         switch (nu) {
             .null => result.set(.null, "nullable_user", {}),
             .value => |obj| {
-                const nu_name_zv = try obj.readProperty("name");
-                if (nu_name_zv) |zv| {
-                    if (Zval.native.is(zv, .string)) {
-                        result.set(.string, "nullable_user", Zval.native.asUnchecked(zv, .string));
-                    } else {
-                        result.set(.string, "nullable_user", "not_a_string");
-                    }
+                var nu_name_scratch = Zval.native.undef;
+                const nu_name_zv = try obj.readProperty("name", .read, &nu_name_scratch);
+                defer Zval.native.tryDtor(&nu_name_scratch);
+                if (Zval.native.is(nu_name_zv, .string)) {
+                    result.set(.string, "nullable_user", Zval.native.asUnchecked(nu_name_zv, .string));
                 } else {
-                    result.set(.string, "nullable_user", "?");
+                    result.set(.string, "nullable_user", "not_a_string");
                 }
             },
         }
@@ -185,6 +180,55 @@ fn testExpectArgMixed(ctx: phpz.Ctx) !void {
     // Return the value back to PHP as-is (add refcount to prevent double-free)
     ctx.ret.ptr().* = zv.*;
     Zval.native.addref(ctx.ret.ptr());
+}
+
+fn setValueSummary(result: *phpz.Zval.Array, zv: *c.zval) void {
+    const kind = Zval.native.kind(zv);
+
+    result.set(.string, "kind", @tagName(kind));
+    switch (kind) {
+        .undef => result.set(.string, "value", "undef"),
+        .null => result.set(.null, "value", {}),
+        .int => result.set(.int, "value", Zval.native.asUnchecked(zv, .int)),
+        .float => result.set(.float, "value", Zval.native.asUnchecked(zv, .float)),
+        .string => result.set(.string, "value", Zval.native.asUnchecked(zv, .string)),
+        .bool => result.set(.bool, "value", Zval.native.asUnchecked(zv, .bool)),
+        else => result.set(.string, "value", @tagName(kind)),
+    }
+}
+
+/// inspectObjectProperty(object $obj, string $name, bool $silent = false): array
+fn inspectObjectProperty(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .object = .{} },
+        .{ .string = .{} },
+        .{ .bool = .{ .optional = true } },
+    }, {});
+
+    const obj: *phpz.zend.Object = args[0];
+    const name: []const u8 = args[1];
+    const silent: bool = args[2] orelse false;
+
+    var scratch = Zval.native.undef;
+    const val = if (silent)
+        try obj.readProperty(name, .isset, &scratch)
+    else
+        try obj.readProperty(name, .read, &scratch);
+    defer Zval.native.tryDtor(&scratch);
+
+    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    result.set(.bool, "scratch", !Zval.native.is(&scratch, .undef));
+    setValueSummary(result, val);
+}
+
+/// tryCreateInvalidUser(): void
+fn tryCreateInvalidUser(ctx: phpz.Ctx) !void {
+    _ = ctx;
+
+    const bad_name = Zval.native.init(.int, 123);
+    const age = Zval.native.init(.int, 1);
+    const user = try UserClass.newWith(.{ bad_name, age });
+    user.release();
 }
 
 /// map(array $arr, callable $cb): array
@@ -242,6 +286,8 @@ comptime {
     phpz.function("MyPHPExt\\testExpectArgScalars", testExpectArgScalars);
     phpz.function("MyPHPExt\\testExpectArgArrayObject", testExpectArgArrayObject);
     phpz.function("MyPHPExt\\testExpectArgMixed", testExpectArgMixed);
+    phpz.function("MyPHPExt\\inspectObjectProperty", inspectObjectProperty);
+    phpz.function("MyPHPExt\\tryCreateInvalidUser", tryCreateInvalidUser);
     phpz.function("iniGetGreeting", iniGetGreeting);
     phpz.function("iniGetMaxUsers", iniGetMaxUsers);
     phpz.function("iniGetDebug", iniGetDebug);

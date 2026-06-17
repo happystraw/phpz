@@ -70,6 +70,14 @@ namespace MyPHPExt {
     {
     }
 
+    function inspectObjectProperty(object $obj, string $name, bool $silent = false): array
+    {
+    }
+
+    function tryCreateInvalidUser(): void
+    {
+    }
+
     interface Identifiable
     {
         public function getId(): int;

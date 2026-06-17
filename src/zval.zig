@@ -129,11 +129,16 @@ pub const Zval = opaque {
     ///
     /// Returns:
     ///   A Zval wrapper
+    ///
+    /// Ownership: borrowed wrapper; no refcount change. Use `addref()` if the
+    /// wrapper must outlive the original owner.
     pub inline fn from(zv: *c.zval) *Zval {
         return @ptrCast(zv);
     }
 
-    /// Get the underlying zval pointer
+    /// Get the underlying zval pointer.
+    ///
+    /// Ownership: borrowed raw pointer.
     pub inline fn ptr(self: *Zval) *c.zval {
         return @ptrCast(@alignCast(self));
     }
@@ -191,6 +196,9 @@ pub const Zval = opaque {
     /// Returns:
     ///   The converted value, or Error.TypeMismatch if types don't match
     ///
+    /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
+    /// are borrowed from the zval; addref/copy before storing beyond `self`.
+    ///
     /// Example:
     /// ```zig
     /// // Safe conversion with error handling
@@ -214,6 +222,9 @@ pub const Zval = opaque {
     ///
     /// Returns:
     ///   The converted value (undefined behavior if type is wrong)
+    ///
+    /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
+    /// are borrowed from the zval; addref/copy before storing beyond `self`.
     ///
     /// Example:
     /// ```zig
@@ -285,14 +296,24 @@ pub const Zval = opaque {
     ///   - For .string: The string is automatically copied and reference-counted by PHP
     ///   - For .undef and .null: The val parameter should be {} (void value)
     ///   - For .array, .object, .resource, .reference: Pass the appropriate wrapper pointer
+    ///
+    /// Ownership: this zval owns the value after `set`. For refcounted wrapper
+    /// inputs (`.array`, `.object`, `.resource`, `.reference`), the pointer is
+    /// stored without addref; addref first if the input is borrowed and remains
+    /// independently owned elsewhere. Destroy any previous zval contents before
+    /// overwriting them.
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
         native.set(self.ptr(), zk, val);
     }
 
+    /// Increment the refcount of this zval's refcounted payload.
+    ///
+    /// Ownership: caller owns the added reference and must `dtor`/delref it.
     pub inline fn addref(self: *Zval) void {
         native.addref(self.ptr());
     }
 
+    /// Destroy one owned zval value.
     pub inline fn dtor(self: *Zval) void {
         native.dtor(self.ptr());
     }
@@ -398,6 +419,10 @@ pub const Zval = opaque {
         pub const undef: c.zval = init(.undef, {});
         pub const nil: c.zval = init(.null, {});
 
+        /// Initialize a raw zval value.
+        ///
+        /// Ownership: caller owns the returned zval contents and must call
+        /// `dtor()`/`tryDtor()` when the value is refcounted and not transferred.
         pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
             var z: c.zval = undefined;
             native.set(&z, zk, val);
@@ -419,6 +444,8 @@ pub const Zval = opaque {
         }
 
         /// Get the PHP type name of a raw zval as a C string.
+        ///
+        /// Ownership: borrowed static/runtime string pointer.
         ///
         /// Returns a human-readable type name like "integer", "string", "array", etc.
         /// Useful for error messages.
@@ -478,12 +505,18 @@ pub const Zval = opaque {
         }
 
         /// Convert a raw zval to a Zig value with type checking.
+        ///
+        /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
+        /// are borrowed from `zv`; addref/copy before storing beyond `zv`.
         pub fn as(zv: *c.zval, comptime zk: Kind) Error!Type(zk) {
             if (!native.is(zv, zk)) return Error.TypeMismatch;
             return native.asUnchecked(zv, zk);
         }
 
         /// Convert a raw zval to a Zig value without type checking.
+        ///
+        /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
+        /// are borrowed from `zv`; addref/copy before storing beyond `zv`.
         pub fn asUnchecked(zv: *c.zval, comptime zk: Kind) Type(zk) {
             return switch (zk) {
                 .undef, .null => @compileError(std.fmt.comptimePrint(
@@ -508,6 +541,12 @@ pub const Zval = opaque {
         }
 
         /// Set a raw zval to the specified type and value.
+        ///
+        /// Ownership: `zv` owns the value after `set`. For refcounted wrapper
+        /// inputs (`.array`, `.object`, `.resource`, `.reference`), the pointer is
+        /// stored without addref; addref first if the input is borrowed and remains
+        /// independently owned elsewhere. Destroy any previous zval contents before
+        /// overwriting them.
         pub fn set(zv: *c.zval, comptime zk: Kind, val: Type(zk)) void {
             switch (zk) {
                 .undef => {
@@ -554,14 +593,33 @@ pub const Zval = opaque {
             }
         }
 
+        /// Set one zval from another using PHP's `ZVAL_ZVAL`.
+        ///
+        /// Ownership: controlled by the `copy` and `dtor_src` flags. `copy=true`
+        /// addrefs the source payload; `dtor_src=true` destroys the source zval.
         pub const setZval = c.phpz_zval_zval;
+        /// Increment the refcount of a raw zval's refcounted payload.
+        ///
+        /// Ownership: caller owns the added reference and must `dtor`/delref it.
         pub const addref = c.zval_add_ref;
+        /// Destroy one owned raw zval value.
         pub const dtor = c.zval_ptr_dtor;
         pub const refcount = c.zval_refcount_p;
+        /// Destroy a scratch/optional zval only if it was initialized.
+        ///
+        /// Ownership: caller-provided scratch cleanup helper.
+        pub inline fn tryDtor(z: *c.zval) void {
+            if (!native.is(z, .undef)) native.dtor(z);
+        }
+        /// Increment the refcount only when the zval is refcounted.
+        ///
+        /// Ownership: caller owns the added reference and must `tryDelref()` or
+        /// otherwise release it.
         pub inline fn tryAddref(z: *c.zval) void {
             // if Z_REFCOUNTED_P
             if (z.u1.v.type_flags != 0) _ = c.zval_addref_p(z);
         }
+        /// Decrement a refcount only when the zval is refcounted.
         pub inline fn tryDelref(z: *c.zval) void {
             // if Z_REFCOUNTED_P
             if (z.u1.v.type_flags != 0) _ = c.zval_delref_p(z);

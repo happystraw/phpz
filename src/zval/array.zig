@@ -3,14 +3,22 @@ const zend = @import("../zend.zig");
 const Zval = @import("../zval.zig").Zval;
 
 pub const Array = opaque {
-    /// Create an empty array
+    /// Create an empty array in caller-provided zval storage.
+    ///
+    /// Ownership: caller owns `zv`'s array value; call `Zval.native.dtor(zv)`
+    /// unless the zval is returned/transferred to PHP. The returned wrapper is
+    /// borrowed from `zv`.
     pub fn empty(zv: *c.zval) *Array {
         zv.value.arr = c.zend_new_array(0);
         zv.u1.type_info = c.IS_ARRAY_EX;
         return @ptrCast(zv);
     }
 
-    /// Create an array with initial capacity
+    /// Create an array with initial capacity in caller-provided zval storage.
+    ///
+    /// Ownership: caller owns `zv`'s array value; call `Zval.native.dtor(zv)`
+    /// unless the zval is returned/transferred to PHP. The returned wrapper is
+    /// borrowed from `zv`.
     pub fn init(zv: *c.zval, capacity: u32) *Array {
         zv.value.arr = c.zend_new_array(capacity);
         zv.u1.type_info = c.IS_ARRAY_EX;
@@ -19,19 +27,25 @@ pub const Array = opaque {
 
     pub const FromError = error{NullPointer} || Zval.Error;
 
-    /// Create from an existing zval pointer (must be array type)
+    /// Create from an existing zval pointer (must be array type).
+    ///
+    /// Ownership: borrowed wrapper; no refcount change.
     pub fn from(zv: *c.zval) FromError!*Array {
         if (Zval.native.getType(zv) != c.IS_ARRAY) return error.TypeMismatch;
         if (zv.value.arr == null) return error.NullPointer;
         return @ptrCast(zv);
     }
 
-    /// Get the underlying zval pointer
+    /// Get the underlying zval pointer.
+    ///
+    /// Ownership: borrowed raw pointer.
     pub inline fn ptr(self: *Array) *c.zval {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Get the underlying zend.Array pointer
+    /// Get the underlying zend.Array pointer.
+    ///
+    /// Ownership: borrowed array pointer owned by this zval.
     pub fn array(self: *Array) *zend.Array {
         return .from(self.ptr().value.arr);
     }
@@ -41,7 +55,12 @@ pub const Array = opaque {
         return self.ptr().value.arr.*.nNumOfElements;
     }
 
-    /// Set a value by string key
+    /// Set a value by string key.
+    ///
+    /// Ownership: scalar/string values are copied. Refcounted wrapper values
+    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// transferred into the array; addref/copy first if the input is borrowed
+    /// and must remain independently owned.
     pub fn set(self: *Array, comptime zk: Zval.Kind, key: []const u8, val: Zval.Type(zk)) void {
         switch (zk) {
             .null => c.add_assoc_null_ex(self.ptr(), key.ptr, key.len),
@@ -60,7 +79,12 @@ pub const Array = opaque {
 
     pub const SetAtError = error{SetIndexFailed};
 
-    /// Set a value by index
+    /// Set a value by index.
+    ///
+    /// Ownership: scalar/string values are copied. Refcounted wrapper values
+    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// transferred into the array; addref/copy first if the input is borrowed
+    /// and must remain independently owned.
     pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: isize, val: Zval.Type(zk)) SetAtError!void {
         const idx: c.zend_ulong = @bitCast(index);
         switch (zk) {
@@ -82,7 +106,12 @@ pub const Array = opaque {
 
     pub const AppendError = error{AppendFailed};
 
-    /// Append a value to the array
+    /// Append a value to the array.
+    ///
+    /// Ownership: scalar/string values are copied. Refcounted wrapper values
+    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// transferred into the array; addref/copy first if the input is borrowed
+    /// and must remain independently owned.
     pub fn append(self: *Array, comptime zk: Zval.Kind, val: Zval.Type(zk)) AppendError!void {
         const result = switch (zk) {
             .null => c.add_next_index_null(self.ptr()),
