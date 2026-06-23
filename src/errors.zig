@@ -101,7 +101,7 @@ pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]co
 
 /// Check whether a PHP exception is pending (EG(exception) != null).
 pub inline fn hasException() bool {
-    return c.executor_globals.exception != null;
+    return c.phpz_executor_globals().*.exception != null;
 }
 
 /// Clear the pending PHP exception. Does nothing if no exception is set.

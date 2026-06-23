@@ -80,6 +80,10 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     // phpz.h
     c.addIncludePath(b.path("build"));
 
+    // FIXME: remove in zig 0.17.0
+    // See: https://codeberg.org/ziglang/translate-c/issues/362
+    c.defineCMacro("__thread", "");
+
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_dir) |root| {
         c.addIncludePath(root);

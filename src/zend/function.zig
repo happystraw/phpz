@@ -39,7 +39,7 @@ pub const Function = opaque {
     /// Look up a function in the global function table
     pub fn find(func_name: []const u8) ?*Function {
         return @ptrCast(@alignCast(c.zend_hash_str_find_ptr(
-            c.executor_globals.function_table,
+            c.phpz_executor_globals().*.function_table,
             func_name.ptr,
             func_name.len,
         )));
