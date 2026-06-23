@@ -8,6 +8,12 @@
 /* ========== global namespace ========== */
 
 namespace {
+    // gen_stub.php resolves Attribute::TARGET_* constants through the @cvalue
+    // metadata declared by PHP's own Attribute stub. Prefer running
+    // php-src/build/gen_stub.php; for a copied standalone gen_stub.php, also
+    // copy php-src/Zend/zend_attributes.stub.php to ./Zend/zend_attributes.stub.php.
+    require "Zend/zend_attributes.stub.php";
+
     function hello(): void
     {
     }
@@ -99,6 +105,20 @@ namespace MyPHPExt {
     {
     }
 
+    // This sample uses an OR expression of multiple Attribute::TARGET_* constants.
+    // Regenerate arginfo with PHP 8.3+ gen_stub.php; PHP 8.2's generator keeps
+    // only the last @cvalue constant in this expression.
+    #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_PARAMETER | \Attribute::IS_REPEATABLE)]
+    final class ExampleAttribute
+    {
+        public string $name;
+        public ?string $note = null;
+
+        public function __construct(string $name, ?string $note = null)
+        {
+        }
+    }
+
     abstract class AbstractEntity implements Identifiable
     {
         protected function onLoad(): void
@@ -108,6 +128,8 @@ namespace MyPHPExt {
         abstract public function handle(string|int $id): void;
     }
 
+    #[ExampleAttribute("entity", "primary user model")]
+    #[ExampleAttribute("audited")]
     final class User extends AbstractEntity implements \Stringable
     {
         public string $name;
@@ -123,7 +145,7 @@ namespace MyPHPExt {
         {
         }
 
-        public function handle(string|int $id): void
+        public function handle(#[ExampleAttribute("identifier", "string or int")] string|int $id): void
         {
         }
 

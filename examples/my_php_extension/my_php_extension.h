@@ -4,6 +4,7 @@
 // for module
 #include "phpz.h"
 #include "Zend/zend_interfaces.h"
+#include "Zend/zend_attributes.h"
 #include "my_php_extension_arginfo.h"
 
 // only for static build (in source tree)

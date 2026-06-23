@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 4f71fe9ade534fb419c5f4f766b7bf7eec595b83 */
+ * Stub hash: b69c5e57a4b8a6464f198f66a4b83e8b7d3ac83b */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -64,6 +64,11 @@ ZEND_END_ARG_INFO()
 #define arginfo_MyPHPExt_tryCreateInvalidUser arginfo_hello
 
 #define arginfo_class_MyPHPExt_Identifiable_getId arginfo_iniGetMaxUsers
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ExampleAttribute___construct, 0, 0, 1)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, note, IS_STRING, 1, "null")
+ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_AbstractEntity_onLoad arginfo_hello
 
@@ -150,6 +155,7 @@ ZEND_FUNCTION(MyPHPExt_testExpectArgArrayObject);
 ZEND_FUNCTION(MyPHPExt_testExpectArgMixed);
 ZEND_FUNCTION(MyPHPExt_inspectObjectProperty);
 ZEND_FUNCTION(MyPHPExt_tryCreateInvalidUser);
+ZEND_METHOD(MyPHPExt_ExampleAttribute, __construct);
 ZEND_METHOD(MyPHPExt_AbstractEntity, onLoad);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, getId);
@@ -211,6 +217,12 @@ static const zend_function_entry class_MyPHPExt_Role_methods[] = {
 
 
 static const zend_function_entry class_MyPHPExt_MyError_methods[] = {
+	ZEND_FE_END
+};
+
+
+static const zend_function_entry class_MyPHPExt_ExampleAttribute_methods[] = {
+	ZEND_ME(MyPHPExt_ExampleAttribute, __construct, arginfo_class_MyPHPExt_ExampleAttribute___construct, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
 };
 
@@ -320,6 +332,36 @@ static zend_class_entry *register_class_MyPHPExt_MyError(zend_class_entry *class
 	return class_entry;
 }
 
+static zend_class_entry *register_class_MyPHPExt_ExampleAttribute(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "ExampleAttribute", class_MyPHPExt_ExampleAttribute_methods);
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+	class_entry->ce_flags |= ZEND_ACC_FINAL;
+
+	zval property_name_default_value;
+	ZVAL_UNDEF(&property_name_default_value);
+	zend_string *property_name_name = zend_string_init("name", sizeof("name") - 1, 1);
+	zend_declare_typed_property(class_entry, property_name_name, &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string_release(property_name_name);
+
+	zval property_note_default_value;
+	ZVAL_NULL(&property_note_default_value);
+	zend_string *property_note_name = zend_string_init("note", sizeof("note") - 1, 1);
+	zend_declare_typed_property(class_entry, property_note_name, &property_note_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING|MAY_BE_NULL));
+	zend_string_release(property_note_name);
+
+	zend_string *attribute_name_Attribute_class_MyPHPExt_ExampleAttribute_0 = zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
+	zend_attribute *attribute_Attribute_class_MyPHPExt_ExampleAttribute_0 = zend_add_class_attribute(class_entry, attribute_name_Attribute_class_MyPHPExt_ExampleAttribute_0, 1);
+	zend_string_release(attribute_name_Attribute_class_MyPHPExt_ExampleAttribute_0);
+	zval attribute_Attribute_class_MyPHPExt_ExampleAttribute_0_arg0;
+	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_ExampleAttribute_0_arg0, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
+	ZVAL_COPY_VALUE(&attribute_Attribute_class_MyPHPExt_ExampleAttribute_0->args[0].value, &attribute_Attribute_class_MyPHPExt_ExampleAttribute_0_arg0);
+
+	return class_entry;
+}
+
 static zend_class_entry *register_class_MyPHPExt_AbstractEntity(zend_class_entry *class_entry_MyPHPExt_Identifiable)
 {
 	zend_class_entry ce, *class_entry;
@@ -358,6 +400,39 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 	zend_string *property_age_name = zend_string_init("age", sizeof("age") - 1, 1);
 	zend_declare_typed_property(class_entry, property_age_name, &property_age_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG|MAY_BE_NULL));
 	zend_string_release(property_age_name);
+
+	zend_string *attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0 = zend_string_init_interned("MyPHPExt\\ExampleAttribute", sizeof("MyPHPExt\\ExampleAttribute") - 1, 1);
+	zend_attribute *attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0, 2);
+	zend_string_release(attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0);
+	zval attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg0;
+	zend_string *attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg0_str = zend_string_init("entity", strlen("entity"), 1);
+	ZVAL_STR(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg0, attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0->args[0].value, &attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg0);
+	zval attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg1;
+	zend_string *attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg1_str = zend_string_init("primary user model", strlen("primary user model"), 1);
+	ZVAL_STR(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg1, attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg1_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0->args[1].value, &attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_0_arg1);
+
+	zend_string *attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1 = zend_string_init_interned("MyPHPExt\\ExampleAttribute", sizeof("MyPHPExt\\ExampleAttribute") - 1, 1);
+	zend_attribute *attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1, 1);
+	zend_string_release(attribute_name_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1);
+	zval attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1_arg0;
+	zend_string *attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1_arg0_str = zend_string_init("audited", strlen("audited"), 1);
+	ZVAL_STR(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1_arg0, attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1->args[0].value, &attribute_MyPHPExt_ExampleAttribute_class_MyPHPExt_User_1_arg0);
+
+
+	zend_string *attribute_name_MyPHPExt_ExampleAttribute_func_handle_arg0_0 = zend_string_init_interned("MyPHPExt\\ExampleAttribute", sizeof("MyPHPExt\\ExampleAttribute") - 1, 1);
+	zend_attribute *attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0 = zend_add_parameter_attribute(zend_hash_str_find_ptr(&class_entry->function_table, "handle", sizeof("handle") - 1), 0, attribute_name_MyPHPExt_ExampleAttribute_func_handle_arg0_0, 2);
+	zend_string_release(attribute_name_MyPHPExt_ExampleAttribute_func_handle_arg0_0);
+	zval attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg0;
+	zend_string *attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg0_str = zend_string_init("identifier", strlen("identifier"), 1);
+	ZVAL_STR(&attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg0, attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0->args[0].value, &attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg0);
+	zval attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg1;
+	zend_string *attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg1_str = zend_string_init("string or int", strlen("string or int"), 1);
+	ZVAL_STR(&attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg1, attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg1_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0->args[1].value, &attribute_MyPHPExt_ExampleAttribute_func_handle_arg0_0_arg1);
 
 	return class_entry;
 }

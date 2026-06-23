@@ -9,6 +9,7 @@ fn startup() !void {
     classes.status.Enum.register();
     classes.role.Enum.register();
     classes.my_error.Class.register();
+    classes.example_attribute.Class.register();
     classes.abstract_entity.Class.register();
     classes.user.Class.register();
     classes.counter.Class.register();

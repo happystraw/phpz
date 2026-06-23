@@ -7,8 +7,24 @@ A basic PHP extension demonstrating core phpz features:
 - **Namespaced functions**: `MyPHPExt\increment(int &$value)`, `MyPHPExt\findById(string|int $id): ?User`, `MyPHPExt\getDefaultUser(): User`, `MyPHPExt\listStatuses(): array`, `MyPHPExt\map(array $arr, callable $cb): array`
 - **Interface**: `MyPHPExt\Identifiable`
 - **Enums**: `MyPHPExt\Status` (int backed), `MyPHPExt\Role` (string backed)
+- **Attributes**: `MyPHPExt\ExampleAttribute` and reflected attributes on `MyPHPExt\User`
 - **Classes**: `MyPHPExt\User`, `MyPHPExt\Counter`, `MyPHPExt\Dumper`, `MyPHPExt\MyError`, `MyPHPExt\AbstractEntity`
 - **INI directives**: `my_php_extension.greeting` (string, all), `my_php_extension.max_users` (int, system), `my_php_extension.debug` (bool, user)
+
+## Notes
+
+Regenerate `ExampleAttribute` arginfo with PHP 8.3+ `php-src/build/gen_stub.php`:
+
+```bash
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+This uses `php-src/Zend/zend_attributes.stub.php` to resolve
+`Attribute::TARGET_*` constants. If you use a standalone copied
+`build/gen_stub.php` instead, copy `php-src/Zend/zend_attributes.stub.php` to
+`Zend/zend_attributes.stub.php` next to this extension first. PHP 8.2's
+generator does not preserve the full `@cvalue` expression for OR'ed
+`Attribute::TARGET_*` constants.
 
 ## Run
 
