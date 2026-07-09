@@ -110,12 +110,12 @@ pub const Call = opaque {
         }
     }
 
-    fn ExpectArgWiths(comptime specs: []const ExpectArgKind.Spec) type {
+    fn ExpectArgsRuntime(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
             var types: [specs.len]type = undefined;
             var is_all_void = true;
             for (specs, 0..) |spec, i| {
-                types[i] = ExpectArgKind.With(spec);
+                types[i] = ExpectArgKind.Runtime(spec);
                 if (is_all_void and types[i] != void) is_all_void = false;
             }
             return if (is_all_void) void else @Tuple(&types);
@@ -125,13 +125,13 @@ pub const Call = opaque {
     /// Extract all arguments with compile-time validation.
     /// Optionals must come after required args. min/max derived automatically.
     ///
-    /// Each entry is an `ExpectArgKind.Spec` tagged union literal. The `withs`
-    /// parameter is `ExpectArgWiths(specs)` — `{}` when all specs are scalar,
-    /// or a tuple of per-position `With` structs for callable/object bindings.
+    /// Each entry is an `ExpectArgKind.Spec` tagged union literal. The `runtime`
+    /// parameter is `ExpectArgsRuntime(specs)` — `{}` when all specs need no
+    /// runtime extension, or a tuple of per-position `Runtime` structs.
     ///
     /// Example:
     /// ```zig
-    /// // Scalar only — withs is void, pass {}:
+    /// // Scalar only — runtime is void, pass {}:
     /// // (string $name, int $age = 0, ?int $count = null)
     /// const args = try self.expectArgs(&.{
     ///     .{ .string = .{} },
@@ -142,15 +142,15 @@ pub const Call = opaque {
     /// const age: ?i64 = args[1];
     /// const count: ?Nullable(i64) = args[2];
     ///
-    /// // With callable/object binding:
+    /// // With callable/object runtime extensions:
     /// // (callable $cb, \User $user)
     /// var cb: zend.Callable = .nil;
     /// const args2 = try self.expectArgs(&.{
-    ///     .{ .callable = .{ .target = true } },
+    ///     .{ .callable = .{ .resolve = true } },
     ///     .{ .object = .{ .instanceof = true } },
     /// }, .{
-    ///     .{ .cb = &cb },
-    ///     .{ .class = UserClass.entry },
+    ///     .{ .target = &cb },
+    ///     .{ .type = UserClass.entry },
     /// });
     ///
     /// // .mixed with union types:
@@ -166,7 +166,7 @@ pub const Call = opaque {
     pub inline fn expectArgs(
         self: *Call,
         comptime specs: []const ExpectArgKind.Spec,
-        withs: ExpectArgWiths(specs),
+        runtime: ExpectArgsRuntime(specs),
     ) ExpectArgsError!ExpectArgResults(specs) {
         comptime {
             var seen_optional = false;
@@ -195,14 +195,14 @@ pub const Call = opaque {
         const Results = ExpectArgResults(specs);
         var result: Results = undefined;
         inline for (specs, 0..) |spec, i| {
-            const with = if (comptime @TypeOf(withs) != void)
-                @field(withs, std.fmt.comptimePrint("{d}", .{i}))
+            const arg_runtime = if (comptime @TypeOf(runtime) != void)
+                @field(runtime, std.fmt.comptimePrint("{d}", .{i}))
             else {};
             const n: u32 = @intCast(i + 1);
             result[i] = if (comptime spec.isOptional())
-                if (n > self.argCount()) null else try self.extractArg(n, spec, with)
+                if (n > self.argCount()) null else try self.extractArg(n, spec, arg_runtime)
             else
-                try self.extractArg(n, spec, with);
+                try self.extractArg(n, spec, arg_runtime);
         }
         return result;
     }
@@ -249,7 +249,7 @@ pub const Call = opaque {
                 .null => unreachable,
                 .mixed => struct { optional: bool = false, unions: ?[]const ExpectArgKind = null },
                 .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, instanceof: bool = false },
-                .callable => struct { optional: bool = false, nullable: bool = false, target: bool = false },
+                .callable => struct { optional: bool = false, nullable: bool = false, resolve: bool = false },
                 .reference => struct { optional: bool = false, zval: bool = false },
                 else => struct { optional: bool = false, nullable: bool = false, zval: bool = false },
             };
@@ -276,16 +276,16 @@ pub const Call = opaque {
             }
         };
 
-        /// Runtime value for a single `Spec`.
-        ///   - `.callable` with `.target = true`     → `struct { cb: *zend.Callable }`
-        ///   - `.callable` without target            → `void`
-        ///   - `.object` with `.instanceof = true`   → `struct { class: *zend.ClassEntry }`
+        /// Runtime extension data for a single `Spec`.
+        ///   - `.callable` with `.resolve = true`    → `struct { target: *zend.Callable }`
+        ///   - `.callable` without resolve           → `void`
+        ///   - `.object` with `.instanceof = true`   → `struct { type: *zend.ClassEntry }` (class/interface)
         ///   - `.object` without instanceof          → `void`
         ///   - scalar types                          → `void` (pass `{}`)
-        pub fn With(comptime spec: Spec) type {
+        pub fn Runtime(comptime spec: Spec) type {
             return switch (spec) {
-                .callable => |s| if (s.target) struct { cb: *zend.Callable } else void,
-                .object => |s| if (s.instanceof) struct { class: *zend.ClassEntry } else void,
+                .callable => |s| if (s.resolve) struct { target: *zend.Callable } else void,
+                .object => |s| if (s.instanceof) struct { type: *zend.ClassEntry } else void,
                 else => void,
             };
         }
@@ -375,10 +375,10 @@ pub const Call = opaque {
     /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
     ///
     /// Accepts an `ExpectArgKind.Spec` tagged union specifying the expected type
-    /// and options (optional, nullable, zval). Pass runtime bindings via `with`:
-    ///   - `.callable` with `.target = true`     → `.{ .cb = &cb }`
-    ///   - `.callable` without target            → `{}`
-    ///   - `.object` with `.instanceof = true`   → `.{ .class = entry }`
+    /// and options (optional, nullable, zval). Pass runtime extension data via `runtime`:
+    ///   - `.callable` with `.resolve = true`    → `.{ .target = &cb }`
+    ///   - `.callable` without resolve           → `{}`
+    ///   - `.object` with `.instanceof = true`   → `.{ .type = entry }` (class/interface)
     ///   - `.object` without instanceof          → `{}`
     ///   - scalar types → `{}`
     ///
@@ -387,7 +387,7 @@ pub const Call = opaque {
         self: *Call,
         n: u32,
         comptime spec: ExpectArgKind.Spec,
-        with: ExpectArgKind.With(spec),
+        runtime: ExpectArgKind.Runtime(spec),
     ) ExpectArgError!ExpectArgResult(spec) {
         if (n > self.argCount()) {
             if (comptime spec.isOptional())
@@ -396,14 +396,14 @@ pub const Call = opaque {
                 return errors.argumentValueError(n, "must be provided", .{});
             }
         }
-        return self.extractArg(n, spec, with);
+        return self.extractArg(n, spec, runtime);
     }
 
     inline fn extractArg(
         self: *Call,
         n: u32,
         comptime spec: ExpectArgKind.Spec,
-        with: ExpectArgKind.With(spec),
+        runtime: ExpectArgKind.Runtime(spec),
     ) ExpectArgError!ExpectArgResult(spec) {
         const zv = self.arg(n);
         switch (comptime spec) {
@@ -429,9 +429,9 @@ pub const Call = opaque {
             .callable => |s| {
                 const or_null = comptime if (s.nullable) " or null" else "";
                 if (comptime s.nullable) if (native.is(zv, .null)) return .null;
-                if (comptime s.target) {
+                if (comptime s.resolve) {
                     var err: ?[*:0]u8 = null;
-                    with.cb.parse(zv, false, &err) catch {
+                    runtime.target.parse(zv, false, &err) catch {
                         if (err) |e| {
                             defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
                             return errors.argumentTypeError(n, "must be a valid callback" ++ or_null ++ ", %s", .{e});
@@ -453,9 +453,9 @@ pub const Call = opaque {
                 const or_null = comptime if (s.nullable) " or null" else "";
                 if (comptime s.nullable) if (native.is(zv, .null)) return .null;
                 if (comptime s.instanceof) {
-                    const ce = with.class;
-                    const obj: *zend.Object = native.as(zv, .object) catch return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ ce.name().ptr, native.kind(zv).cstr() });
-                    if (!obj.instanceof(ce)) return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ ce.name().ptr, obj.class().name().ptr });
+                    const expected_type = runtime.type;
+                    const obj: *zend.Object = native.as(zv, .object) catch return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, native.kind(zv).cstr() });
+                    if (!obj.instanceof(expected_type)) return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, obj.class().name().ptr });
                     const raw = if (comptime s.zval) zv else obj;
                     return if (comptime s.nullable) .{ .value = raw } else raw;
                 } else if (!native.is(zv, .object)) {
