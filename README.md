@@ -109,11 +109,16 @@ const phpz = Phpz.init(phpz_dep, .{
     .php_include_dir = .{ .cwd_relative = "/usr/include/php" },
 });
 
-// Import the phpz module into your extension library
-lib.root_module.addImport("phpz", phpz.mod);
-
-// Apply OS-specific linker settings (macOS undefined symbols, Windows php8.lib)
-phpz.apply(lib);
+// Create the PHP extension library and import the phpz module.
+const lib = phpz.addExtension(b, .{
+    .name = "my_php_extension",
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    }),
+    .linkage = .dynamic,
+});
 ```
 
 Then `zig build` !
