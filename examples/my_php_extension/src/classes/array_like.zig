@@ -3,7 +3,7 @@ const ArrayLike = extern struct {
     iter: phpz.zend.Array.Iterator,
 
     pub fn register(impl: anytype) *phpz.ClassEntry {
-        return .from(impl(c.zend_ce_arrayaccess, c.zend_ce_countable, c.zend_ce_iterator));
+        return .from(impl(phpz.globals.class.entry("ArrayAccess"), phpz.globals.class.entry("Countable"), phpz.globals.class.entry("Iterator")));
     }
 
     pub fn init(self: *ArrayLike) void {

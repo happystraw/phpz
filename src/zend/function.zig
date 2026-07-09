@@ -1,6 +1,7 @@
 const errors = @import("../errors.zig");
 const phpz = @import("../root.zig");
 const c = phpz.c;
+const globals = phpz.globals;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
 const try_catch = @import("try_catch.zig");
@@ -42,7 +43,7 @@ pub const Function = opaque {
     /// Look up a function in the global function table
     pub fn find(func_name: []const u8) ?*Function {
         return @ptrCast(@alignCast(c.zend_hash_str_find_ptr(
-            c.phpz_executor_globals().*.function_table,
+            globals.executor().function_table,
             func_name.ptr,
             func_name.len,
         )));

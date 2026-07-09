@@ -69,26 +69,26 @@ jobs:
             -Dtarget=native-native-msvc \
             -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
             -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
-      # - name: Run example tests
-      #   shell: bash
-      #   run: |
-      #     zig build test-examples \
-      #       -Dtarget=native-native-msvc \
-      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
-      # - name: Run example tests (ReleaseSafe)
-      #   shell: bash
-      #   run: |
-      #     zig build test-examples \
-      #       -Dtarget=native-native-msvc \
-      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
-      #       -Doptimize=ReleaseSafe
-      # - name: Run example tests (ReleaseFast)
-      #   shell: bash
-      #   run: |
-      #     zig build test-examples \
-      #       -Dtarget=native-native-msvc \
-      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
-      #       -Doptimize=ReleaseFast
+      - name: Run example tests
+        shell: bash
+        run: |
+          zig build test-examples \
+            -Dtarget=native-native-msvc \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
+      - name: Run example tests (ReleaseSafe)
+        shell: bash
+        run: |
+          zig build test-examples \
+            -Dtarget=native-native-msvc \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+            -Doptimize=ReleaseSafe
+      - name: Run example tests (ReleaseFast)
+        shell: bash
+        run: |
+          zig build test-examples \
+            -Dtarget=native-native-msvc \
+            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+            -Doptimize=ReleaseFast

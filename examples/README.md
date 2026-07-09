@@ -4,7 +4,6 @@
 |---------|-------------|
 | [skeleton](./skeleton/) | Minimal starter: hello, greet, Counter class |
 | [my_php_extension](./my_php_extension/) | Full-featured extension: functions, classes, methods |
-| [pjs](./pjs/) | Embed QuickJS in PHP to run JavaScript |
 
 ## Running
 

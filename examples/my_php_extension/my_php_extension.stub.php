@@ -34,6 +34,10 @@ namespace {
     {
     }
 
+    function iniGetMode(): string
+    {
+    }
+
     /** @var string */
     const MY_EXT_VERSION = "1.0.0";
 }
@@ -81,6 +85,10 @@ namespace MyPHPExt {
     }
 
     function tryCreateInvalidUser(): void
+    {
+    }
+
+    function testHeapAllocatorBailout(): array
     {
     }
 

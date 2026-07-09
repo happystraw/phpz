@@ -564,7 +564,7 @@ pub const Zval = opaque {
                     zv.u1.type_info = c.IS_DOUBLE;
                 },
                 .string => {
-                    const str: *zend.String = .init(val);
+                    const str: *zend.String = .init(val, false);
                     zv.value.str = str.ptr();
                     zv.u1.type_info = if (str.isInterned()) c.IS_INTERNED_STRING_EX else c.IS_STRING_EX;
                 },

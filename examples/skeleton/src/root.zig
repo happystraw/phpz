@@ -4,10 +4,6 @@ const phpz = @import("phpz");
 
 const counter = @import("classes/counter.zig");
 
-fn startup() !void {
-    counter.Class.register();
-}
-
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
@@ -15,7 +11,7 @@ comptime {
     phpz.module(.{
         .name = "skeleton",
         .version = "0.1.0",
-        .module_startup_fn = startup,
+        .classes = &.{counter.Class},
     });
 }
 

@@ -108,7 +108,7 @@ pub const ObjectHandlers = struct {
 ///
 ///     // Optional: Custom registration (e.g., inherit from parent class)
 ///     pub fn register(impl: anytype) *phpz.ClassEntry {
-///         return .from(impl(c.zend_ce_stringable));
+///         return .from(impl(phpz.globals.class.entry("Stringable")));
 ///     }
 ///
 ///     pub fn construct(self: *Student, ctx: Ctx) !void {
@@ -222,7 +222,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///    - `pub fn register(fn) *phpz.ClassEntry`
         ///    - Useful for setting parent class or implementing interfaces
         ///    - Framework still sets up handlers after your customization
-        ///    Example: `return .from(impl(c.zend_ce_stringable));`
+        ///    Example: `return .from(impl(phpz.globals.class.entry("Stringable")));`
         ///
         /// The register_class_* function is generated from PHP stub files during
         /// the translate-c process and contains class metadata (methods, properties).
@@ -235,7 +235,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn register() void {
-            handlers = c.std_object_handlers;
+            handlers = phpz.globals.global(.value, c.zend_object_handlers, "std_object_handlers");
             handlers.free_obj = &deinit;
             handlers.offset = @offsetOf(Self, "std");
 
@@ -254,7 +254,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// const User = extern struct {
         ///     pub fn register(impl: anytype) *phpz.ClassEntry {
         ///         Class.setObjectHandlers(.{ .clone_obj = &myClone });
-        ///         return .from(impl(c.zend_ce_stringable));
+        ///         return .from(impl(phpz.globals.class.entry("Stringable")));
         ///     }
         ///     fn myClone(self: *User) ?*c.zend_object {
         ///         // Custom clone implementation
@@ -506,7 +506,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// // Create a custom exception class
 /// pub const MyException = phpz.SimpleClass("MyExt\\MyException", struct {
 ///     pub fn register(impl: anytype) *phpz.ClassEntry {
-///         return .from(impl(c.spl_ce_RuntimeException));
+///         return .from(impl(phpz.globals.class.entry("RuntimeException")));
 ///     }
 /// });
 ///

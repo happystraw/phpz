@@ -1,22 +1,22 @@
 --TEST--
-testExpectArgArrayObject() — covers .array, .object+class, nullable object+class
+testExpectArgArrayObject() — covers .array, .object+type, nullable object+type
 --FILE--
 <?php
 
 use function MyPHPExt\testExpectArgArrayObject;
 
-// === Success: array + User (covers: .array type match, .object+class instanceof) ===
+// === Success: array + User (covers: .array type match, .object+type instanceof) ===
 echo "=== array + User ===", PHP_EOL;
 $u1 = new \MyPHPExt\User("Alice", 30);
 var_dump(testExpectArgArrayObject(["x" => 1, "y" => 2], $u1));
 
-// === Success: array + User + extra User (covers: nullable+class with User value) ===
+// === Success: array + User + extra User (covers: nullable+type with User value) ===
 echo "=== array + User + nullable User ===", PHP_EOL;
 $u2a = new \MyPHPExt\User("First", 10);
 $u2b = new \MyPHPExt\User("Second", 20);
 var_dump(testExpectArgArrayObject([1, 2, 3], $u2a, $u2b));
 
-// === Success: array + User + null (covers: nullable+class with null -> .null) ===
+// === Success: array + User + null (covers: nullable+type with null -> .null) ===
 echo "=== array + User + null ===", PHP_EOL;
 $u3 = new \MyPHPExt\User("Bob", 25);
 var_dump(testExpectArgArrayObject(["a"], $u3, null));
@@ -42,7 +42,7 @@ try { testExpectArgArrayObject([], $u, null, "extra"); } catch (ArgumentCountErr
 echo "=== wrong type: string for array ===", PHP_EOL;
 try { testExpectArgArrayObject("not_array", $u); } catch (TypeError $e) { echo $e->getMessage(), PHP_EOL; }
 
-// === Error: not an object for user (covers: .object class check fails on non-object) ===
+// === Error: not an object for user (covers: .object type check fails on non-object) ===
 echo "=== not object for user: string ===", PHP_EOL;
 try { testExpectArgArrayObject([], "not_user"); } catch (TypeError $e) { echo $e->getMessage(), PHP_EOL; }
 
@@ -50,11 +50,11 @@ try { testExpectArgArrayObject([], "not_user"); } catch (TypeError $e) { echo $e
 echo "=== wrong class for user: stdClass ===", PHP_EOL;
 try { testExpectArgArrayObject([], new stdClass()); } catch (TypeError $e) { echo $e->getMessage(), PHP_EOL; }
 
-// === Error: not object for nullable_user (covers: nullable+class fails on non-object) ===
+// === Error: not object for nullable_user (covers: nullable+type fails on non-object) ===
 echo "=== not object for nullable_user: int ===", PHP_EOL;
 try { testExpectArgArrayObject([], $u, 123); } catch (TypeError $e) { echo $e->getMessage(), PHP_EOL; }
 
-// === Error: wrong class for nullable_user (covers: nullable+class instanceof fails) ===
+// === Error: wrong class for nullable_user (covers: nullable+type instanceof fails) ===
 echo "=== wrong class for nullable_user: stdClass ===", PHP_EOL;
 try { testExpectArgArrayObject([], $u, new stdClass()); } catch (TypeError $e) { echo $e->getMessage(), PHP_EOL; }
 

@@ -1,4 +1,6 @@
-const c = @import("root.zig").c;
+const phpz = @import("root.zig");
+const c = phpz.c;
+const globals = phpz.globals;
 const zend = @import("zend.zig");
 
 /// PHP error levels
@@ -101,7 +103,13 @@ pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]co
 
 /// Check whether a PHP exception is pending (EG(exception) != null).
 pub inline fn hasException() bool {
-    return c.phpz_executor_globals().*.exception != null;
+    return globals.executor().exception != null;
+}
+
+/// Get the pending PHP exception object (EG(exception)). Returns null if no exception is set.
+pub inline fn exception() ?*zend.Object {
+    const obj = globals.executor().exception;
+    return if (obj) |o| zend.Object.from(o) else null;
 }
 
 /// Clear the pending PHP exception. Does nothing if no exception is set.

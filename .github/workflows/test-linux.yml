@@ -61,10 +61,17 @@ jobs:
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR"
       - name: Run example tests (ReleaseSafe)
+        if: ${{ matrix.debug == false }}
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
       - name: Run example tests (ReleaseFast)
+        if: ${{ matrix.debug == false }}
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseFast
+      - name: Run example tests (ReleaseSmall)
+        if: ${{ matrix.debug == false }}
+        run: |
+          PHP_INCLUDE_DIR=$(php-config --include-dir)
+          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSmall

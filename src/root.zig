@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const c = @import("c.zig").c;
+pub const globals = @import("globals.zig");
 
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
@@ -30,11 +31,19 @@ pub fn printf(fmt: [:0]const u8, args: anytype) usize {
     return @call(.auto, c.php_printf, .{fmt.ptr} ++ args);
 }
 
+comptime {
+    const builtin = @import("builtin");
+    if (builtin.os.tag == .windows and builtin.abi != .msvc) {
+        @compileError("phpz only supports the MSVC ABI on Windows");
+    }
+}
+
 test {
     _ = @import("Ctx.zig");
     _ = @import("class.zig");
     _ = @import("errors.zig");
     _ = @import("function.zig");
+    _ = @import("globals.zig");
     _ = @import("heap.zig");
     _ = @import("ini.zig");
     _ = @import("info.zig");
