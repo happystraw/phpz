@@ -311,7 +311,7 @@ pub const Call = opaque {
                     const TagInt = @typeInfo(ExpectArgKind).@"enum".tag_type;
                     var field_names: [u.len][]const u8 = undefined;
                     var field_types: [u.len]type = undefined;
-                    var field_attrs: [u.len]std.builtin.Type.UnionField.Attributes = undefined;
+                    var field_attrs: [u.len]std.lang.Type.Union.FieldAttributes = undefined;
                     var field_values: [u.len]TagInt = undefined;
                     inline for (u, 0..) |kind, i| {
                         if (kind == .mixed) @compileError("invalid .mixed specification: unions cannot contain .mixed");

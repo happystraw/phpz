@@ -70,19 +70,8 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     translator_options.strict_flex_arrays = .@"1";
 
     const c: Translator = .init(translate_c_dep, translator_options);
-    if (translator_options.target.query.isNative() and translator_options.target.result.os.tag == .linux) {
-        // FIXME: remove in zig 0.17.0
-        // Add Zig's C include path (for stdint.h, stddef.h, etc.)
-        if (b.graph.zig_lib_directory.path) |path| {
-            c.addIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{path}) });
-        }
-    }
     // phpz.h
     c.addIncludePath(b.path("build"));
-
-    // FIXME: remove in zig 0.17.0
-    // See: https://codeberg.org/ziglang/translate-c/issues/362
-    c.defineCMacro("__thread", "");
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_dir) |root| {
@@ -95,6 +84,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
             c.defineCMacro("ZEND_WIN32", "1");
             c.defineCMacro("PHP_WIN32", "1");
             c.defineCMacro("WINDOWS", "1");
+            c.defineCMacro("ZEND_DEBUG", "0");
         }
     }
 

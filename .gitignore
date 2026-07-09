@@ -8,3 +8,8 @@
 zig-out
 .zig-cache
 zig-pkg
+
+# For msvc cross-compilation test
+.xwin
+xwin
+libc.txt

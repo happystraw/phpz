@@ -180,11 +180,11 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
             if (@hasDecl(T, "init")) {
-                if (comptime @typeInfo(@TypeOf(T.init)).@"fn".params.len == 1) {
+                if (comptime @typeInfo(@TypeOf(T.init)).@"fn".param_types.len == 1) {
                     intern.impl.init();
                 } else {
                     comptime {
-                        if (@typeInfo(@TypeOf(T.init)).@"fn".params.len != 2) @compileError("T.init must take 1 or 2 parameters");
+                        if (@typeInfo(@TypeOf(T.init)).@"fn".param_types.len != 2) @compileError("T.init must take 1 or 2 parameters");
                     }
                     intern.impl.init(entry);
                 }
@@ -263,9 +263,9 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// pub const Class = phpz.Class("User", User);
         /// ```
         pub fn setObjectHandlers(comptime hs: ObjectHandlers) void {
-            inline for (@typeInfo(ObjectHandlers).@"struct".fields) |field| {
-                const fv = @field(hs, field.name);
-                if (fv != null) @field(handlers, field.name) = fv;
+            inline for (@typeInfo(ObjectHandlers).@"struct".field_names) |field_name| {
+                const fv = @field(hs, field_name);
+                if (fv != null) @field(handlers, field_name) = fv;
             }
         }
 
