@@ -7,10 +7,10 @@ namespace Phpz\Tools;
 
 // phpcs:disable PSR1.Files.SideEffects.FoundWithSymbols -- CLI script entry point calls Command::run().
 // phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses -- CLI script is distributed as one file.
+// phpcs:disable Generic.Files.LineLength.TooLong -- Embedded Zig templates use Zig formatting.
 
 const MIN_PHP_VERSION = '8.2.0';
-const MIN_PHP_VERSION_ID = 80200;
-const MIN_ZIG_VERSION = '0.17.0';
+const MIN_ZIG_VERSION = '0.17.0-dev.1282+c0f9b51d8';
 const DEFAULT_PHPZ_SPEC = 'git+https://github.com/happystraw/phpz';
 const DEFAULT_PHP_INCLUDE_DIR = '/usr/include/php';
 const REQUIRED_PHP_EXTENSIONS = ['pcre', 'standard'];
@@ -26,6 +26,8 @@ readonly class Args
         public PhpConfig $phpConfig,
         public ToolOption $genStub,
         public ToolOption $runTests,
+        public bool $unix,
+        public bool $windows,
         public bool $force,
         public bool $verbose,
     ) {
@@ -44,6 +46,8 @@ readonly class Args
         $phpConfig = PhpConfig::auto();
         $genStub = ToolOption::auto();
         $runTests = ToolOption::auto();
+        $unix = true;
+        $windows = true;
         $force = false;
         $verbose = false;
 
@@ -63,6 +67,14 @@ readonly class Args
             }
             if ($arg === '--without-run-tests') {
                 $runTests = ToolOption::disabled();
+                continue;
+            }
+            if ($arg === '--onlyunix') {
+                $windows = false;
+                continue;
+            }
+            if ($arg === '--onlywindows') {
+                $unix = false;
                 continue;
             }
 
@@ -125,6 +137,9 @@ readonly class Args
         if ($ext === null) {
             Console::fail('Missing --ext <name>');
         }
+        if (!$unix && !$windows) {
+            Console::fail('Cannot pass both --onlyunix and --onlywindows');
+        }
         if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $ext)) {
             Console::fail('Invalid extension name. Use letters, numbers and underscores, starting with a letter.');
         }
@@ -138,6 +153,8 @@ readonly class Args
             $phpConfig,
             $genStub,
             $runTests,
+            $unix,
+            $windows,
             $force,
             $verbose,
         );
@@ -567,7 +584,7 @@ final class Environment
     public static function checkPhpVersion(): string
     {
         $version = PHP_VERSION;
-        if (PHP_VERSION_ID < MIN_PHP_VERSION_ID || version_compare($version, MIN_PHP_VERSION, '<')) {
+        if (version_compare($version, MIN_PHP_VERSION, '<')) {
             Console::fail("Unsupported PHP version $version. Expected >= " . MIN_PHP_VERSION . '.');
         }
 
@@ -836,6 +853,55 @@ const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
     test_step.dependOn(&test_phpt_cmd.step);
 ZIG;
 
+const PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE = <<<'ZIG'
+    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)");
+    const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
+    const windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false;
+ZIG;
+
+const PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE = <<<'ZIG'
+        .php_lib_dir = if (php_lib_dir) |dir| .{ .cwd_relative = dir } else null,
+        .windows_zts = windows_zts,
+        .windows_debug = windows_debug,
+ZIG;
+
+const PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE = <<<'ZIG'
+    const ext_filename = if (target.result.os.tag == .windows)
+        "php_" ++ ext_name ++ ".dll"
+    else
+        ext_name ++ ".so";
+ZIG;
+
+const PHPZ_UNIX_FILENAME_TEMPLATE = <<<'ZIG'
+    const ext_filename = ext_name ++ ".so";
+ZIG;
+
+const PHPZ_WINDOWS_FILENAME_TEMPLATE = <<<'ZIG'
+    const ext_filename = "php_" ++ ext_name ++ ".dll";
+ZIG;
+
+const PHPZ_UNIX_TARGET_CHECK_TEMPLATE = <<<'ZIG'
+    if (target.result.os.tag == .windows) {
+        @panic("This extension only supports Unix targets");
+    }
+ZIG;
+
+const PHPZ_WINDOWS_TARGET_CHECK_TEMPLATE = <<<'ZIG'
+    if (target.result.os.tag != .windows) {
+        @panic("This extension only supports Windows targets");
+    }
+ZIG;
+
+const PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE = <<<'MD'
+php -dextension=./modules/{{EXT_NAME}}.so -r 'hello();'
+php -dextension=./modules/{{EXT_NAME}}.so -r 'echo greet("World");'
+MD;
+
+const PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE = <<<'MD'
+php -dextension=./modules/php_{{EXT_NAME}}.dll -r 'hello();'
+php -dextension=./modules/php_{{EXT_NAME}}.dll -r 'echo greet("World");'
+MD;
+
 const PHPZ_GEN_STUB_REGEN_TEMPLATE = <<<'MD'
 After changing `{{EXT_NAME}}.stub.php`, regenerate C arginfo:
 
@@ -869,8 +935,10 @@ const Phpz = @import("phpz").Phpz;
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+{{PHPZ_PLATFORM_TARGET_CHECK}}
 
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include dir") orelse "{{PHP_INCLUDE_DIR}}";
+{{PHPZ_WINDOWS_BUILD_OPTIONS}}
 
     const phpz_dep = b.dependency("phpz", .{});
     const phpz = Phpz.init(phpz_dep, .{
@@ -880,6 +948,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         },
         .php_include_dir = .{ .cwd_relative = php_include_dir },
+{{PHPZ_WINDOWS_INIT_OPTIONS}}
     });
 
     const ext_name = "{{EXT_NAME}}";
@@ -893,7 +962,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
     });
 
-    const ext_filename = ext_name ++ ".so";
+{{PHPZ_EXT_FILENAME}}
 
     const ext_file = std.Build.Step.UpdateSourceFiles.create(b);
     ext_file.addCopyFileToSource(ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{ext_filename}));
@@ -925,8 +994,7 @@ Custom PHP include path:
 
 ```bash
 zig build
-php -dextension=./modules/{{EXT_NAME}}.so -r 'hello();'
-php -dextension=./modules/{{EXT_NAME}}.so -r 'echo greet("World");'
+{{PHPZ_MANUAL_COMMANDS}}
 ```
 MD,
     '{{EXT_NAME}}.h' => <<<'C'
@@ -1029,10 +1097,6 @@ const phpz = @import("phpz");
 
 const counter = @import("classes/counter.zig");
 
-fn startup() !void {
-    counter.Class.register();
-}
-
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
@@ -1040,7 +1104,7 @@ comptime {
     phpz.module(.{
         .name = "{{EXT_NAME}}",
         .version = "0.1.0",
-        .module_startup_fn = startup,
+        .classes = &.{counter.Class},
     });
 }
 
@@ -1175,8 +1239,48 @@ final class TemplateWriter
         string $phpIncludeDir,
         bool $hasRunTests,
         bool $hasGenStub,
+        bool $unix,
+        bool $windows,
     ): string {
-        $contents = str_replace('{{PHPZ_TEST_STEP}}', $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE : '', $contents);
+        $targetCheck = '';
+        $extFilename = PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE;
+        if (!$windows) {
+            $targetCheck = PHPZ_UNIX_TARGET_CHECK_TEMPLATE;
+            $extFilename = PHPZ_UNIX_FILENAME_TEMPLATE;
+        } elseif (!$unix) {
+            $targetCheck = PHPZ_WINDOWS_TARGET_CHECK_TEMPLATE;
+            $extFilename = PHPZ_WINDOWS_FILENAME_TEMPLATE;
+        }
+
+        $contents = str_replace(
+            "{{PHPZ_PLATFORM_TARGET_CHECK}}\n",
+            $targetCheck === '' ? '' : $targetCheck . "\n",
+            $contents,
+        );
+        $contents = str_replace(
+            "{{PHPZ_WINDOWS_BUILD_OPTIONS}}\n",
+            $windows ? PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE . "\n" : '',
+            $contents,
+        );
+        $contents = str_replace(
+            "{{PHPZ_WINDOWS_INIT_OPTIONS}}\n",
+            $windows ? PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE . "\n" : '',
+            $contents,
+        );
+        $contents = str_replace("{{PHPZ_EXT_FILENAME}}\n", $extFilename . "\n", $contents);
+        $manualCommands = PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE;
+        if ($unix && $windows) {
+            $manualCommands = "# Unix\n" . PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE
+                . "\n\n# Windows\n" . PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE;
+        } elseif ($windows) {
+            $manualCommands = PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE;
+        }
+        $contents = str_replace('{{PHPZ_MANUAL_COMMANDS}}', $manualCommands, $contents);
+        $contents = str_replace(
+            "{{PHPZ_TEST_STEP}}\n",
+            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE . "\n" : '',
+            $contents,
+        );
         $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build test' : 'zig build', $contents);
         $contents = str_replace('{{PHP_INCLUDE_DIR}}', TemplateVars::escapeZigString($phpIncludeDir), $contents);
         $contents = str_replace(
@@ -1202,6 +1306,8 @@ final class TemplateWriter
         bool $force,
         bool $hasRunTests,
         bool $hasGenStub,
+        bool $unix,
+        bool $windows,
     ): array {
         $written = 0;
         $skippedTests = 0;
@@ -1223,7 +1329,7 @@ final class TemplateWriter
             if (
                 file_put_contents(
                     $destPath,
-                    self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub),
+                    self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows),
                 ) === false
             ) {
                 Console::fail("Unable to write $destPath");
@@ -1283,6 +1389,8 @@ final class Command
             $args->force,
             $runTestsPath !== null,
             $genStubPath !== null,
+            $args->unix,
+            $args->windows,
         );
         $templateResult = $templateCount . ' files';
         if ($skippedTestTemplateCount > 0) {
@@ -1356,6 +1464,8 @@ Options:
   --with-run-tests [path]  Use run-tests.php; without path, auto-detect via php-config
                            or zig-pkg/phpz-*/examples/skeleton/run-tests.php.
   --without-run-tests      Disable run-tests.php; omit tests/ and the build test step.
+  --onlyunix               Only include Unix support in build.zig.
+  --onlywindows            Only include Windows support in build.zig.
   --force                  Overwrite generated template files in an existing target.
   -v, --verbose            Print successful command output.
   -h, --help               Show this help.
@@ -1414,6 +1524,9 @@ USAGE;
         echo "Project:\n";
         echo '  extension:    ' . $args->ext . "\n";
         echo "  directory:    $targetDir\n";
+        echo '  platforms:    ' . ($args->unix && $args->windows
+            ? 'Unix, Windows'
+            : ($args->unix ? 'Unix' : 'Windows')) . "\n";
         echo "  arginfo:      $arginfoStatus\n";
         echo "  PHPT tests:   $testsStatus\n";
         echo "\nQuick start:\n";

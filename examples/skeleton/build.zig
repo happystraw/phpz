@@ -7,7 +7,9 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php";
-    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8.lib)");
+    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)");
+    const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
+    const windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false;
 
     const phpz_dep = b.dependency("phpz", .{});
     const phpz = Phpz.init(phpz_dep, .{
@@ -18,6 +20,8 @@ pub fn build(b: *std.Build) void {
         },
         .php_include_dir = .{ .cwd_relative = php_include_dir },
         .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
+        .windows_zts = windows_zts,
+        .windows_debug = windows_debug,
     });
 
     const ext_name = "skeleton";
