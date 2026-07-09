@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const Alignment = std.mem.Alignment;
 
 const c = @import("root.zig").c;
+const zend = @import("zend.zig");
 
 /// A wrapper around the PHP Memory Manager API which supports the full `Allocator` interface.
 ///
@@ -14,11 +15,10 @@ const c = @import("root.zig").c;
 /// multi-frame source location trace using DWARF debug info, so PHP's leak reports point to
 /// the actual allocation site rather than this file.
 ///
-/// **Warning:** `emalloc` never returns `null` on failure. Instead it calls `zend_mm_safe_error()`
-/// which invokes `zend_error_noreturn(E_ERROR, ...)` — a `ZEND_NORETURN` function that terminates
-/// script execution without returning to the C caller. This means Zig's `defer`/`errdefer` and any
-/// pending cleanup will be silently skipped. Zig code using this allocator must not hold resources
-/// that require deterministic cleanup across allocation boundaries.
+/// `emalloc` / `erealloc` never return `null` on failure. Instead, PHP raises a
+/// fatal error and performs a Zend bailout. This allocator catches that bailout
+/// and reports allocation failure through Zig's allocator `null` path, which is
+/// surfaced as `error.OutOfMemory` by `std.mem.Allocator`.
 pub const php_allocator: Allocator = .{
     .ptr = undefined,
     .vtable = &php_allocator_impl.vtable,
@@ -42,12 +42,29 @@ const php_allocator_impl = struct {
         _ = context;
         // same as raw c allocator alignment
         std.debug.assert(alignment.compare(.lte, .of(std.c.max_align_t)));
-        if (comptime c.ZEND_DEBUG == 1) {
-            const src = DebugSourceLocation.resolve(return_address);
-            return @ptrCast(c._emalloc(len, src.file.ptr, @intCast(src.line), null, 0));
-        } else {
-            return @ptrCast(c.emalloc(len));
-        }
+
+        const Context = struct {
+            len: usize,
+            return_address: usize,
+            result: ?*anyopaque = null,
+
+            fn call(raw: ?*anyopaque) callconv(.c) void {
+                const self: *@This() = @ptrCast(@alignCast(raw.?));
+                if (comptime c.ZEND_DEBUG == 1) {
+                    const src = DebugSourceLocation.resolve(self.return_address);
+                    self.result = c._emalloc(self.len, src.file.ptr, @intCast(src.line), null, 0);
+                } else {
+                    self.result = c.emalloc(self.len);
+                }
+            }
+        };
+
+        var ctx: Context = .{
+            .len = len,
+            .return_address = return_address,
+        };
+        zend.tryCatchRaw(Context.call, &ctx) catch return null;
+        return @ptrCast(ctx.result);
     }
 
     fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) bool {
@@ -62,12 +79,31 @@ const php_allocator_impl = struct {
     fn remap(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) ?[*]u8 {
         _ = context;
         _ = alignment;
-        if (comptime c.ZEND_DEBUG == 1) {
-            const src = DebugSourceLocation.resolve(return_address);
-            return @ptrCast(c._erealloc(memory.ptr, new_len, src.file.ptr, @intCast(src.line), null, 0));
-        } else {
-            return @ptrCast(c.erealloc(memory.ptr, new_len));
-        }
+
+        const Context = struct {
+            memory: []u8,
+            new_len: usize,
+            return_address: usize,
+            result: ?*anyopaque = null,
+
+            fn call(raw: ?*anyopaque) callconv(.c) void {
+                const self: *@This() = @ptrCast(@alignCast(raw.?));
+                if (comptime c.ZEND_DEBUG == 1) {
+                    const src = DebugSourceLocation.resolve(self.return_address);
+                    self.result = c._erealloc(self.memory.ptr, self.new_len, src.file.ptr, @intCast(src.line), null, 0);
+                } else {
+                    self.result = c.erealloc(self.memory.ptr, self.new_len);
+                }
+            }
+        };
+
+        var ctx: Context = .{
+            .memory = memory,
+            .new_len = new_len,
+            .return_address = return_address,
+        };
+        zend.tryCatchRaw(Context.call, &ctx) catch return null;
+        return @ptrCast(ctx.result);
     }
 
     fn free(context: *anyopaque, memory: []u8, alignment: Alignment, return_address: usize) void {

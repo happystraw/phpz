@@ -1,12 +1,15 @@
 const errors = @import("../errors.zig");
-const c = @import("../root.zig").c;
+const phpz = @import("../root.zig");
+const c = phpz.c;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
+const try_catch = @import("try_catch.zig");
 
 pub const Function = opaque {
     pub const Error = error{
         PhpException,
     };
+    pub const TryCallError = Error || try_catch.TryCatchError;
 
     /// Function type classification.
     pub const Kind = enum(u8) {
@@ -83,6 +86,11 @@ pub const Function = opaque {
         try self.invoke(null, null, retval, params);
     }
 
+    /// Call as a global function and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCall(self: *Function, retval: ?*c.zval, params: anytype) TryCallError!void {
+        try self.tryInvoke(null, null, retval, params);
+    }
+
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     ///
@@ -91,12 +99,22 @@ pub const Function = opaque {
         try self.invoke(null, ce.ptr(), retval, params);
     }
 
+    /// Call as a static method and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCallStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) TryCallError!void {
+        try self.tryInvoke(null, ce.ptr(), retval, params);
+    }
+
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
     ///
     /// Returns `error.PhpException` if the called method throws a PHP exception.
     pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) Error!void {
         try self.invoke(obj.ptr(), obj.class().ptr(), retval, params);
+    }
+
+    /// Call as an instance method and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCallMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) TryCallError!void {
+        try self.tryInvoke(obj.ptr(), obj.class().ptr(), retval, params);
     }
 
     inline fn invoke(
@@ -117,6 +135,65 @@ pub const Function = opaque {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
                 c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), null);
+            },
+        }
+        if (errors.hasException()) return error.PhpException;
+    }
+
+    inline fn tryInvoke(
+        self: *Function,
+        obj: ?*c.zend_object,
+        scope: ?*c.zend_class_entry,
+        retval: ?*c.zval,
+        params: anytype,
+    ) TryCallError!void {
+        const info = @typeInfo(@TypeOf(params));
+        if (!(info == .@"struct" and info.@"struct".is_tuple))
+            @compileError("params must be a tuple, e.g. .{} or .{a, b}");
+
+        const n = info.@"struct".field_types.len;
+        switch (n) {
+            0 => {
+                const CallFrame = struct {
+                    function: *Function,
+                    obj: ?*c.zend_object,
+                    scope: ?*c.zend_class_entry,
+                    retval: ?*c.zval,
+
+                    fn call(frame: *@This()) void {
+                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, 0, null, null);
+                    }
+                };
+                var frame: CallFrame = .{
+                    .function = self,
+                    .obj = obj,
+                    .scope = scope,
+                    .retval = retval,
+                };
+                try try_catch.tryCatchTyped(void, CallFrame, &frame, CallFrame.call);
+            },
+            else => {
+                var arr: [n]c.zval = undefined;
+                inline for (0..n) |i| arr[i] = params[i];
+                const CallFrame = struct {
+                    function: *Function,
+                    obj: ?*c.zend_object,
+                    scope: ?*c.zend_class_entry,
+                    retval: ?*c.zval,
+                    params: *[n]c.zval,
+
+                    fn call(frame: *@This()) void {
+                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, @intCast(n), @ptrCast(frame.params), null);
+                    }
+                };
+                var frame: CallFrame = .{
+                    .function = self,
+                    .obj = obj,
+                    .scope = scope,
+                    .retval = retval,
+                    .params = &arr,
+                };
+                try try_catch.tryCatchTyped(void, CallFrame, &frame, CallFrame.call);
             },
         }
         if (errors.hasException()) return error.PhpException;
