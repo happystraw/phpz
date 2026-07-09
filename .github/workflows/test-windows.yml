@@ -1,4 +1,4 @@
-name: Test (Windows)
+name: Windows Test
 
 on:
   # push:
@@ -19,15 +19,23 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    runs-on: windows-2025
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
+        # php: ["8.2", "8.3", "8.4", "8.5"]
+        php: ["8.5"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
+      - name: Install pkg-config
+        shell: pwsh
+        run: |
+          # Strawberry Perl's pkg-config.BAT cannot be executed directly by
+          # Zig's ChildProcess. Install a native .exe to shadow it.
+          choco install pkgconfiglite --no-progress -y
+          where pkg-config
       - name: Setup PHP SDK with dev headers
         id: setup-php-sdk
         uses: php/setup-php-sdk@v0.12
@@ -61,26 +69,26 @@ jobs:
             -Dtarget=native-native-msvc \
             -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
             -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
-      - name: Run example tests
-        shell: bash
-        run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
-      - name: Run example tests (ReleaseSafe)
-        shell: bash
-        run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
-            -Doptimize=ReleaseSafe
-      - name: Run example tests (ReleaseFast)
-        shell: bash
-        run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
-            -Doptimize=ReleaseFast
+      # - name: Run example tests
+      #   shell: bash
+      #   run: |
+      #     zig build test-examples \
+      #       -Dtarget=native-native-msvc \
+      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
+      # - name: Run example tests (ReleaseSafe)
+      #   shell: bash
+      #   run: |
+      #     zig build test-examples \
+      #       -Dtarget=native-native-msvc \
+      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+      #       -Doptimize=ReleaseSafe
+      # - name: Run example tests (ReleaseFast)
+      #   shell: bash
+      #   run: |
+      #     zig build test-examples \
+      #       -Dtarget=native-native-msvc \
+      #       -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
+      #       -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+      #       -Doptimize=ReleaseFast

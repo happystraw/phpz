@@ -95,7 +95,7 @@ pub const Callable = extern struct {
         if (owns_retval) self.fci.retval = &discard;
         defer if (owns_retval) native.dtor(&discard);
 
-        const n = info.@"struct".fields.len;
+        const n = info.@"struct".field_types.len;
         switch (n) {
             0 => {
                 self.fci.param_count = 0;

@@ -91,7 +91,7 @@ pub fn methodWithClass(comptime Class: anytype, comptime class_name: [:0]const u
 fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     return struct {
-        fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
+        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args = switch (Args) {
                 @Tuple(&.{Ctx}) => .{ctx},
@@ -107,28 +107,28 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
                 }
             };
         }
-    }.@"fn";
+    }.handle;
 }
 
 fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     const args_type_info = @typeInfo(Args).@"struct";
     const impl_type = @FieldType(Class, "impl");
-    const kind: enum { static, object } = comptime if (args_type_info.fields.len > 0) blk: {
-        const first = args_type_info.fields[0].type;
+    const kind: enum { static, object } = comptime if (args_type_info.field_types.len > 0) blk: {
+        const first = args_type_info.field_types[0];
         break :blk if (first == impl_type or first == *impl_type or first == *const impl_type) .object else .static;
     } else .static;
     const impl_offset = comptime @intFromBool(kind == .object);
     return struct {
-        fn @"fn"(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
+        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(.c) void {
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args: Args = (if (kind == .object) blk: {
                 const obj: *Class = .from(.std, ctx.call.thisObject().?.ptr());
-                break :blk if (impl_type == args_type_info.fields[0].type) .{obj.impl} else .{&obj.impl};
+                break :blk if (impl_type == args_type_info.field_types[0]) .{obj.impl} else .{&obj.impl};
             } else .{}) ++ rest: {
-                const rest_count = args_type_info.fields.len - impl_offset;
+                const rest_count = args_type_info.field_types.len - impl_offset;
                 break :rest if (rest_count == 1)
-                    if (comptime args_type_info.fields[impl_offset].type == Ctx)
+                    if (comptime args_type_info.field_types[impl_offset] == Ctx)
                         .{ctx}
                     else
                         @compileError(std.fmt.comptimePrint("unsupported method signature for {s}: expected Ctx", .{func_desc}))
@@ -145,7 +145,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
                 }
             };
         }
-    }.@"fn";
+    }.handle;
 }
 
 fn exportFn(comptime kind: enum { function, method }, comptime func_name: [:0]const u8, comptime func: Fn) void {

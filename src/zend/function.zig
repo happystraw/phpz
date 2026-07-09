@@ -110,7 +110,7 @@ pub const Function = opaque {
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("params must be a tuple, e.g. .{} or .{a, b}");
 
-        const n = info.@"struct".fields.len;
+        const n = info.@"struct".field_types.len;
         switch (n) {
             0 => c.zend_call_known_function(self.ptr(), obj, scope, retval, 0, null, null),
             else => {

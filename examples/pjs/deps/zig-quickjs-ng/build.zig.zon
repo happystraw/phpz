@@ -2,7 +2,7 @@
     .name = .quickjs_ng,
     .version = "0.0.0",
     .fingerprint = 0xb2bca9fa0367c6d1,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0-dev.813+2153f8143",
     .paths = .{
         "build.zig",
         "build.zig.zon",
