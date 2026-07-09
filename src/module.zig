@@ -5,11 +5,15 @@ const phpz_options = @import("phpz_options");
 const c = @import("root.zig").c;
 pub const ModuleEntry = c.zend_module_entry;
 const errors = @import("errors.zig");
-const function_helper = @import("function.zig");
+const ini_helper = @import("ini.zig");
 /// Configuration for creating a PHP extension module.
 ///
 /// This structure defines the metadata and lifecycle hooks for a PHP extension.
 /// All lifecycle hooks are optional and will be called by PHP at appropriate times.
+/// INI declarations listed in `ini` are collected into Zend definitions and
+/// registered during module startup.
+/// Class wrappers listed in `classes` are registered during module startup,
+/// before `module_startup_fn`.
 pub const Config = struct {
     /// Extension name (must be null-terminated).
     /// This should match the filename of your extension (.so file).
@@ -20,6 +24,13 @@ pub const Config = struct {
     /// Displayed in phpinfo() and php -m output.
     /// Default: "0.0.0"
     version: [:0]const u8 = "0.0.0",
+
+    /// Class wrappers to register during module startup, in the given order.
+    /// Parent classes and interfaces should appear before children.
+    classes: ?[]const type = null,
+
+    /// INI declarations to register during module startup.
+    ini: []const type = &.{},
 
     /// Module startup hook, called when PHP starts (e.g., when Apache starts).
     /// Use this to initialize resources that persist across requests (e.g., register classes).
@@ -48,9 +59,6 @@ pub const Config = struct {
     /// Use this to display custom information about your extension.
     /// Example: configuration settings, compile-time options, credits.
     info_fn: ?PhpInfoFn = null,
-
-    /// INI definitions from `ini.collect(.{...})`. Registered during module startup.
-    ini_defs: ?[]const c.zend_ini_entry_def = null,
 };
 
 pub const PhpInfoFn = fn (*ModuleEntry) void;
@@ -63,7 +71,7 @@ pub const PhpHookFn = fn () anyerror!void;
 /// additionally exports the `get_module` function for the PHP loader.
 ///
 /// Parameters:
-///   - cfg: Module configuration including name, version, and lifecycle hook functions
+///   - cfg: Module configuration including name, version, lifecycle hooks, INI declarations, and optional classes
 pub fn module(comptime cfg: Config) void {
     comptime {
         if (!@hasDecl(c, "zend_module_entry")) {
@@ -95,14 +103,40 @@ fn makePhpHookFn(comptime hook_fn: PhpHookFn) *const fn (c_int, c_int) callconv(
     }.handle;
 }
 
+fn checkModuleClass(comptime Class: type) void {
+    if (!@hasDecl(Class, "register")) {
+        @compileError(
+            "module .classes entry '" ++ @typeName(Class) ++ "' has no register() function; " ++
+                "pass the wrapper type returned by phpz.Class()/phpz.SimpleClass(), e.g. .classes = &.{ classes.user.Class }",
+        );
+    }
+
+    const register_info = @typeInfo(@TypeOf(Class.register));
+    if (register_info != .@"fn") {
+        @compileError(
+            "module .classes entry '" ++ @typeName(Class) ++ "' has a register declaration, but it is not a function; " ++
+                "expected pub fn register() void",
+        );
+    }
+
+    const fn_info = register_info.@"fn";
+    if (fn_info.param_types.len != 0 or fn_info.return_type.? != void) {
+        @compileError(
+            "module .classes entry '" ++ @typeName(Class) ++ "' register declaration must be pub fn register() void; " ++
+                "pass the phpz class wrapper type, not the implementation type",
+        );
+    }
+}
+
 fn makePhpModuleStartupFn(
     comptime module_name: [:0]const u8,
     comptime hook_fn: ?PhpHookFn,
     comptime ini_defs: ?[]const c.zend_ini_entry_def,
+    comptime classes: ?[]const type,
 ) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
     const symbols_fn_name = "register_" ++ module_name ++ "_symbols";
     const has_symbols = comptime @hasDecl(c, symbols_fn_name);
-    if (!has_symbols and hook_fn == null and ini_defs == null) return null;
+    if (!has_symbols and hook_fn == null and ini_defs == null and classes == null) return null;
     return struct {
         fn handle(_: c_int, module_number: c_int) callconv(.c) c.zend_result {
             if (comptime has_symbols) {
@@ -112,6 +146,12 @@ fn makePhpModuleStartupFn(
             if (comptime ini_defs) |defs| {
                 if (c.zend_register_ini_entries(&defs[0], module_number) != c.SUCCESS) {
                     return c.FAILURE;
+                }
+            }
+            if (comptime classes) |items| {
+                inline for (items) |Class| {
+                    checkModuleClass(Class);
+                    Class.register();
                 }
             }
             if (comptime hook_fn) |f| {
@@ -152,6 +192,9 @@ fn makePhpInfoFn(comptime info_fn: PhpInfoFn) *const fn ([*c]ModuleEntry) callco
 }
 
 inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
+    const ini_defs = ini_helper.collect(cfg.ini);
+    const registered_ini_defs: ?[]const c.zend_ini_entry_def = if (cfg.ini.len == 0) null else &ini_defs;
+
     var entry: ModuleEntry = undefined;
 
     // STANDARD_MODULE_HEADER
@@ -165,8 +208,8 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
     // EXTENSION SETUP
     entry.name = cfg.name;
     entry.functions = if (@hasDecl(c, "ext_functions")) &c.ext_functions else null;
-    entry.module_startup_func = makePhpModuleStartupFn(cfg.name, cfg.module_startup_fn, cfg.ini_defs);
-    entry.module_shutdown_func = makePhpModuleShutdownFn(cfg.module_shutdown_fn, cfg.ini_defs);
+    entry.module_startup_func = makePhpModuleStartupFn(cfg.name, cfg.module_startup_fn, registered_ini_defs, cfg.classes);
+    entry.module_shutdown_func = makePhpModuleShutdownFn(cfg.module_shutdown_fn, registered_ini_defs);
     entry.request_startup_func = if (cfg.request_startup_fn) |f| makePhpHookFn(f) else null;
     entry.request_shutdown_func = if (cfg.request_shutdown_fn) |f| makePhpHookFn(f) else null;
     entry.info_func = if (cfg.info_fn) |f| makePhpInfoFn(f) else null;
@@ -181,7 +224,7 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
     entry.type = 0;
     entry.handle = null;
     entry.module_number = 0;
-    entry.build_id = "API" ++ std.fmt.comptimePrint("{d}", .{c.ZEND_MODULE_API_NO}) ++ c.ZEND_BUILD_TS ++ c.ZEND_BUILD_DEBUG;
+    entry.build_id = c.phpz_module_build_id();
 
     if (@hasField(ModuleEntry, "globals_id_ptr")) {
         // ZTS
