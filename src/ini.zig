@@ -15,43 +15,229 @@ pub const Access = enum(c_int) {
     all = c.ZEND_INI_ALL,
 };
 
-// Define — typed INI declarations
+/// INI update stage passed to Zend's alter-ini API.
+pub const Stage = enum(c_int) {
+    startup = c.ZEND_INI_STAGE_STARTUP,
+    shutdown = c.ZEND_INI_STAGE_SHUTDOWN,
+    activate = c.ZEND_INI_STAGE_ACTIVATE,
+    deactivate = c.ZEND_INI_STAGE_DEACTIVATE,
+    runtime = c.ZEND_INI_STAGE_RUNTIME,
+    htaccess = c.ZEND_INI_STAGE_HTACCESS,
+};
 
-/// Typed INI definition factory. Use via `ini.string`, `ini.int`, etc.
-fn define(comptime T: type) type {
+pub const SetOptions = struct {
+    modify: Access = .user,
+    stage: Stage = .runtime,
+    force: bool = false,
+};
+
+pub const SetError = error{ AlterIniFailed, FormatIniValueFailed };
+
+// Typed INI declarations
+
+/// Typed custom INI definition factory.
+///
+/// `parse` converts the Zend INI string into `T` whenever PHP changes the
+/// directive. The input is length-bounded and also has a 0 sentinel at `len`.
+/// `format` is optional; provide it to enable typed `set(T)`.
+///
+/// ```zig
+/// const Mode = enum { safe, fast };
+///
+/// const mode = phpz.ini.typed(Mode).new(.{
+///     .name = "ext.mode",
+///     .default = .safe,
+///     .default_text = "safe",
+///     .access = .all,
+///     .parse = parseMode,
+///     .format = formatMode,
+/// });
+/// ```
+pub fn typed(comptime T: type) type {
     return struct {
-        pub fn new(
-            comptime name: [:0]const u8,
-            comptime default_value: T,
-            comptime access: Access,
-        ) type {
+        pub const ParseFn = fn ([:0]const u8) anyerror!T;
+        pub const ParseWithEntryFn = fn (*c.zend_ini_entry, [:0]const u8) anyerror!T;
+        pub const FormatFn = fn (T, []u8) anyerror![]const u8;
+
+        pub const Config = struct {
+            name: [:0]const u8,
+            default: T,
+            default_text: [:0]const u8,
+            access: Access,
+            parse: ?*const ParseFn = null,
+            parse_with_entry: ?*const ParseWithEntryFn = null,
+            format: ?*const FormatFn = null,
+        };
+
+        pub fn new(comptime cfg: Config) type {
             return struct {
-                pub var value: T = default_value;
+                var value: T = cfg.default;
+
+                pub inline fn get() T {
+                    return value;
+                }
+
+                pub fn set(new_value: T) SetError!void {
+                    return setWith(new_value, .{});
+                }
+
+                pub fn setWith(new_value: T, opts: SetOptions) SetError!void {
+                    const format = cfg.format orelse @compileError(
+                        "ini.typed(" ++ @typeName(T) ++ ").new(...) requires .format to use set()",
+                    );
+                    var buffer: [256]u8 = undefined;
+                    const text = format(new_value, &buffer) catch return error.FormatIniValueFailed;
+                    return alter(cfg.name, text, opts);
+                }
+
+                pub fn setText(new_value: []const u8) SetError!void {
+                    return setTextWith(new_value, .{});
+                }
+
+                pub fn setTextWith(new_value: []const u8, opts: SetOptions) SetError!void {
+                    return alter(cfg.name, new_value, opts);
+                }
 
                 fn iniDef() c.zend_ini_entry_def {
-                    const val = formatDefault(T, default_value);
                     return .{
-                        .name = name,
-                        .on_modify = @ptrCast(onModifyFor(T, &value)),
+                        .name = cfg.name,
+                        .on_modify = @ptrCast(onModify(&value)),
                         .mh_arg1 = null,
                         .mh_arg2 = null,
                         .mh_arg3 = null,
-                        .value = val,
+                        .value = cfg.default_text,
                         .displayer = null,
-                        .value_length = @intCast(val.len),
-                        .name_length = @intCast(name.len),
-                        .modifiable = @intFromEnum(access),
+                        .value_length = @intCast(cfg.default_text.len),
+                        .name_length = @intCast(cfg.name.len),
+                        .modifiable = @intFromEnum(cfg.access),
                     };
+                }
+
+                fn onModify(comptime global: *T) OnModifyFn {
+                    return struct {
+                        fn handle(entry: *c.zend_ini_entry, new_value: ?*c.zend_string, _: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+                            if (new_value) |nv| {
+                                const text = nv.*.val()[0..nv.*.len :0];
+                                global.* = parse(entry, text) catch return c.FAILURE;
+                            }
+                            return c.SUCCESS;
+                        }
+                    }.handle;
+                }
+
+                fn parse(entry: *c.zend_ini_entry, text: [:0]const u8) anyerror!T {
+                    if (comptime cfg.parse_with_entry) |f| return f(entry, text);
+                    if (comptime cfg.parse) |f| return f(text);
+                    @compileError(
+                        "ini.typed(" ++ @typeName(T) ++ ").new(...) requires .parse or .parse_with_entry",
+                    );
                 }
             };
         }
     };
 }
 
-pub const string = define([:0]const u8);
-pub const int = define(i64);
-pub const float = define(f64);
-pub const boolean = define(bool);
+pub const string = struct {
+    pub fn new(
+        comptime name: [:0]const u8,
+        comptime default_value: [:0]const u8,
+        comptime access: Access,
+    ) type {
+        return typed([:0]const u8).new(.{
+            .name = name,
+            .default = default_value,
+            .default_text = default_value,
+            .access = access,
+            .parse = parse,
+            .format = format,
+        });
+    }
+
+    fn parse(text: [:0]const u8) ![:0]const u8 {
+        return text;
+    }
+
+    fn format(value: [:0]const u8, _: []u8) ![]const u8 {
+        return value;
+    }
+};
+
+pub const int = struct {
+    pub fn new(
+        comptime name: [:0]const u8,
+        comptime default_value: i64,
+        comptime access: Access,
+    ) type {
+        return typed(i64).new(.{
+            .name = name,
+            .default = default_value,
+            .default_text = std.fmt.comptimePrint("{d}", .{default_value}),
+            .access = access,
+            .parse_with_entry = parse,
+            .format = format,
+        });
+    }
+
+    fn parse(entry: *c.zend_ini_entry, text: [:0]const u8) !i64 {
+        const zstr = c.zend_string_init(text.ptr, text.len, false);
+        defer c.zend_string_release(zstr);
+        return c.zend_ini_parse_quantity_warn(zstr, entry.*.name);
+    }
+
+    fn format(value: i64, buffer: []u8) ![]const u8 {
+        return std.fmt.bufPrint(buffer, "{d}", .{value});
+    }
+};
+
+pub const float = struct {
+    pub fn new(
+        comptime name: [:0]const u8,
+        comptime default_value: f64,
+        comptime access: Access,
+    ) type {
+        return typed(f64).new(.{
+            .name = name,
+            .default = default_value,
+            .default_text = std.fmt.comptimePrint("{d}", .{default_value}),
+            .access = access,
+            .parse = parse,
+            .format = format,
+        });
+    }
+
+    fn parse(text: [:0]const u8) !f64 {
+        return std.fmt.parseFloat(f64, std.mem.trim(u8, text, " \t\r\n"));
+    }
+
+    fn format(value: f64, buffer: []u8) ![]const u8 {
+        return std.fmt.bufPrint(buffer, "{d}", .{value});
+    }
+};
+
+pub const boolean = struct {
+    pub fn new(
+        comptime name: [:0]const u8,
+        comptime default_value: bool,
+        comptime access: Access,
+    ) type {
+        return typed(bool).new(.{
+            .name = name,
+            .default = default_value,
+            .default_text = if (default_value) "1" else "0",
+            .access = access,
+            .parse = parse,
+            .format = format,
+        });
+    }
+
+    fn parse(text: [:0]const u8) !bool {
+        return parseBool(std.mem.trim(u8, text, " \t\r\n"));
+    }
+
+    fn format(value: bool, _: []u8) ![]const u8 {
+        return if (value) "1" else "0";
+    }
+};
 
 // Custom — free-form INI entry
 
@@ -89,29 +275,31 @@ pub fn custom(
 
 // Collect
 
-/// Collects typed INI declarations into a null-terminated `zend_ini_entry_def`
-/// array ready for `module()`.
+/// Collects INI declarations into a null-terminated `zend_ini_entry_def` array.
+/// Usually `module()` calls this internally for `.ini = &.{ ... }`; use this
+/// directly only when integrating with lower-level Zend APIs.
 ///
 /// ```zig
 /// const greeting = ini.string.new("ext.greeting", "Hello", .all);
 /// const max      = ini.int.new("ext.max", 100, .system);
 /// const debug    = ini.boolean.new("ext.debug", false, .user);
 ///
-/// pub const defs = ini.collect(.{ greeting, max, debug });
-///
 /// comptime {
 ///     phpz.module(.{
 ///         .name = "ext",
-///         .ini_defs = &defs,
+///         .ini = &.{ greeting, max, debug },
 ///     });
 /// }
 /// ```
-pub fn collect(comptime defs: anytype) [defs.len + 1]c.zend_ini_entry_def {
-    var result: [defs.len + 1]c.zend_ini_entry_def = undefined;
-    inline for (defs, 0..) |d, i| {
-        result[i] = d.iniDef();
+///
+/// `entries` may also contain raw `c.zend_ini_entry_def` values for low-level
+/// integrations.
+pub fn collect(comptime entries: anytype) [entries.len + 1]c.zend_ini_entry_def {
+    var result: [entries.len + 1]c.zend_ini_entry_def = undefined;
+    inline for (entries, 0..) |entry, i| {
+        result[i] = entryDef(entry);
     }
-    result[defs.len] = std.mem.zeroes(c.zend_ini_entry_def);
+    result[entries.len] = std.mem.zeroes(c.zend_ini_entry_def);
     return result;
 }
 
@@ -201,6 +389,51 @@ pub fn onUpdateBool(comptime global: *bool) OnModifyFn {
 
 // Internal
 
+fn entryDef(comptime entry: anytype) c.zend_ini_entry_def {
+    const Entry = @TypeOf(entry);
+    if (Entry == type) {
+        checkEntry(entry);
+        return entry.iniDef();
+    }
+    if (Entry == c.zend_ini_entry_def) return entry;
+    if (Entry == *const c.zend_ini_entry_def) return entry.*;
+
+    @compileError(
+        "ini.collect entry '" ++ @typeName(Entry) ++ "' must be an INI wrapper type " ++
+            "or c.zend_ini_entry_def",
+    );
+}
+
+fn checkEntry(comptime Entry: type) void {
+    if (!@hasDecl(Entry, "iniDef")) {
+        @compileError(
+            "module .ini entry '" ++ @typeName(Entry) ++ "' has no iniDef() function; " ++
+                "pass a value returned by phpz.ini.string/int/float/boolean/typed.new(...) or phpz.ini.custom(...)",
+        );
+    }
+
+    const ini_def_info = @typeInfo(@TypeOf(Entry.iniDef));
+    if (ini_def_info != .@"fn") {
+        @compileError("module .ini entry '" ++ @typeName(Entry) ++ "' iniDef declaration is not a function");
+    }
+
+    const fn_info = ini_def_info.@"fn";
+    if (fn_info.param_types.len != 0 or fn_info.return_type.? != c.zend_ini_entry_def) {
+        @compileError("module .ini entry '" ++ @typeName(Entry) ++ "' iniDef must be fn() zend_ini_entry_def");
+    }
+}
+
+fn alter(comptime name: [:0]const u8, value: []const u8, opts: SetOptions) SetError!void {
+    const zname = c.zend_string_init(name.ptr, name.len, false);
+    defer c.zend_string_release(zname);
+
+    const result = if (opts.force)
+        c.zend_alter_ini_entry_chars_ex(zname, value.ptr, value.len, @intFromEnum(opts.modify), @intFromEnum(opts.stage), 1)
+    else
+        c.zend_alter_ini_entry_chars(zname, value.ptr, value.len, @intFromEnum(opts.modify), @intFromEnum(opts.stage));
+    if (result != c.SUCCESS) return error.AlterIniFailed;
+}
+
 fn unpackMhArgs(comptime args: anytype) [3]?*anyopaque {
     if (args.len > 3) @compileError("custom: at most 3 args (mh_arg1/mh_arg2/mh_arg3)");
     var result: [3]?*anyopaque = .{ null, null, null };
@@ -208,28 +441,49 @@ fn unpackMhArgs(comptime args: anytype) [3]?*anyopaque {
     return result;
 }
 
-fn formatDefault(comptime T: type, comptime val: T) [:0]const u8 {
-    return switch (T) {
-        [:0]const u8 => val,
-        i64, f64 => std.fmt.comptimePrint("{d}", .{val}),
-        bool => if (val) "1" else "0",
-        else => @compileError("Unsupported INI value type: " ++ @typeName(T)),
-    };
-}
-
-fn onModifyFor(comptime T: type, comptime ptr: *T) OnModifyFn {
-    return switch (T) {
-        [:0]const u8 => onUpdateString(ptr),
-        i64 => onUpdateInt(ptr),
-        f64 => onUpdateFloat(ptr),
-        bool => onUpdateBool(ptr),
-        else => @compileError("Unsupported INI value type: " ++ @typeName(T)),
-    };
-}
-
 test {
     std.testing.refAllDecls(@This());
+    const Mode = enum { safe, fast };
+    const ModeIni = struct {
+        fn parse(text: [:0]const u8) !Mode {
+            if (std.mem.eql(u8, text, "safe")) return .safe;
+            if (std.mem.eql(u8, text, "fast")) return .fast;
+            return error.InvalidMode;
+        }
+
+        fn format(value: Mode, _: []u8) ![]const u8 {
+            return switch (value) {
+                .safe => "safe",
+                .fast => "fast",
+            };
+        }
+    };
+    const greeting = string.new("test.greeting", "Hello", .all);
+    const max = int.new("test.max", 100, .system);
+    const debug = boolean.new("test.debug", false, .user);
+    const mode = typed(Mode).new(.{
+        .name = "test.mode",
+        .default = .safe,
+        .default_text = "safe",
+        .access = .all,
+        .parse = ModeIni.parse,
+        .format = ModeIni.format,
+    });
+    _ = collect(&.{ greeting, max, debug, mode });
+    const raw = c.zend_ini_entry_def{
+        .name = "test.raw",
+        .on_modify = null,
+        .mh_arg1 = null,
+        .mh_arg2 = null,
+        .mh_arg3 = null,
+        .value = "raw",
+        .displayer = null,
+        .value_length = 3,
+        .name_length = 8,
+        .modifiable = @intFromEnum(Access.all),
+    };
+    _ = collect(.{ raw, &raw });
     _ = &unpackMhArgs;
-    _ = &formatDefault;
-    _ = &onModifyFor;
+    _ = &entryDef;
+    _ = &alter;
 }
