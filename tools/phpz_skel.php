@@ -883,7 +883,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const ext_name = "{{EXT_NAME}}";
-    const ext_lib = b.addLibrary(.{
+    const ext_lib = phpz.addExtension(b, .{
         .name = ext_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
@@ -892,8 +892,6 @@ pub fn build(b: *std.Build) void {
         }),
         .linkage = .dynamic,
     });
-    ext_lib.root_module.addImport("phpz", phpz.mod);
-    phpz.apply(ext_lib);
 
     const ext_filename = ext_name ++ ".so";
 

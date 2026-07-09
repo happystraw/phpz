@@ -92,8 +92,13 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     return c;
 }
 
-/// Apply OS-specific linker settings to a PHP extension shared library.
-pub fn apply(self: Phpz, lib: *Build.Step.Compile) void {
+/// Create a PHP extension library and attach the phpz module.
+///
+/// This also applies platform-specific linker settings required for PHP to
+/// load the resulting shared library.
+pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build.Step.Compile {
+    options.root_module.addImport("phpz", self.mod);
+    const lib = b.addLibrary(options);
     switch (self.options.translator.target.result.os.tag) {
         // macOS: allows undefined symbols to be resolved at runtime by PHP
         .macos => lib.linker_allow_shlib_undefined = true,
@@ -106,6 +111,7 @@ pub fn apply(self: Phpz, lib: *Build.Step.Compile) void {
         },
         else => {},
     }
+    return lib;
 }
 
 const std = @import("std");
