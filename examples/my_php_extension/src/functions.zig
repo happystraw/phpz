@@ -55,7 +55,7 @@ fn getDefaultUser(ctx: phpz.Ctx) !void {
     defer Zval.native.dtor(&name_zv);
     const age_zv = Zval.native.init(.int, 25);
 
-    const user: *UserClass = try .newWith(.{ name_zv, age_zv });
+    const user: *UserClass = try .new(.{ name_zv, age_zv });
     ctx.ret.set(.object, .from(&user.std));
 }
 
@@ -130,8 +130,8 @@ fn testExpectArgArrayObject(ctx: phpz.Ctx) !void {
         .{ .object = .{ .instanceof = true, .optional = true, .nullable = true } },
     }, .{
         {},
-        .{ .class = UserClass.entry },
-        .{ .class = UserClass.entry },
+        .{ .type = UserClass.entry },
+        .{ .type = UserClass.entry },
     });
 
     const data: *phpz.zend.Array = args[0];
@@ -227,8 +227,49 @@ fn tryCreateInvalidUser(ctx: phpz.Ctx) !void {
 
     const bad_name = Zval.native.init(.int, 123);
     const age = Zval.native.init(.int, 1);
-    const user = try UserClass.newWith(.{ bad_name, age });
+    const user = try UserClass.new(.{ bad_name, age });
     user.release();
+}
+
+fn exhaustPhpAllocator(scope_defer: *bool, cleanup_defer: *bool, freed_blocks: *usize) !void {
+    const allocator = phpz.heap.php_allocator;
+
+    defer scope_defer.* = true;
+
+    var blocks: [64][]u8 = undefined;
+    var count: usize = 0;
+    defer {
+        for (blocks[0..count]) |block| allocator.free(block);
+        freed_blocks.* = count;
+        cleanup_defer.* = true;
+    }
+
+    while (count < blocks.len) : (count += 1) {
+        const block = try allocator.alloc(u8, 1024 * 1024);
+        block[0] = @intCast(count);
+        block[block.len - 1] = @intCast(count);
+        blocks[count] = block;
+    }
+}
+
+/// testHeapAllocatorBailout(): array
+fn testHeapAllocatorBailout(ctx: phpz.Ctx) !void {
+    _ = try ctx.call.expectArgs(&.{}, {});
+
+    var scope_defer = false;
+    var cleanup_defer = false;
+    var freed_blocks: usize = 0;
+    var out_of_memory = false;
+
+    exhaustPhpAllocator(&scope_defer, &cleanup_defer, &freed_blocks) catch |err| switch (err) {
+        error.OutOfMemory => out_of_memory = true,
+    };
+
+    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    result.set(.bool, "out_of_memory", out_of_memory);
+    result.set(.bool, "scope_defer", scope_defer);
+    result.set(.bool, "cleanup_defer", cleanup_defer);
+    result.set(.bool, "freed_blocks", freed_blocks > 0);
 }
 
 /// map(array $arr, callable $cb): array
@@ -238,11 +279,11 @@ fn map(ctx: phpz.Ctx) !void {
     const ht, _ = try ctx.call.expectArgs(
         &.{
             .{ .array = .{} },
-            .{ .callable = .{ .target = true } },
+            .{ .callable = .{ .resolve = true } },
         },
         .{
             {},
-            .{ .cb = &cb },
+            .{ .target = &cb },
         },
     );
     // _ = cb.parse(cb_zv, false, null); // parse twice !
@@ -262,17 +303,22 @@ fn map(ctx: phpz.Ctx) !void {
 
 /// iniGetGreeting(): string
 fn iniGetGreeting(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.string, ini_config.greeting.value);
+    ctx.ret.set(.string, ini_config.greeting.get());
 }
 
 /// iniGetMaxUsers(): int
 fn iniGetMaxUsers(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.int, ini_config.max_users.value);
+    ctx.ret.set(.int, ini_config.max_users.get());
 }
 
 /// iniGetDebug(): bool
 fn iniGetDebug(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.bool, ini_config.debug.value);
+    ctx.ret.set(.bool, ini_config.debug.get());
+}
+
+/// iniGetMode(): string
+fn iniGetMode(ctx: phpz.Ctx) !void {
+    ctx.ret.set(.string, @tagName(ini_config.mode.get()));
 }
 
 comptime {
@@ -288,7 +334,9 @@ comptime {
     phpz.function("MyPHPExt\\testExpectArgMixed", testExpectArgMixed);
     phpz.function("MyPHPExt\\inspectObjectProperty", inspectObjectProperty);
     phpz.function("MyPHPExt\\tryCreateInvalidUser", tryCreateInvalidUser);
+    phpz.function("MyPHPExt\\testHeapAllocatorBailout", testHeapAllocatorBailout);
     phpz.function("iniGetGreeting", iniGetGreeting);
     phpz.function("iniGetMaxUsers", iniGetMaxUsers);
     phpz.function("iniGetDebug", iniGetDebug);
+    phpz.function("iniGetMode", iniGetMode);
 }

@@ -1,6 +1,7 @@
 const errors = @import("../errors.zig");
 const phpz = @import("../root.zig");
 const c = phpz.c;
+const globals = phpz.globals;
 const native = @import("../zval.zig").Zval.native;
 const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
@@ -15,9 +16,10 @@ pub const Object = opaque {
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
     pub fn init() InitError!*Object {
-        const obj = c.zend_objects_new(c.zend_standard_class_def);
+        const std_class = globals.class.rawEntry("zend_standard_class_def");
+        const obj = c.zend_objects_new(std_class);
         if (obj == null) return error.InitFailed;
-        c.object_properties_init(obj, c.zend_standard_class_def);
+        c.object_properties_init(obj, std_class);
         return @ptrCast(obj);
     }
 
@@ -112,7 +114,7 @@ pub const Object = opaque {
     /// (private/protected), triggers `__call` when the method is absent,
     /// and respects inheritance. Use `findMethod` for a direct table lookup.
     pub fn resolveMethod(self: *Object, method_name: []const u8) ?*Function {
-        const zstr = String.init(method_name);
+        const zstr = String.init(method_name, false);
         defer zstr.release();
 
         var obj_ptr = self.ptr();
@@ -167,7 +169,7 @@ pub const Object = opaque {
         comptime read: PropertyRead,
         scratch: *c.zval,
     ) Function.Error!*c.zval {
-        const zstr = String.init(name);
+        const zstr = String.init(name, false);
         defer zstr.release();
 
         const result = c.zend_std_read_property(
@@ -193,7 +195,7 @@ pub const Object = opaque {
         name: []const u8,
         value: *c.zval,
     ) Function.Error!?*c.zval {
-        const zstr = String.init(name);
+        const zstr = String.init(name, false);
         defer zstr.release();
 
         const result = c.zend_std_write_property(
@@ -225,7 +227,7 @@ pub const Object = opaque {
         name: []const u8,
         comptime check: PropertyCheck,
     ) Function.Error!bool {
-        const zstr = String.init(name);
+        const zstr = String.init(name, false);
         defer zstr.release();
 
         const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @intFromEnum(check), null);
@@ -237,14 +239,14 @@ pub const Object = opaque {
     ///
     /// Returns `error.PhpException` if a magic `__unset` handler throws.
     pub fn unsetProperty(self: *Object, name: []const u8) Function.Error!void {
-        const zstr = String.init(name);
+        const zstr = String.init(name, false);
         defer zstr.release();
 
         c.zend_std_unset_property(self.ptr(), zstr.ptr(), null);
         if (errors.hasException()) return error.PhpException;
     }
 
-    /// Check if object is an instance of a class
+    /// Check if object is an instance of a class or implements an interface.
     pub inline fn instanceof(self: *Object, ce: *ClassEntry) bool {
         return c.instanceof_function(self.class().ptr(), ce.ptr());
     }
@@ -326,7 +328,7 @@ pub const Object = opaque {
         retval: ?*c.zval,
         params: []c.zval,
     ) CallIfExistsError!void {
-        const zstr = String.init(method_name);
+        const zstr = String.init(method_name, false);
         defer zstr.release();
 
         const result = c.zend_call_method_if_exists(

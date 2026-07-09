@@ -1,5 +1,5 @@
 --TEST--
-newWith releases the object when the constructor throws
+new releases the object when the constructor throws
 --FILE--
 <?php
 

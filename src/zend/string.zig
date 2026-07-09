@@ -1,28 +1,31 @@
-const c = @import("../root.zig").c;
+const phpz = @import("../root.zig");
+const c = phpz.c;
+const globals = phpz.globals;
 
 pub const String = opaque {
     /// Create an empty string.
     ///
     /// Ownership: borrowed interned singleton.
     pub inline fn empty() *String {
-        return @ptrCast(@alignCast(c.zend_empty_string));
+        return @ptrCast(globals.global(.value, *c.zend_string, "zend_empty_string"));
     }
 
     /// Create a single character string.
     ///
     /// Ownership: borrowed interned singleton.
     pub inline fn char(ch: u8) *String {
-        return @ptrCast(@alignCast(c.zend_one_char_string[ch]));
+        const index: usize = ch;
+        return @ptrCast(globals.global(.ptr, [256]*c.zend_string, "zend_one_char_string")[index]);
     }
 
     /// Create a string from a byte slice.
     ///
     /// Ownership: caller owns one logical reference; call `release()` when done.
     /// Empty and one-byte strings may be interned, but `release()` is still valid.
-    pub fn init(str: []const u8) *String {
+    pub fn init(str: []const u8, persistent: bool) *String {
         if (str.len == 0) return empty();
         if (str.len == 1) return char(str[0]);
-        return @ptrCast(c.zend_string_init(str.ptr, str.len, false));
+        return @ptrCast(c.zend_string_init(str.ptr, str.len, persistent));
     }
 
     /// Create a string from an existing zend_string pointer.

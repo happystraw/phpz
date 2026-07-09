@@ -1,6 +1,6 @@
 const User = extern struct {
     pub fn register(impl: anytype) *phpz.ClassEntry {
-        return .from(impl(AbstractEntity.entry.ptr(), c.zend_ce_stringable));
+        return .from(impl(AbstractEntity.entry.ptr(), phpz.globals.class.entry("Stringable")));
     }
 
     /// __construct(string $name, int|null $age = null)

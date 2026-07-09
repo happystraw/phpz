@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: b69c5e57a4b8a6464f198f66a4b83e8b7d3ac83b */
+ * Stub hash: 34215a54f14dd37a56a161859166f9ee56368b8d */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -16,6 +16,8 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetDebug, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_iniGetMode arginfo_iniGetGreeting
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_increment, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_LONG, 0)
@@ -62,6 +64,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_inspectObjectProperty, 
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_tryCreateInvalidUser arginfo_hello
+
+#define arginfo_MyPHPExt_testHeapAllocatorBailout arginfo_MyPHPExt_listStatuses
 
 #define arginfo_class_MyPHPExt_Identifiable_getId arginfo_iniGetMaxUsers
 
@@ -145,6 +149,7 @@ ZEND_FUNCTION(greet);
 ZEND_FUNCTION(iniGetGreeting);
 ZEND_FUNCTION(iniGetMaxUsers);
 ZEND_FUNCTION(iniGetDebug);
+ZEND_FUNCTION(iniGetMode);
 ZEND_FUNCTION(MyPHPExt_increment);
 ZEND_FUNCTION(MyPHPExt_findById);
 ZEND_FUNCTION(MyPHPExt_getDefaultUser);
@@ -155,6 +160,7 @@ ZEND_FUNCTION(MyPHPExt_testExpectArgArrayObject);
 ZEND_FUNCTION(MyPHPExt_testExpectArgMixed);
 ZEND_FUNCTION(MyPHPExt_inspectObjectProperty);
 ZEND_FUNCTION(MyPHPExt_tryCreateInvalidUser);
+ZEND_FUNCTION(MyPHPExt_testHeapAllocatorBailout);
 ZEND_METHOD(MyPHPExt_ExampleAttribute, __construct);
 ZEND_METHOD(MyPHPExt_AbstractEntity, onLoad);
 ZEND_METHOD(MyPHPExt_User, __construct);
@@ -186,6 +192,7 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(iniGetGreeting, arginfo_iniGetGreeting)
 	ZEND_FE(iniGetMaxUsers, arginfo_iniGetMaxUsers)
 	ZEND_FE(iniGetDebug, arginfo_iniGetDebug)
+	ZEND_FE(iniGetMode, arginfo_iniGetMode)
 	ZEND_NS_FALIAS("MyPHPExt", increment, MyPHPExt_increment, arginfo_MyPHPExt_increment)
 	ZEND_NS_FALIAS("MyPHPExt", findById, MyPHPExt_findById, arginfo_MyPHPExt_findById)
 	ZEND_NS_FALIAS("MyPHPExt", getDefaultUser, MyPHPExt_getDefaultUser, arginfo_MyPHPExt_getDefaultUser)
@@ -196,6 +203,7 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_NS_FALIAS("MyPHPExt", testExpectArgMixed, MyPHPExt_testExpectArgMixed, arginfo_MyPHPExt_testExpectArgMixed)
 	ZEND_NS_FALIAS("MyPHPExt", inspectObjectProperty, MyPHPExt_inspectObjectProperty, arginfo_MyPHPExt_inspectObjectProperty)
 	ZEND_NS_FALIAS("MyPHPExt", tryCreateInvalidUser, MyPHPExt_tryCreateInvalidUser, arginfo_MyPHPExt_tryCreateInvalidUser)
+	ZEND_NS_FALIAS("MyPHPExt", testHeapAllocatorBailout, MyPHPExt_testHeapAllocatorBailout, arginfo_MyPHPExt_testHeapAllocatorBailout)
 	ZEND_FE_END
 };
 
