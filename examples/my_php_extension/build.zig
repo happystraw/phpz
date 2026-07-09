@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     const libc_file = b.option([]const u8, "libc", "Libc paths file for cross-compilation");
     const libc_file_path: ?std.Build.LazyPath = if (libc_file) |path| .{ .cwd_relative = path } else null;
     const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
+    const windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false;
 
     // Fetch the phpz dependency declared in build.zig.zon
     const phpz_dep = b.dependency("phpz", .{});
@@ -29,6 +30,7 @@ pub fn build(b: *std.Build) void {
         .php_include_dir = .{ .cwd_relative = php_include_dir },
         .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
         .windows_zts = windows_zts,
+        .windows_debug = windows_debug,
     });
 
     // Create the PHP extension as a dynamic library (.so / .dll / .dylib)

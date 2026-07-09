@@ -120,6 +120,8 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
             if (options.php_lib_dir) |lib_dir| {
                 test_cmd.addArg(b.fmt("-Dphp-lib-dir={s}", .{lib_dir}));
             }
+            test_cmd.addArg(b.fmt("-Dwindows-zts={}", .{options.windows_zts}));
+            test_cmd.addArg(b.fmt("-Dwindows-debug={}", .{options.windows_debug}));
         }
         test_cmd.setCwd(b.path("examples").join(b.allocator, test_example) catch unreachable);
         step.dependOn(&test_cmd.step);
