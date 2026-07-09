@@ -359,13 +359,13 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             return .from(.std, zv.object().ptr());
         }
 
-        /// Creates a new instance of the class.
+        /// Creates an instance of the class without calling its constructor.
         ///
         /// Ownership: caller owns the returned object reference; call
         /// `release()` unless the object is transferred into a zval/PHP return.
         ///
         /// Must be called after `register()`, otherwise `entry` is undefined.
-        pub fn new() *Self {
+        pub fn create() *Self {
             // emalloc never returns null (it aborts on OOM), so `orelse` is unreachable.
             return .from(.std, init(entry.ptr()) orelse unreachable);
         }
@@ -380,7 +380,14 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             try obj.call(method_name, retval, params);
         }
 
+        /// Calls a method on the object and converts a Zend bailout into `error.ZendBailout`.
+        pub fn tryCall(self: *Self, method_name: []const u8, retval: ?*c.zval, params: anytype) zend.Object.TryCallError!void {
+            const obj: *zend.Object = .from(&self.std);
+            try obj.tryCall(method_name, retval, params);
+        }
+
         pub const ConstructError = zend.Object.ConstructorError || zend.Function.Error;
+        pub const TryConstructError = zend.Object.ConstructorError || zend.Function.TryCallError;
 
         /// Calls the constructor (`__construct`) with the given parameters.
         /// Does nothing if the class has no constructor defined.
@@ -392,9 +399,15 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             if (try obj.constructor()) |ctor| try ctor.callMethod(obj, null, params);
         }
 
+        /// Calls the constructor and converts a Zend bailout into `error.ZendBailout`.
+        pub fn tryConstruct(self: *Self, params: anytype) TryConstructError!void {
+            const obj: *zend.Object = .from(&self.std);
+            if (try obj.constructor()) |ctor| try ctor.tryCallMethod(obj, null, params);
+        }
+
         /// Create a new instance and call its constructor in one step.
         ///
-        /// Combines `new()` and `construct()`. If the class has no constructor,
+        /// Combines `create()` and `construct()`. If the class has no constructor,
         /// the params are silently ignored.
         ///
         /// Must be called after `register()`, otherwise `entry` is undefined.
@@ -404,10 +417,18 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Returns `error.AccessDenied` if the constructor is inaccessible.
         /// Returns `error.PhpException` if the constructor throws a PHP exception.
-        pub fn newWith(params: anytype) ConstructError!*Self {
-            const instance = new();
+        pub fn new(params: anytype) ConstructError!*Self {
+            const instance = create();
             errdefer instance.release();
             try instance.construct(params);
+            return instance;
+        }
+
+        /// Create a new instance, call its constructor, and convert a Zend bailout into `error.ZendBailout`.
+        pub fn tryNew(params: anytype) TryConstructError!*Self {
+            const instance = create();
+            errdefer instance.release();
+            try instance.tryConstruct(params);
             return instance;
         }
 

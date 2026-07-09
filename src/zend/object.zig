@@ -1,10 +1,12 @@
 const errors = @import("../errors.zig");
-const c = @import("../root.zig").c;
+const phpz = @import("../root.zig");
+const c = phpz.c;
 const native = @import("../zval.zig").Zval.native;
 const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
+const try_catch = @import("try_catch.zig");
 
 pub const Object = opaque {
     pub const InitError = error{InitFailed};
@@ -248,6 +250,7 @@ pub const Object = opaque {
     }
 
     pub const CallError = error{MethodNotFound} || Function.Error;
+    pub const TryCallError = error{MethodNotFound} || Function.TryCallError;
 
     /// Call a known method by name.
     ///
@@ -267,6 +270,17 @@ pub const Object = opaque {
     ) CallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
         try method.callMethod(self, retval, params);
+    }
+
+    /// Call a known method by name and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCall(
+        self: *Object,
+        method_name: []const u8,
+        retval: ?*c.zval,
+        params: anytype,
+    ) TryCallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
+        try method.tryCallMethod(self, retval, params);
     }
 
     /// Call a known static method by name.
@@ -290,7 +304,20 @@ pub const Object = opaque {
         try method.callStatic(ce, retval, params);
     }
 
+    /// Call a known static method by name and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCallStatic(
+        self: *Object,
+        method_name: []const u8,
+        ce: *ClassEntry,
+        retval: ?*c.zval,
+        params: anytype,
+    ) TryCallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
+        try method.tryCallStatic(ce, retval, params);
+    }
+
     pub const CallIfExistsError = error{MethodCallFailed} || Function.Error;
+    pub const TryCallIfExistsError = error{MethodCallFailed} || Function.TryCallError;
 
     /// Call a method by name, succeeding only if the method exists.
     pub fn callIfExists(
@@ -309,6 +336,45 @@ pub const Object = opaque {
             @intCast(params.len),
             if (params.len > 0) @ptrCast(params.ptr) else null,
         );
+        if (result == c.FAILURE) return error.MethodCallFailed;
+        if (errors.hasException()) return error.PhpException;
+    }
+
+    /// Call a method by name if it exists and convert a Zend bailout into `error.ZendBailout`.
+    pub fn tryCallIfExists(
+        self: *Object,
+        method_name: []const u8,
+        retval: ?*c.zval,
+        params: []c.zval,
+    ) TryCallIfExistsError!void {
+        const zstr = String.init(method_name, false);
+        defer zstr.release();
+
+        const CallResult = @typeInfo(@TypeOf(c.zend_call_method_if_exists)).@"fn".return_type.?;
+        const CallFrame = struct {
+            object: *Object,
+            method: *c.zend_string,
+            retval: ?*c.zval,
+            params: []c.zval,
+
+            fn call(frame: *@This()) CallResult {
+                return c.zend_call_method_if_exists(
+                    frame.object.ptr(),
+                    frame.method,
+                    frame.retval,
+                    @intCast(frame.params.len),
+                    if (frame.params.len > 0) @ptrCast(frame.params.ptr) else null,
+                );
+            }
+        };
+
+        var frame: CallFrame = .{
+            .object = self,
+            .method = zstr.ptr(),
+            .retval = retval,
+            .params = params,
+        };
+        const result = try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
         if (result == c.FAILURE) return error.MethodCallFailed;
         if (errors.hasException()) return error.PhpException;
     }

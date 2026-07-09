@@ -72,6 +72,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     const c: Translator = .init(translate_c_dep, translator_options);
     // phpz.h
     c.addIncludePath(b.path("build"));
+    c.defineCMacro("PHPZ_TRANSLATE_C", "1");
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_dir) |root| {

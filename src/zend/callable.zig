@@ -4,6 +4,7 @@ const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const native = @import("../zval.zig").Zval.native;
 const Object = @import("object.zig").Object;
+const try_catch = @import("try_catch.zig");
 
 /// Parsed callable ready for invocation.
 ///
@@ -80,6 +81,7 @@ pub const Callable = extern struct {
     }
 
     pub const CallError = error{ CallFailed, PhpException };
+    pub const TryCallError = CallError || try_catch.TryCatchError;
 
     /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
     ///
@@ -116,6 +118,63 @@ pub const Callable = extern struct {
                 }
             },
         }
+        if (errors.hasException()) return error.PhpException;
+    }
+
+    /// Invoke the callable and convert a Zend bailout into `error.ZendBailout`.
+    ///
+    /// This variant restores `fci` temporary call fields and destroys the
+    /// internally-owned discard return value before returning `error.ZendBailout`.
+    pub fn tryCall(self: *Callable, args: anytype) TryCallError!void {
+        const info = @typeInfo(@TypeOf(args));
+        if (!(info == .@"struct" and info.@"struct".is_tuple))
+            @compileError("tryCall: args must be a tuple, e.g. .{} or .{a, b}");
+
+        const saved_retval = self.fci.retval;
+        const saved_param_count = self.fci.param_count;
+        const saved_params = self.fci.params;
+        const saved_named_params = self.fci.named_params;
+
+        var discard: c.zval = native.undef;
+        const owns_retval = saved_retval == null;
+        if (owns_retval) self.fci.retval = &discard;
+        defer {
+            self.fci.retval = saved_retval;
+            self.fci.param_count = saved_param_count;
+            self.fci.params = saved_params;
+            self.fci.named_params = saved_named_params;
+            if (owns_retval) native.tryDtor(&discard);
+        }
+
+        const n = info.@"struct".field_types.len;
+        const CallResult = @typeInfo(@TypeOf(c.zend_call_function)).@"fn".return_type.?;
+        const CallFrame = struct {
+            callable: *Callable,
+
+            fn call(frame: *@This()) CallResult {
+                return c.zend_call_function(&frame.callable.fci, &frame.callable.fcc);
+            }
+        };
+
+        var frame: CallFrame = .{ .callable = self };
+        const result = switch (n) {
+            0 => blk: {
+                self.fci.param_count = 0;
+                self.fci.params = null;
+                self.fci.named_params = null;
+                break :blk try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
+            },
+            else => blk: {
+                var arr: [n]c.zval = undefined;
+                inline for (0..n) |i| arr[i] = args[i];
+                self.fci.param_count = @intCast(n);
+                self.fci.params = @ptrCast(&arr);
+                self.fci.named_params = null;
+                break :blk try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
+            },
+        };
+
+        if (result == c.FAILURE) return error.CallFailed;
         if (errors.hasException()) return error.PhpException;
     }
 
