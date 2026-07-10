@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
     const options = BuildOptions{
         .php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php",
         .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)"),
-        .libc_file = b.option([]const u8, "libc", "Libc paths file for local cross-compilation tests"),
+        .libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation"),
         .windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false,
         .windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false,
         .target = b.standardTargetOptions(.{}),
@@ -40,8 +40,8 @@ fn createPhpzModule(b: *std.Build, options: BuildOptions) *std.Build.Module {
             .c_source_file = b.path("build/phpz.h"),
             .target = options.target,
             .optimize = options.optimize,
-            .libc_file = options.getLibCFilePath(),
         },
+        .libc_file = options.getLibCFilePath(),
         .php_include_dir = .{ .cwd_relative = options.php_include_dir },
         .php_lib_dir = if (options.php_lib_dir) |d| .{ .cwd_relative = d } else null,
         .windows_zts = options.windows_zts,
@@ -110,9 +110,13 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
         "my_php_extension",
     };
     inline for (examples) |test_example| {
-        const test_cmd = b.addSystemCommand(&[_][]const u8{ b.graph.zig_exe, "build", "test" });
+        const test_cmd = b.addSystemCommand(&[_][]const u8{ "zig", "build", "test" });
         test_cmd.addArg(b.fmt("-Dphp-include-dir={s}", .{options.php_include_dir}));
         test_cmd.addArg(b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}));
+        if (options.libc_file) |libc_file| {
+            const absolute_path = std.fs.path.resolve(b.allocator, &.{libc_file}) catch @panic("OOM");
+            test_cmd.addArg(b.fmt("-Dlibc-file={s}", .{absolute_path}));
+        }
         if (!options.target.query.isNativeTriple()) {
             test_cmd.addArg(b.fmt("-Dtarget={s}", .{options.target.query.zigTriple(b.allocator) catch unreachable}));
         }

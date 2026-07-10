@@ -938,6 +938,7 @@ pub fn build(b: *std.Build) void {
 {{PHPZ_PLATFORM_TARGET_CHECK}}
 
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include dir") orelse "{{PHP_INCLUDE_DIR}}";
+    const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
 {{PHPZ_WINDOWS_BUILD_OPTIONS}}
 
     const phpz_dep = b.dependency("phpz", .{});
@@ -947,6 +948,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         },
+        .libc_file = if (libc_file) |path| .{ .cwd_relative = path } else null,
         .php_include_dir = .{ .cwd_relative = php_include_dir },
 {{PHPZ_WINDOWS_INIT_OPTIONS}}
     });

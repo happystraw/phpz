@@ -1,30 +1,52 @@
 name: Windows Test
 
 on:
-  # push:
-  #   branches: ["dev"]
-  #   paths:
-  #     - "src/**"
-  #     - "build.zig"
-  #     - "build.zig.zon"
-  #     - ".github/workflows/test-windows.yml"
-  # pull_request:
-  #   branches: ["dev"]
-  #   paths:
-  #     - "src/**"
-  #     - "build.zig"
-  #     - "build.zig.zon"
-  #     - ".github/workflows/test-windows.yml"
+  push:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/**"
+      - "tools/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/setup-php-windows.ps1"
+      - ".github/workflows/test-windows.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/**"
+      - "tools/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/setup-php-windows.ps1"
+      - ".github/workflows/test-windows.yml"
   workflow_dispatch:
 
 jobs:
+  matrix:
+    name: Generate Windows test matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Generate matrix
+        id: generate
+        uses: php/php-windows-builder/extension-matrix@v1
+        with:
+          php-version-list: "8.2,8.3,8.4,8.5"
+          arch-list: "x64"
+          ts-list: "nts,ts"
+
   test:
-    runs-on: windows-2025
+    name: test (PHP ${{ matrix['php-version'] }}, ${{ matrix.arch }}, ${{ matrix.ts }})
+    needs: matrix
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        # php: ["8.2", "8.3", "8.4", "8.5"]
-        php: ["8.5"]
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,63 +54,64 @@ jobs:
       - name: Install pkg-config
         shell: pwsh
         run: |
-          # Strawberry Perl's pkg-config.BAT cannot be executed directly by
-          # Zig's ChildProcess. Install a native .exe to shadow it.
           choco install pkgconfiglite --no-progress -y
-          where pkg-config
-      - name: Setup PHP SDK with dev headers
-        id: setup-php-sdk
-        uses: php/setup-php-sdk@v0.12
-        with:
-          version: ${{ matrix.php }}
-          arch: x64
-          ts: nts
-      - name: Resolve PHP dev paths
-        id: php-paths
-        shell: bash
+          where.exe pkg-config
+      - name: Setup PHP runtime and development files
+        shell: pwsh
         run: |
-          # setup-php-sdk lays out:
-          #   <workspace>/php-bin    -> PHP runtime (php.exe), already on PATH
-          #   <workspace>/php-dev    -> dev pack with include/ and lib/
-          DEV_DIR="$(cygpath -u "${{ github.workspace }}")/php-dev"
-          INCLUDE_DIR="$DEV_DIR/include"
-          LIB_DIR="$DEV_DIR/lib"
-          [ -d "$INCLUDE_DIR" ] || { echo "missing $INCLUDE_DIR"; ls -la "$DEV_DIR" || true; exit 1; }
-          [ -d "$LIB_DIR" ] || { echo "missing $LIB_DIR"; ls -la "$DEV_DIR" || true; exit 1; }
-          # Pass native (backslash) paths to zig
-          INCLUDE_WIN="$(cygpath -w "$INCLUDE_DIR")"
-          LIB_WIN="$(cygpath -w "$LIB_DIR")"
-          echo "include=$INCLUDE_WIN" >> "$GITHUB_OUTPUT"
-          echo "lib=$LIB_WIN" >> "$GITHUB_OUTPUT"
-          echo "PHP include: $INCLUDE_WIN"
-          echo "PHP lib:     $LIB_WIN"
+          .\.github\scripts\setup-php-windows.ps1 `
+            -PhpVersion "${{ matrix['php-version'] }}" `
+            -Arch "${{ matrix.arch }}" `
+            -ThreadSafety "${{ matrix.ts }}" `
+            -Destination (Join-Path $env:RUNNER_TEMP "php-sdk")
+      - name: Verify PHP installation
+        shell: pwsh
+        run: |
+          php -n -v
+          php -n -r 'printf("PHP %s (%s, PHP_DEBUG=%d)\n", PHP_VERSION, PHP_ZTS ? "ZTS" : "NTS", PHP_DEBUG);'
+          Get-ChildItem -LiteralPath $env:PHP_LIB_DIR -Filter "php8*.lib"
+          if (!(Test-Path -LiteralPath $env:LIBC_FILE)) {
+            throw "Missing libc file $env:LIBC_FILE"
+          }
+          Get-Content -LiteralPath $env:LIBC_FILE
+          zig libc -target $env:LIBC_TARGET $env:LIBC_FILE
+          Write-Host "PHP Visual Studio: $env:PHP_VS_VERSION"
+          Write-Host "MSVC toolset: $env:MSVC_TOOLSET"
       - name: Run unit tests
-        shell: bash
+        shell: pwsh
         run: |
-          zig build test \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
+          zig build test `
+            -Dtarget=native-native-msvc `
+            "-Dlibc-file=$env:LIBC_FILE" `
+            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
+            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
+            "-Dwindows-zts=$env:WINDOWS_ZTS"
       - name: Run example tests
-        shell: bash
+        shell: pwsh
         run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}"
+          zig build test-examples `
+            -Dtarget=native-native-msvc `
+            "-Dlibc-file=$env:LIBC_FILE" `
+            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
+            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
+            "-Dwindows-zts=$env:WINDOWS_ZTS"
       - name: Run example tests (ReleaseSafe)
-        shell: bash
+        shell: pwsh
         run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+          zig build test-examples `
+            -Dtarget=native-native-msvc `
+            "-Dlibc-file=$env:LIBC_FILE" `
+            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
+            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
+            "-Dwindows-zts=$env:WINDOWS_ZTS" `
             -Doptimize=ReleaseSafe
       - name: Run example tests (ReleaseFast)
-        shell: bash
+        shell: pwsh
         run: |
-          zig build test-examples \
-            -Dtarget=native-native-msvc \
-            -Dphp-include-dir="${{ steps.php-paths.outputs.include }}" \
-            -Dphp-lib-dir="${{ steps.php-paths.outputs.lib }}" \
+          zig build test-examples `
+            -Dtarget=native-native-msvc `
+            "-Dlibc-file=$env:LIBC_FILE" `
+            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
+            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
+            "-Dwindows-zts=$env:WINDOWS_ZTS" `
             -Doptimize=ReleaseFast

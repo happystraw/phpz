@@ -4,6 +4,8 @@
 // compatibility
 #ifdef PHPZ_TRANSLATE_C
 #include "phpz_translate_c_compat.h"
+#else
+#include "phpz_compat.h"
 #endif
 
 // core

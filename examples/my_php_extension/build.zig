@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php";
     // Windows only: PHP SDK lib directory containing php8*.lib
     const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)");
-    const libc_file = b.option([]const u8, "libc", "Libc paths file for cross-compilation");
+    const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
     const libc_file_path: ?std.Build.LazyPath = if (libc_file) |path| .{ .cwd_relative = path } else null;
     const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
     const windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false;
@@ -25,8 +25,8 @@ pub fn build(b: *std.Build) void {
             .c_source_file = b.path("my_php_extension.h"),
             .target = target,
             .optimize = optimize,
-            .libc_file = libc_file_path,
         },
+        .libc_file = libc_file_path,
         .php_include_dir = .{ .cwd_relative = php_include_dir },
         .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
         .windows_zts = windows_zts,
@@ -44,8 +44,6 @@ pub fn build(b: *std.Build) void {
         }),
         .linkage = .dynamic,
     });
-    php_ext_lib.setLibCFile(libc_file_path);
-
     // PHP expects extensions at a specific naming convention
     const php_ext_filename = if (target.result.os.tag == .windows)
         "php_" ++ php_ext_name ++ ".dll"

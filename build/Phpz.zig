@@ -18,6 +18,9 @@ pub const Options = struct {
     /// Phpz forces `strict_flex_arrays` to `.@"1"`.
     translator: Translator.Options,
 
+    /// Libc paths file used by both C translation and extension compilation.
+    libc_file: ?Build.LazyPath = null,
+
     /// Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
     ///   Linux:   /usr/include/php
     ///   macOS:   /usr/local/php/include
@@ -82,7 +85,6 @@ pub fn initInner(b: *Build, options: Options) Phpz {
             mod.addCMacro("PHP_WIN32", "1");
             mod.addCMacro("WINDOWS", "1");
             mod.addCMacro("WIN32", "1");
-            mod.addCMacro("ENABLE_INTSAFE_SIGNED_FUNCTIONS", "1");
         },
         else => {},
     }
@@ -100,7 +102,10 @@ pub fn initInner(b: *Build, options: Options) Phpz {
 fn createPhpCTranslator(b: *Build, options: Options) Translator {
     const translate_c_dep = b.dependency("translate_c", .{});
     var translator_options = options.translator;
+
+    // Override translator options managed by Phpz.
     translator_options.strict_flex_arrays = .@"1";
+    translator_options.libc_file = options.libc_file;
 
     var c: Translator = .init(translate_c_dep, translator_options);
     // phpz.h
@@ -149,6 +154,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build.Step.Compile {
     options.root_module.addImport("phpz", self.mod);
     const lib = b.addLibrary(options);
+    lib.setLibCFile(self.options.libc_file);
     switch (self.options.translator.target.result.os.tag) {
         // macOS: allows undefined symbols to be resolved at runtime by PHP
         .macos => lib.linker_allow_shlib_undefined = true,
