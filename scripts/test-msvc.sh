@@ -108,7 +108,7 @@ gcc_dir=
 EOF
 
 set -- -Dtarget=native-windows-msvc \
-    -Dlibc="$libc_file" \
+    -Dlibc-file="$libc_file" \
     -Dphp-include-dir="$php_sdk/include" \
     -Dphp-lib-dir="$php_sdk/lib"
 
