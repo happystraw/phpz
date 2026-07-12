@@ -138,10 +138,19 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
             },
             else => {},
         }
+    } else {
+        c.run.step.dependOn(&b.addFail("PHP headers are required; pass -Dphp-include-dir=<path-to-php-include>").step);
     }
 
-    if (translator_options.target.result.os.tag == .windows and translator_options.target.result.abi == .msvc) {
-        patchWindowsBindings(b, &c, translator_options);
+    if (translator_options.target.result.os.tag == .windows) {
+        if (translator_options.target.result.abi == .msvc) {
+            patchWindowsBindings(b, &c, translator_options);
+        } else {
+            c.run.step.dependOn(&b.addFail("Windows PHP extensions require the MSVC ABI; use -Dtarget=native-windows-msvc").step);
+        }
+        if (options.php_lib_dir == null) {
+            c.run.step.dependOn(&b.addFail("Windows PHP extensions require the PHP SDK library directory; pass -Dphp-lib-dir=<path-to-php-sdk-lib>").step);
+        }
     }
 
     return c;
@@ -152,15 +161,18 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 /// This also applies platform-specific linker settings required for PHP to
 /// load the resulting shared library.
 pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build.Step.Compile {
-    options.root_module.addImport("phpz", self.mod);
     const lib = b.addLibrary(options);
-    lib.setLibCFile(self.options.libc_file);
-    switch (self.options.translator.target.result.os.tag) {
-        // macOS: allows undefined symbols to be resolved at runtime by PHP
-        .macos => lib.linker_allow_shlib_undefined = true,
-        else => {},
+    lib.root_module.addImport("phpz", self.mod);
+
+    if (self.options.libc_file) |libc_file| lib.setLibCFile(libc_file);
+    if (lib.root_module.resolved_target) |target| {
+        switch (target.result.os.tag) {
+            // macOS: allows undefined symbols to be resolved at runtime by PHP
+            .macos => lib.linker_allow_shlib_undefined = true,
+            else => {},
+        }
     }
-    if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub") orelse true) {
+    if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub (default: true)") orelse true) {
         lib.step.dependOn(addArginfoCheckStep(self, b, options.name));
     }
     return lib;
