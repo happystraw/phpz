@@ -10,6 +10,7 @@ pub const info = @import("info.zig");
 const mod_helper = @import("module.zig");
 pub const module = mod_helper.module;
 pub const ModuleEntry = mod_helper.ModuleEntry;
+pub const ModuleGlobals = mod_helper.ModuleGlobals;
 
 pub const zend = @import("zend.zig");
 

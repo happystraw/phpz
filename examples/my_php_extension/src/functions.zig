@@ -8,6 +8,18 @@ const ini_config = @import("ini.zig");
 const StatusEnum = @import("classes.zig").status.Enum;
 const UserClass = @import("classes.zig").user.Class;
 
+pub const Globals = phpz.ModuleGlobals(struct {
+    count: i64 = 40,
+
+    pub fn init(self: *@This()) void {
+        self.count += 2;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.count = 0;
+    }
+});
+
 /// hello(): void
 fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
@@ -24,6 +36,18 @@ fn greet(ctx: phpz.Ctx) !void {
     const result: []const u8 = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
 
     ctx.ret.set(.string, result);
+}
+
+/// moduleGlobalsGet(): int
+fn moduleGlobalsGet(ctx: phpz.Ctx) void {
+    ctx.ret.set(.int, Globals.get().count);
+}
+
+/// moduleGlobalsIncrement(): int
+fn moduleGlobalsIncrement(ctx: phpz.Ctx) void {
+    const globals = Globals.get();
+    globals.count += 1;
+    ctx.ret.set(.int, globals.count);
 }
 
 /// increment(int &$value): void
@@ -324,6 +348,8 @@ fn iniGetMode(ctx: phpz.Ctx) !void {
 comptime {
     phpz.function("hello", hello);
     phpz.function("greet", greet);
+    phpz.function("moduleGlobalsGet", moduleGlobalsGet);
+    phpz.function("moduleGlobalsIncrement", moduleGlobalsIncrement);
     phpz.function("MyPHPExt\\increment", increment);
     phpz.function("MyPHPExt\\findById", findById);
     phpz.function("MyPHPExt\\getDefaultUser", getDefaultUser);

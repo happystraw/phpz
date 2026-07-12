@@ -65,6 +65,25 @@ static zend_always_inline php_file_globals *phpz_file_globals(void) {
 #endif
 }
 
+#ifdef ZTS
+typedef ts_rsrc_id phpz_rsrc_id;
+#else
+typedef int phpz_rsrc_id;
+#endif
+
+static zend_always_inline void *phpz_tsrmg_bulk(phpz_rsrc_id id) {
+#ifdef ZTS
+#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
+    return TSRMG_BULK_STATIC(id, void *);
+#else
+    return TSRMG_BULK(id, void *);
+#endif
+#else
+    (void) id;
+    return NULL;
+#endif
+}
+
 typedef void (*phpz_zend_try_callback)(void *);
 
 bool phpz_zend_try_catch(phpz_zend_try_callback callback, void *ctx);

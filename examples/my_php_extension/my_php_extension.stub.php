@@ -22,6 +22,14 @@ namespace {
     {
     }
 
+    function moduleGlobalsGet(): int
+    {
+    }
+
+    function moduleGlobalsIncrement(): int
+    {
+    }
+
     function iniGetGreeting(): string
     {
     }
