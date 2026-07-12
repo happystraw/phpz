@@ -2,6 +2,7 @@ const phpz = @import("phpz");
 
 const allocator = @import("allocator.zig");
 const classes = @import("classes.zig");
+const functions = @import("functions.zig");
 const ini_config = @import("ini.zig");
 
 fn shutdown() !void {
@@ -20,11 +21,10 @@ fn info(entry: *phpz.ModuleEntry) void {
 }
 
 comptime {
-    _ = @import("functions.zig");
-
     phpz.module(.{
         .name = "my_php_extension",
         .version = "0.1.0",
+        .globals = functions.Globals,
         .classes = &.{
             classes.identifiable.Interface,
             classes.status.Enum,

@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 34215a54f14dd37a56a161859166f9ee56368b8d */
+ * Stub hash: 8174e4e61bb73c9c1ec4ce6f84107a80a784c4fe */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -8,11 +8,15 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_greet, 0, 1, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_moduleGlobalsGet, 0, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_moduleGlobalsIncrement arginfo_moduleGlobalsGet
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetGreeting, 0, 0, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetMaxUsers, 0, 0, IS_LONG, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_iniGetMaxUsers arginfo_moduleGlobalsGet
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_iniGetDebug, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
@@ -67,7 +71,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_testHeapAllocatorBailout arginfo_MyPHPExt_listStatuses
 
-#define arginfo_class_MyPHPExt_Identifiable_getId arginfo_iniGetMaxUsers
+#define arginfo_class_MyPHPExt_Identifiable_getId arginfo_moduleGlobalsGet
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ExampleAttribute___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
@@ -85,7 +89,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_User___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 1, "null")
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_User_getId arginfo_iniGetMaxUsers
+#define arginfo_class_MyPHPExt_User_getId arginfo_moduleGlobalsGet
 
 #define arginfo_class_MyPHPExt_User_handle arginfo_class_MyPHPExt_AbstractEntity_handle
 
@@ -105,7 +109,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Counter_dec arginfo_class_MyPHPExt_Counter_add
 
-#define arginfo_class_MyPHPExt_Counter_value arginfo_iniGetMaxUsers
+#define arginfo_class_MyPHPExt_Counter_value arginfo_moduleGlobalsGet
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ArrayLike___construct, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, data, IS_ARRAY, 0, "[]")
@@ -130,7 +134,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_offsetU
 	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_ArrayLike_count arginfo_iniGetMaxUsers
+#define arginfo_class_MyPHPExt_ArrayLike_count arginfo_moduleGlobalsGet
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ArrayLike_current, 0, 0, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -146,6 +150,8 @@ ZEND_END_ARG_INFO()
 
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
+ZEND_FUNCTION(moduleGlobalsGet);
+ZEND_FUNCTION(moduleGlobalsIncrement);
 ZEND_FUNCTION(iniGetGreeting);
 ZEND_FUNCTION(iniGetMaxUsers);
 ZEND_FUNCTION(iniGetDebug);
@@ -189,6 +195,8 @@ ZEND_METHOD(MyPHPExt_ArrayLike, valid);
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
+	ZEND_FE(moduleGlobalsGet, arginfo_moduleGlobalsGet)
+	ZEND_FE(moduleGlobalsIncrement, arginfo_moduleGlobalsIncrement)
 	ZEND_FE(iniGetGreeting, arginfo_iniGetGreeting)
 	ZEND_FE(iniGetMaxUsers, arginfo_iniGetMaxUsers)
 	ZEND_FE(iniGetDebug, arginfo_iniGetDebug)

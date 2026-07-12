@@ -6,6 +6,7 @@ const c = @import("root.zig").c;
 pub const ModuleEntry = c.zend_module_entry;
 const errors = @import("errors.zig");
 const ini_helper = @import("ini.zig");
+
 /// Configuration for creating a PHP extension module.
 ///
 /// This structure defines the metadata and lifecycle hooks for a PHP extension.
@@ -31,6 +32,10 @@ pub const Config = struct {
 
     /// INI declarations to register during module startup.
     ini: []const type = &.{},
+
+    /// Typed module globals managed by PHP for the extension lifetime.
+    /// In ZTS builds, each TSRM thread receives a separate instance.
+    globals: ?type = null,
 
     /// Module startup hook, called when PHP starts (e.g., when Apache starts).
     /// Use this to initialize resources that persist across requests (e.g., register classes).
@@ -230,14 +235,146 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
     entry.module_number = 0;
     entry.build_id = c.phpz_module_build_id();
 
-    if (@hasField(ModuleEntry, "globals_id_ptr")) {
-        // ZTS
-        entry.globals_id_ptr = null;
+    if (cfg.globals) |g| {
+        g.configure(&entry);
     } else {
-        entry.globals_ptr = null;
+        if (c.USING_ZTS == 1) {
+            entry.globals_id_ptr = null;
+        } else {
+            entry.globals_ptr = null;
+        }
     }
 
     return entry;
+}
+
+fn checkModuleGlobalsHook(comptime T: type, comptime name: []const u8) void {
+    if (!@hasDecl(T, name)) return;
+
+    const hook_info = @typeInfo(@TypeOf(@field(T, name)));
+    if (hook_info != .@"fn") {
+        @compileError(@typeName(T) ++ "." ++ name ++ " must be a function");
+    }
+
+    const fn_info = hook_info.@"fn";
+    if (fn_info.param_types.len != 1) {
+        @compileError(@typeName(T) ++ "." ++ name ++ " must have the signature fn (*" ++ @typeName(T) ++ ") void");
+    }
+    const param_type = fn_info.param_types[0] orelse {
+        @compileError(@typeName(T) ++ "." ++ name ++ " must have a concrete receiver type");
+    };
+    const return_type = fn_info.return_type orelse {
+        @compileError(@typeName(T) ++ "." ++ name ++ " must have a concrete return type");
+    };
+    if (param_type != *T or return_type != void) {
+        @compileError(@typeName(T) ++ "." ++ name ++ " must have the signature fn (*" ++ @typeName(T) ++ ") void");
+    }
+}
+
+/// Creates a typed namespace for PHP module globals.
+///
+/// The globals type must be a non-zero-sized struct whose fields can be
+/// initialized with `.{}`. Optional `init(*T) void` and `deinit(*T) void`
+/// methods run from PHP's globals constructor and destructor respectively.
+pub fn ModuleGlobals(comptime T: type) type {
+    comptime {
+        if (@typeInfo(T) != .@"struct") {
+            @compileError("phpz.ModuleGlobals requires a struct type");
+        }
+        if (@sizeOf(T) == 0) {
+            @compileError("phpz.ModuleGlobals does not support zero-sized globals");
+        }
+        _ = @as(T, .{});
+        checkModuleGlobalsHook(T, "init");
+        checkModuleGlobalsHook(T, "deinit");
+    }
+
+    if (comptime c.USING_ZTS != 0) {
+        return struct {
+            var id: c.phpz_rsrc_id = 0;
+
+            /// Returns the current thread's module globals.
+            pub inline fn get() *T {
+                std.debug.assert(id != 0);
+                const ptr = c.phpz_tsrmg_bulk(id) orelse unreachable;
+                return @ptrCast(@alignCast(ptr));
+            }
+
+            fn construct(raw: ?*anyopaque) callconv(.c) void {
+                const value: *T = @ptrCast(@alignCast(raw orelse unreachable));
+                value.* = .{};
+                if (comptime @hasDecl(T, "init")) value.init();
+            }
+
+            fn destruct(raw: ?*anyopaque) callconv(.c) void {
+                const value: *T = @ptrCast(@alignCast(raw orelse unreachable));
+                if (comptime @hasDecl(T, "deinit")) value.deinit();
+            }
+
+            fn configure(entry: *ModuleEntry) void {
+                entry.globals_size = @sizeOf(T);
+                entry.globals_ctor = &construct;
+                entry.globals_dtor = &destruct;
+                entry.globals_id_ptr = &id;
+            }
+        };
+    }
+
+    return struct {
+        var storage: T = undefined;
+
+        /// Returns the module globals.
+        pub inline fn get() *T {
+            return &storage;
+        }
+
+        fn construct(raw: ?*anyopaque) callconv(.c) void {
+            const value: *T = @ptrCast(@alignCast(raw orelse unreachable));
+            value.* = .{};
+            if (comptime @hasDecl(T, "init")) value.init();
+        }
+
+        fn destruct(raw: ?*anyopaque) callconv(.c) void {
+            const value: *T = @ptrCast(@alignCast(raw orelse unreachable));
+            if (comptime @hasDecl(T, "deinit")) value.deinit();
+        }
+
+        fn configure(entry: *ModuleEntry) void {
+            entry.globals_size = @sizeOf(T);
+            entry.globals_ctor = &construct;
+            entry.globals_dtor = &destruct;
+            entry.globals_ptr = &storage;
+        }
+    };
+}
+
+test "module globals lifecycle and access types" {
+    const TestGlobals = struct {
+        count: usize = 40,
+        initialized: bool = false,
+
+        pub fn init(self: *@This()) void {
+            self.count += 2;
+            self.initialized = true;
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.count = 0;
+            self.initialized = false;
+        }
+    };
+    const Globals = ModuleGlobals(TestGlobals);
+
+    try std.testing.expect(@TypeOf(Globals.get()) == *TestGlobals);
+
+    var value: TestGlobals = undefined;
+    Globals.construct(&value);
+    try std.testing.expectEqual(@as(usize, 42), value.count);
+    try std.testing.expect(value.initialized);
+
+    Globals.destruct(&value);
+    try std.testing.expectEqual(@as(usize, 0), value.count);
+    try std.testing.expect(!value.initialized);
 }
 
 test {
