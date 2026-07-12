@@ -12,23 +12,22 @@ Runs: C build + test, Zig build + test, then benchmarks. Default 1,000,000 itera
 
 ## Results
 
-Linux, PHP 8.5.7, Zig 0.16.0, 1M iterations × 5 runs averaged, ReleaseFast. Lower is better.
+Linux, PHP 8.5.8, Zig 0.17.0-dev.1282, 1M iterations × 10 runs averaged. C uses `-O3`; Zig uses `ReleaseFast`. Lower is better.
 
 | Benchmark | C ns/call | Zig ns/call | Winner |
 |---|---|---|---|
-| Empty function call | 29.7 | 30.4 | — (tie) |
-| Parse 8 params (macro/fast) | 62.9 | 63.1 | — (tie) |
-| Parse 8 params (parse/zpp) | 134.3 | **125.7** | Zig 6.4% |
-| Array sum 1k (macro/fast) | 449.7 | **336.2** | Zig 25.2% |
-| Array sum 1k (parse/zpp) | 462.6 | **338.9** | Zig 26.7% |
-| **TOTAL** | 1139.2 | **894.3** | **Zig 21.5%** |
+| Empty function call | 28.2 | 29.3 | — (tie) |
+| Parse 8 params (macro/fast) | 60.6 | 61.7 | — (tie) |
+| Parse 8 params (parse/zpp) | **139.1** | 141.1 | C 1.4% |
+| Array sum 1k (macro/fast) | 448.3 | **316.5** | Zig 29.4% |
+| Array sum 1k (parse/zpp) | 463.9 | **339.8** | Zig 26.8% |
+| **TOTAL** | 1140.1 | **888.3** | **Zig 22.1%** |
 
 ### Takeaways
 
-- **Function call overhead**: identical (~1ns diff, within noise).
-- **Parameter parsing**: Zig's `expectArgs` matches C's fast `Z_PARAM` macros (tie).
-  The traditional `zend_parse_parameters` path is ~6% faster in Zig.
-- **Array iteration**: Zig's inline `eachValue` beats C's `ZEND_HASH_FOREACH_VAL` by ~26%.
+- **Function call overhead**: no meaningful difference (~1.1ns per call).
+- **Parameter parsing**: the fast paths are effectively tied (~1.1ns); C's traditional path is ~2ns faster.
+- **Array iteration**: Zig's inline `eachValue` beats C's `ZEND_HASH_FOREACH_VAL` by 27–29%.
   The IS_UNDEF check and user type check are in the same compiler scope, eliminating
   redundant branch evaluation.
 
@@ -48,7 +47,9 @@ Linux, PHP 8.5.7, Zig 0.16.0, 1M iterations × 5 runs averaged, ReleaseFast. Low
 
 ```bash
 cd c_ext
-phpize && ./configure && make
+phpize
+CFLAGS="-O3" ./configure
+make
 make test
 ```
 

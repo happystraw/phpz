@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
 
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php";
 
-    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only)");
+    const php_lib_dir = b.option([]const u8, "php-lib-dir", "Windows only: required PHP SDK library directory containing php8*.lib");
 
     const phpz_dep = b.dependency("phpz", .{});
     const phpz = Phpz.init(phpz_dep, .{
