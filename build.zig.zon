@@ -3,6 +3,7 @@
     .version = "0.0.0",
     .fingerprint = 0x935004cc3861700f,
     .minimum_zig_version = "0.17.0-dev.1282+c0f9b51d8",
+    .minimum_php_version = "8.2",
     .dependencies = .{
         .translate_c = .{
             .url = "git+https://codeberg.org/happystraw/translate-c?ref=vectorcall#a7cd3fd81b074c1318060fa1985098bfda571aa8",
