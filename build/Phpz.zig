@@ -160,7 +160,26 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
         .macos => lib.linker_allow_shlib_undefined = true,
         else => {},
     }
+    if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub") orelse true) {
+        lib.step.dependOn(addArginfoCheckStep(self, b, options.name));
+    }
     return lib;
+}
+
+fn addArginfoCheckStep(self: Phpz, b: *Build, extension_name: []const u8) *Build.Step {
+    const checker = b.addExecutable(.{
+        .name = "check-arginfo",
+        .root_module = b.createModule(.{
+            .root_source_file = self.mod.owner.path("tools/check_arginfo.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseSafe,
+        }),
+    });
+    const run = b.addRunArtifact(checker);
+    run.setName(b.fmt("check {s} arginfo", .{extension_name}));
+    run.addFileArg(b.path(b.fmt("{s}.stub.php", .{extension_name})));
+    run.addFileArg(b.path(b.fmt("{s}_arginfo.h", .{extension_name})));
+    return &run.step;
 }
 
 fn patchWindowsBindings(b: *Build, translate_c: *Translator, options: Translator.Options) void {

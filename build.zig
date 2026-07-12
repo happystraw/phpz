@@ -19,10 +19,10 @@ const BuildOptions = struct {
 pub fn build(b: *std.Build) void {
     const options = BuildOptions{
         .php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php",
-        .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)"),
-        .libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation"),
+        .php_lib_dir = b.option([]const u8, "php-lib-dir", "Windows only: required PHP SDK library directory containing php8*.lib"),
         .windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false,
         .windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false,
+        .libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation"),
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
     };
@@ -101,6 +101,21 @@ fn addTestStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) voi
     test_lib.setLibCFile(options.getLibCFilePath());
     const step = b.step("test", "Run unit tests");
     step.dependOn(&test_lib.step);
+
+    for ([_][]const u8{
+        "tools/check_arginfo.zig",
+        "tools/windows_patcher.zig",
+    }) |path| {
+        const tool_tests = b.addTest(.{
+            .name = b.fmt("{s}-tests", .{std.fs.path.stem(path)}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(path),
+                .target = b.graph.host,
+                .optimize = options.optimize,
+            }),
+        });
+        step.dependOn(&b.addRunArtifact(tool_tests).step);
+    }
 }
 
 fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {

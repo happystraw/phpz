@@ -5,10 +5,20 @@ const default_dllimport_data_symbols = [_][]const u8{
     "zend_empty_string",
     "zend_one_char_string",
     "zend_string_init_interned",
+
+    // NTS
     "executor_globals",
     "compiler_globals",
     "core_globals",
     "sapi_globals",
+    "file_globals",
+
+    // ZTS
+    "executor_globals_id",
+    "compiler_globals_id",
+    "core_globals_id",
+    "sapi_globals_id",
+    "file_globals_id",
     "executor_globals_offset",
     "compiler_globals_offset",
     "core_globals_offset",
@@ -21,10 +31,9 @@ const default_dllimport_data_prefixes = [_][]const u8{
 };
 
 pub fn main(init: std.process.Init) !void {
-    const gpa = init.gpa;
+    const arena = init.arena.allocator();
 
-    var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, gpa);
-    defer args.deinit();
+    var args = init.minimal.args.iterate();
 
     const cmd = args.next() orelse "windows-patcher";
     const input_path = args.next() orelse fatal("usage: {s} <input.zig> <output.zig>", .{cmd});
@@ -34,13 +43,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const cwd = std.Io.Dir.cwd();
-    const source = try cwd.readFileAllocOptions(init.io, input_path, gpa, .unlimited, .of(u8), 0);
-    defer gpa.free(source);
+    const source = try cwd.readFileAllocOptions(init.io, input_path, arena, .unlimited, .of(u8), 0);
 
     var result = std.ArrayList(u8).empty;
-    defer result.deinit(gpa);
 
-    try patch(gpa, &result, source, .{
+    try patch(arena, &result, source, .{
         .dllimport_data_symbols = &default_dllimport_data_symbols,
         .dllimport_data_prefixes = &default_dllimport_data_prefixes,
     });
@@ -108,12 +115,8 @@ const Patcher = struct {
     }
 
     fn patch(self: *Patcher, options: Options) !bool {
-        var changed = false;
-
         try self.collectDllImportDataSymbols(options);
-        changed = try self.patchDllImportDataReferences() or changed;
-
-        return changed;
+        return try self.patchDllImportDataReferences();
     }
 
     fn collectDllImportDataSymbols(self: *Patcher, options: Options) !void {
@@ -129,6 +132,10 @@ const Patcher = struct {
             const name = self.tree.tokenSlice(name_token);
             if (!isDllImportDataSymbolName(name, options)) continue;
 
+            // pub extern var executor_globals: zend_executor_globals;
+            // - name:      executor_globals
+            // - type_expr: zend_executor_globals
+            // - is_const:  false
             const type_node = var_decl.ast.type_node.unwrap() orelse continue;
             try self.dllimport_data_symbols.put(self.gpa, name, .{
                 .name = name,
@@ -141,10 +148,10 @@ const Patcher = struct {
     fn patchDllImportDataReferences(self: *Patcher) !bool {
         if (self.dllimport_data_symbols.count() == 0) return false;
 
-        var body_ranges = std.ArrayList(TokenRange).empty;
-        defer body_ranges.deinit(self.gpa);
-        try self.collectFunctionBodyRanges(&body_ranges);
-        if (body_ranges.items.len == 0) return false;
+        var fn_body_ranges = std.ArrayList(TokenRange).empty;
+        defer fn_body_ranges.deinit(self.gpa);
+        try self.collectFunctionBodyRanges(&fn_body_ranges);
+        if (fn_body_ranges.items.len == 0) return false;
 
         var addressed_identifiers: std.AutoHashMapUnmanaged(std.zig.Ast.Node.Index, void) = .empty;
         defer addressed_identifiers.deinit(self.gpa);
@@ -153,11 +160,12 @@ const Patcher = struct {
         for (0..self.tree.nodes.len) |node_i| {
             const node: std.zig.Ast.Node.Index = @enumFromInt(node_i);
             if (self.tree.nodeTag(node) != .address_of) continue;
-            if (!self.nodeInTokenRanges(node, body_ranges.items)) continue;
+            if (!self.nodeInTokenRanges(node, fn_body_ranges.items)) continue;
 
             const child = self.tree.nodeData(node).node;
             const symbol = self.identifierDllImportDataSymbol(child) orelse continue;
 
+            // &executor_globals -> @extern(*zend_executor_globals, ...)
             const replacement = try self.dllImportPointerExpr(symbol);
             try self.fixups.replace_nodes_with_string.put(self.gpa, node, replacement);
             try addressed_identifiers.put(self.gpa, child, {});
@@ -167,10 +175,13 @@ const Patcher = struct {
         for (0..self.tree.nodes.len) |node_i| {
             const node: std.zig.Ast.Node.Index = @enumFromInt(node_i);
             if (self.tree.nodeTag(node) != .identifier) continue;
+            // Its parent &identifier node already has a replacement; avoid overlapping fixups.
             if (addressed_identifiers.contains(node)) continue;
-            if (!self.nodeInTokenRanges(node, body_ranges.items)) continue;
+            if (!self.nodeInTokenRanges(node, fn_body_ranges.items)) continue;
 
             const symbol = self.identifierDllImportDataSymbol(node) orelse continue;
+
+            // executor_globals -> (@extern(*zend_executor_globals, ...).*)
             const replacement = try self.dllImportValueExpr(symbol);
             try self.fixups.replace_nodes_with_string.put(self.gpa, node, replacement);
             changed = true;
