@@ -274,7 +274,7 @@ pub const Array = opaque {
         const ht = self.ptr();
         const count = ht.nNumUsed;
         const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var el: [*]u8 = @ptrCast(ht.unnamed_0.arPacked);
+        var el: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
 
         var i: u32 = 0;
         while (i < count) : (i += 1) {
@@ -323,7 +323,7 @@ pub const Array = opaque {
         const count = ht.nNumUsed;
         const is_packed = (ht.u.flags & c.HASH_FLAG_PACKED) != 0;
         const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var el: [*]u8 = @ptrCast(ht.unnamed_0.arPacked);
+        var el: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
 
         if (is_packed) {
             // Packed
@@ -574,7 +574,7 @@ pub const Array = opaque {
         pub fn init(array: *Array) FastValueIterator {
             const ht = array.ptr();
             return .{
-                .el = @ptrCast(ht.unnamed_0.arPacked),
+                .el = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
                 .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
                 .pos = 0,
                 .count = ht.nNumUsed,
@@ -640,7 +640,7 @@ pub const Array = opaque {
         pub fn init(array: *Array) FastIterator {
             const ht = array.ptr();
             return .{
-                .el = @ptrCast(ht.unnamed_0.arPacked),
+                .el = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
                 .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
                 .pos = 0,
                 .count = ht.nNumUsed,
