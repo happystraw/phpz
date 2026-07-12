@@ -53,6 +53,18 @@ static zend_always_inline sapi_globals_struct *phpz_sapi_globals(void) {
 #endif
 }
 
+static zend_always_inline php_file_globals *phpz_file_globals(void) {
+#ifdef ZTS
+#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
+    return TSRMG_BULK_STATIC(file_globals_id, php_file_globals *);
+#else
+    return TSRMG_BULK(file_globals_id, php_file_globals *);
+#endif
+#else
+    return &file_globals;
+#endif
+}
+
 typedef void (*phpz_zend_try_callback)(void *);
 
 bool phpz_zend_try_catch(phpz_zend_try_callback callback, void *ctx);
@@ -66,10 +78,14 @@ static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, boo
     ZVAL_ZVAL(z, src, copy, dtor_src);
 }
 
-/* Bridge helpers for zend_class_entry anonymous unions.
+/* Bridge helpers for anonymous unions.
  * translate-c numbers unnamed unions (unnamed_0, unnamed_1, ...),
  * which break when PHP headers change union layout. These inline
  * wrappers give translate-c stable symbol names to bind against. */
+
+static zend_always_inline zval *phpz_hash_table_get_ar_packed(HashTable *ht) {
+    return ht->arPacked;
+}
 
 static zend_always_inline void phpz_class_entry_set_create_object(zend_class_entry *ce, zend_object* (*handler)(zend_class_entry *)) {
     ce->create_object = handler;

@@ -94,6 +94,10 @@ pub inline fn sapi() *c.sapi_globals_struct {
     return @ptrCast(c.phpz_sapi_globals());
 }
 
+pub inline fn file() *c.php_file_globals {
+    return @ptrCast(c.phpz_file_globals());
+}
+
 test {
     std.testing.refAllDecls(@This());
     std.testing.refAllDecls(@This().class);
