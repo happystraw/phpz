@@ -75,7 +75,7 @@ pub const Call = opaque {
     }
 
     /// Get all arguments as a slice of zvals.
-    pub inline fn args(self: *Call) []c.zval {
+    pub fn args(self: *Call) []c.zval {
         const count = self.argCount();
         const base: [*]c.zval = @ptrCast(self.ptr());
         return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
@@ -83,7 +83,7 @@ pub const Call = opaque {
 
     /// Validate the total number of arguments against expected min/max.
     /// Call once at the top of each function, before accessing individual args.
-    pub inline fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
+    pub fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
         const count = self.argCount();
         if (count < min or count > max) {
             return errors.wrongParameterCount(min, max);
@@ -91,7 +91,7 @@ pub const Call = opaque {
     }
 
     /// Expect zero arguments. Calls zend_wrong_parameters_none_error on failure.
-    pub inline fn expectNoArgs(self: *Call) errors.WrongParameterCountError!void {
+    pub fn expectNoArgs(self: *Call) errors.WrongParameterCountError!void {
         if (self.argCount() != 0) {
             return errors.wrongParametersNone();
         }
@@ -163,12 +163,13 @@ pub const Call = opaque {
     ///     .string => |name| _ = name,
     /// }
     /// ```
-    pub inline fn expectArgs(
+    pub fn expectArgs(
         self: *Call,
         comptime specs: []const ExpectArgKind.Spec,
         runtime: ExpectArgsRuntime(specs),
     ) ExpectArgsError!ExpectArgResults(specs) {
-        comptime {
+        const min = comptime min: {
+            var count: u32 = 0;
             var seen_optional = false;
             for (specs, 0..) |spec, i| {
                 if (seen_optional and !spec.isOptional()) {
@@ -177,17 +178,14 @@ pub const Call = opaque {
                         .{ i + 1, @tagName(spec) },
                     ));
                 }
-                if (spec.isOptional()) seen_optional = true;
-            }
-        }
-
-        const min = comptime min: {
-            var count: u32 = 0;
-            for (specs) |spec| {
-                if (!spec.isOptional()) count += 1;
+                if (spec.isOptional())
+                    seen_optional = true
+                else
+                    count += 1;
             }
             break :min count;
         };
+
         const max: u32 = @intCast(specs.len);
 
         try self.expectArgCount(min, max);
@@ -383,7 +381,7 @@ pub const Call = opaque {
     ///   - scalar types → `{}`
     ///
     /// Prefer `expectArgs` for multi-arg cases.
-    pub inline fn expectArg(
+    pub fn expectArg(
         self: *Call,
         n: u32,
         comptime spec: ExpectArgKind.Spec,
