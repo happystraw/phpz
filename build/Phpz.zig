@@ -130,12 +130,6 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
                 c.defineCMacro("WIN32", "1");
                 c.defineCMacro("_CRT_USE_BUILTIN_OFFSETOF", "1");
             },
-            .macos => {
-                // FIXME: regression in translate_c
-                c.defineCMacro("_Nonnull", "");
-                c.defineCMacro("_Nullable", "");
-                c.defineCMacro("_Null_unspecified", "");
-            },
             else => {},
         }
     } else {
