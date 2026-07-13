@@ -2,7 +2,7 @@ const std = @import("std");
 
 const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
-const native = @import("../zval.zig").Zval.native;
+const Zval = @import("../zval.zig").Zval;
 const Object = @import("object.zig").Object;
 const bailout = @import("bailout.zig");
 
@@ -53,7 +53,7 @@ pub const Callable = extern struct {
     /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
     pub fn parse(self: *Callable, zv: *c.zval, comptime nullable: bool, err: ?*?[*:0]u8) ParseError!void {
         if (err) |e| e.* = null;
-        if (nullable and native.is(zv, .null)) {
+        if (nullable and Zval.raw.is(zv, .null)) {
             self.fci.size = 0;
             self.fcc.function_handler = null;
             return;
@@ -70,7 +70,7 @@ pub const Callable = extern struct {
     /// Check whether a zval contains a callable.
     /// When `nullable` is true, a null zval is also accepted.
     pub fn isCallable(zv: *c.zval, comptime nullable: bool) bool {
-        if (comptime nullable) if (native.is(zv, .null)) return true;
+        if (comptime nullable) if (Zval.raw.is(zv, .null)) return true;
         return c.zend_is_callable(zv, 0, null);
     }
 
@@ -95,7 +95,7 @@ pub const Callable = extern struct {
         var discard: c.zval = undefined;
         const owns_retval = self.fci.retval == null;
         if (owns_retval) self.fci.retval = &discard;
-        defer if (owns_retval) native.dtor(&discard);
+        defer if (owns_retval) Zval.raw.dtor(&discard);
 
         const n = info.@"struct".field_types.len;
         switch (n) {
@@ -135,7 +135,7 @@ pub const Callable = extern struct {
         const saved_params = self.fci.params;
         const saved_named_params = self.fci.named_params;
 
-        var discard: c.zval = native.undef;
+        var discard: c.zval = Zval.raw.undef;
         const owns_retval = saved_retval == null;
         if (owns_retval) self.fci.retval = &discard;
         defer {
@@ -143,7 +143,7 @@ pub const Callable = extern struct {
             self.fci.param_count = saved_param_count;
             self.fci.params = saved_params;
             self.fci.named_params = saved_named_params;
-            if (owns_retval) native.tryDtor(&discard);
+            if (owns_retval) Zval.raw.tryDtor(&discard);
         }
 
         const n = info.@"struct".field_types.len;
@@ -181,13 +181,13 @@ pub const Callable = extern struct {
     /// Increment refcounts on `function_name` and `fcc.object`.
     /// Prevents premature destruction when the callable is retained.
     pub inline fn addref(self: *Callable) void {
-        native.tryAddref(&self.fci.function_name);
+        Zval.raw.tryAddref(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.addref(.from(obj));
     }
 
     /// Decrement refcounts on `function_name` and `fcc.object`.
     pub inline fn delref(self: *Callable) void {
-        native.dtor(&self.fci.function_name);
+        Zval.raw.dtor(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.release(.from(obj));
     }
 

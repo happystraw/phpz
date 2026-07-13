@@ -156,7 +156,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn kind(self: *Zval) Kind {
-        return native.kind(self.ptr());
+        return raw.kind(self.ptr());
     }
 
     /// Check if this zval is of a specific type.
@@ -182,7 +182,7 @@ pub const Zval = opaque {
     /// }
     /// ```
     pub fn is(self: *Zval, comptime zk: Kind) bool {
-        return native.is(self.ptr(), zk);
+        return raw.is(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value with type checking.
@@ -208,7 +208,7 @@ pub const Zval = opaque {
     /// };
     /// ```
     pub fn as(self: *Zval, comptime zk: Kind) Error!Type(zk) {
-        return native.as(self.ptr(), zk);
+        return raw.as(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value without type checking.
@@ -237,7 +237,7 @@ pub const Zval = opaque {
     /// const num = zval.asUnchecked(.int); // Undefined behavior if not an int!
     /// ```
     pub fn asUnchecked(self: *Zval, comptime zk: Kind) Type(zk) {
-        return native.asUnchecked(self.ptr(), zk);
+        return raw.asUnchecked(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value, or return a default value on type mismatch.
@@ -303,23 +303,23 @@ pub const Zval = opaque {
     /// independently owned elsewhere. Destroy any previous zval contents before
     /// overwriting them.
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
-        native.set(self.ptr(), zk, val);
+        raw.set(self.ptr(), zk, val);
     }
 
     /// Increment the refcount of this zval's refcounted payload.
     ///
     /// Ownership: caller owns the added reference and must `dtor`/delref it.
     pub inline fn addref(self: *Zval) void {
-        native.addref(self.ptr());
+        raw.addref(self.ptr());
     }
 
     /// Destroy one owned zval value.
     pub inline fn dtor(self: *Zval) void {
-        native.dtor(self.ptr());
+        raw.dtor(self.ptr());
     }
 
     pub inline fn refcount(self: *Zval) u32 {
-        return native.refcount(self.ptr());
+        return raw.refcount(self.ptr());
     }
 
     /// Optional zval wrapper for handling nullable PHP parameters.
@@ -410,12 +410,12 @@ pub const Zval = opaque {
     /// var raw: *c.zval = undefined;
     /// try ctx.call.parseArgs("z", .{&raw});
     ///
-    /// if (Zval.native.is(raw, .int)) {
-    ///     const n = Zval.native.asUnchecked(raw, .int);
+    /// if (Zval.raw.is(raw, .int)) {
+    ///     const n = Zval.raw.asUnchecked(raw, .int);
     /// }
-    /// Zval.native.set(raw, .null, {});
+    /// Zval.raw.set(raw, .null, {});
     /// ```
-    pub const native = struct {
+    pub const raw = struct {
         pub const undef: c.zval = init(.undef, {});
         pub const nil: c.zval = init(.null, {});
 
@@ -425,7 +425,7 @@ pub const Zval = opaque {
         /// `dtor()`/`tryDtor()` when the value is refcounted and not transferred.
         pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
             var z: c.zval = undefined;
-            native.set(&z, zk, val);
+            raw.set(&z, zk, val);
             return z;
         }
 
@@ -458,7 +458,7 @@ pub const Zval = opaque {
         ///
         /// Example:
         /// ```zig
-        /// const type_name = Zval.native.getTypeName(zv);
+        /// const type_name = Zval.raw.getTypeName(zv);
         /// std.debug.print("Got type: {s}\n", .{type_name});
         /// ```
         pub fn getTypeName(zv: *c.zval) [*:0]const u8 {
@@ -509,8 +509,8 @@ pub const Zval = opaque {
         /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
         /// are borrowed from `zv`; addref/copy before storing beyond `zv`.
         pub fn as(zv: *c.zval, comptime zk: Kind) Error!Type(zk) {
-            if (!native.is(zv, zk)) return Error.TypeMismatch;
-            return native.asUnchecked(zv, zk);
+            if (!raw.is(zv, zk)) return Error.TypeMismatch;
+            return raw.asUnchecked(zv, zk);
         }
 
         /// Convert a raw zval to a Zig value without type checking.
@@ -520,7 +520,7 @@ pub const Zval = opaque {
         pub fn asUnchecked(zv: *c.zval, comptime zk: Kind) Type(zk) {
             return switch (zk) {
                 .undef, .null => @compileError(std.fmt.comptimePrint(
-                    "'{s}' has no value to convert - use 'Zval.is/Zval.native.is(.{s})' to check the type instead",
+                    "'{s}' has no value to convert - use 'Zval.is/Zval.raw.is(.{s})' to check the type instead",
                     .{ @tagName(zk), @tagName(zk) },
                 )),
                 .int => zv.value.lval,
@@ -587,7 +587,7 @@ pub const Zval = opaque {
                     zv.value.ref = val.ptr();
                     zv.u1.type_info = c.IS_REFERENCE_EX;
                 },
-                .mixed => native.setZval(zv, val, true, false),
+                .mixed => raw.setZval(zv, val, true, false),
                 .indirect => @compileError("IS_INDIRECT is an internal type, cannot be set directly"),
                 .ptr => @compileError("IS_PTR is an internal type, cannot be set directly"),
             }
@@ -609,7 +609,7 @@ pub const Zval = opaque {
         ///
         /// Ownership: caller-provided scratch cleanup helper.
         pub inline fn tryDtor(z: *c.zval) void {
-            if (!native.is(z, .undef)) native.dtor(z);
+            if (!raw.is(z, .undef)) raw.dtor(z);
         }
         /// Increment the refcount only when the zval is refcounted.
         ///
@@ -630,5 +630,5 @@ pub const Zval = opaque {
 test {
     std.testing.refAllDecls(Zval);
     std.testing.refAllDecls(Zval.Optional);
-    std.testing.refAllDecls(Zval.native);
+    std.testing.refAllDecls(Zval.raw);
 }
