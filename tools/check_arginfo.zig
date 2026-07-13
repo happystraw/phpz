@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
 
-    var args = init.minimal.args.iterate();
+    var args = try init.minimal.args.iterateAllocator(arena);
 
     const cmd = args.next() orelse "check-arginfo";
     const stub_path = args.next() orelse fatal("usage: {s} <stub.php> <arginfo.h>", .{cmd});

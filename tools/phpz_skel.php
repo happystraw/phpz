@@ -1036,7 +1036,7 @@ class Counter
 PHP,
     '{{EXT_NAME}}_arginfo.h' => <<<'C'
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: d84374eb3cc93ebb1e1cf6f0dfa2ee49381bec07 */
+ * Stub hash: {{PHPZ_STUB_HASH}} */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -1293,6 +1293,12 @@ final class TemplateWriter
         $contents = str_replace(
             '{{PHPZ_GEN_STUB_REGEN_SECTION}}',
             $hasGenStub ? PHPZ_GEN_STUB_REGEN_TEMPLATE : PHPZ_GEN_STUB_MISSING_TEMPLATE,
+            $contents,
+        );
+        $stub = TemplateVars::replace(PHPZ_TEMPLATE_FILES['{{EXT_NAME}}.stub.php'], $ext);
+        $contents = str_replace(
+            '{{PHPZ_STUB_HASH}}',
+            sha1(str_replace("\r\n", "\n", $stub)),
             $contents,
         );
         return TemplateVars::replace($contents, $ext);
