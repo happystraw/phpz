@@ -33,7 +33,7 @@ const default_dllimport_data_prefixes = [_][]const u8{
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
 
-    var args = init.minimal.args.iterate();
+    var args = try init.minimal.args.iterateAllocator(arena);
 
     const cmd = args.next() orelse "windows-patcher";
     const input_path = args.next() orelse fatal("usage: {s} <input.zig> <output.zig>", .{cmd});
