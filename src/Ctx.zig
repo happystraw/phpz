@@ -54,6 +54,14 @@ pub const Call = opaque {
         return @ptrCast(@alignCast(self));
     }
 
+    /// Get the function executed by this call frame.
+    ///
+    /// Ownership: borrowed function pointer owned by Zend.
+    pub inline fn function(self: *Call) ?*zend.Function {
+        const fn_ptr = self.ptr().func orelse return null;
+        return .from(fn_ptr);
+    }
+
     /// Get the number of arguments passed to the current function/method.
     ///
     /// Returns:

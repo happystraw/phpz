@@ -38,6 +38,21 @@ pub const Level = enum(c_int) {
     /// E_USER_DEPRECATED: User-triggered deprecation notice
     user_deprecated = c.E_USER_DEPRECATED,
     _,
+
+    /// Return whether this value contains any bit in `mask`.
+    pub inline fn matches(self: Level, mask: c_int) bool {
+        return (@intFromEnum(self) & mask) != 0;
+    }
+
+    /// Return whether this value contains a core error-level bit.
+    pub inline fn isCore(self: Level) bool {
+        return self.matches(c.E_CORE);
+    }
+
+    /// Return whether this value contains a fatal error-level bit.
+    pub inline fn isFatal(self: Level) bool {
+        return self.matches(c.E_FATAL_ERRORS);
+    }
 };
 
 pub const ArgumentTypeError = error{PhpArgumentTypeError};

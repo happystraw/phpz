@@ -6,6 +6,7 @@ pub const globals = @import("globals.zig");
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
 pub const info = @import("info.zig");
+pub const observer = @import("observer.zig");
 
 const mod_helper = @import("module.zig");
 pub const module = mod_helper.module;
@@ -42,6 +43,7 @@ test {
     _ = @import("ini.zig");
     _ = @import("info.zig");
     _ = @import("module.zig");
+    _ = @import("observer.zig");
     _ = @import("zend.zig");
     _ = @import("zval.zig");
     _ = @import("zend/array.zig");
