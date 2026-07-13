@@ -8,97 +8,20 @@
 /* ========== global namespace ========== */
 
 namespace {
-    // gen_stub.php resolves Attribute::TARGET_* constants through the @cvalue
-    // metadata declared by PHP's own Attribute stub. Prefer running
-    // php-src/build/gen_stub.php; for a copied standalone gen_stub.php, also
-    // copy php-src/Zend/zend_attributes.stub.php to ./Zend/zend_attributes.stub.php.
     require "Zend/zend_attributes.stub.php";
 
-    function hello(): void
-    {
-    }
+    function hello(): void {}
 
-    function greet(string $name): string
-    {
-    }
-
-    function moduleGlobalsGet(): int
-    {
-    }
-
-    function moduleGlobalsIncrement(): int
-    {
-    }
-
-    function iniGetGreeting(): string
-    {
-    }
-
-    function iniGetMaxUsers(): int
-    {
-    }
-
-    function iniGetDebug(): bool
-    {
-    }
-
-    function iniGetMode(): string
-    {
-    }
-
-    /** @var string */
-    const MY_EXT_VERSION = "1.0.0";
+    function greet(string $name): string {}
 }
 
-/* ========== named namespace ========== */
-
 namespace MyPHPExt {
-    /** @var int */
-    const VERSION = 1;
+    /** @var string */
+    const VERSION = "0.1.0";
 
-    function increment(int &$value): void
-    {
-    }
+    function increment(int &$value, int $by = 1): void {}
 
-    function findById(string|int $id): ?User
-    {
-    }
-
-    function getDefaultUser(): User
-    {
-    }
-
-    function listStatuses(): array
-    {
-    }
-
-    function map(array $arr, callable $cb): array
-    {
-    }
-
-    function testExpectArgScalars(string $str, int $int, float $float, bool $flag = true, ?string $nullable_str = null, int $opt_int = 0): array
-    {
-    }
-
-    function testExpectArgArrayObject(array $data, \MyPHPExt\User $user, ?\MyPHPExt\User $nullable_user = null): array
-    {
-    }
-
-    function testExpectArgMixed(mixed $value): mixed
-    {
-    }
-
-    function inspectObjectProperty(object $obj, string $name, bool $silent = false): array
-    {
-    }
-
-    function tryCreateInvalidUser(): void
-    {
-    }
-
-    function testHeapAllocatorBailout(): array
-    {
-    }
+    function mapValues(array $values, callable $mapper): array {}
 
     interface Identifiable
     {
@@ -107,146 +30,131 @@ namespace MyPHPExt {
 
     enum Status: int
     {
-        case Active = 1;
         case Inactive = 0;
+        case Active = 1;
     }
 
     enum Role: string
     {
-        case Admin = 'admin';
-        case User = 'user';
+        case User = "user";
+        case Admin = "admin";
     }
 
-    class MyError extends \Exception
-    {
-    }
-
-    // This sample uses an OR expression of multiple Attribute::TARGET_* constants.
-    // Regenerate arginfo with PHP 8.3+ gen_stub.php; PHP 8.2's generator keeps
-    // only the last @cvalue constant in this expression.
     #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_PARAMETER | \Attribute::IS_REPEATABLE)]
-    final class ExampleAttribute
+    final class Tag
     {
         public string $name;
-        public ?string $note = null;
+        public ?string $description;
 
-        public function __construct(string $name, ?string $note = null)
-        {
-        }
+        public function __construct(
+            string $name,
+            ?string $description = null,
+        ) {}
     }
 
-    abstract class AbstractEntity implements Identifiable
+    #[Tag("entity")]
+    abstract class Entity implements Identifiable
     {
-        protected function onLoad(): void
-        {
-        }
+        protected int $id;
 
-        abstract public function handle(string|int $id): void;
+        protected function __construct(int $id) {}
+
+        final public function getId(): int {}
+
+        abstract public function label(): string;
     }
 
-    #[ExampleAttribute("entity", "primary user model")]
-    #[ExampleAttribute("audited")]
-    final class User extends AbstractEntity implements \Stringable
+    #[Tag("model", "Demonstrates properties, inheritance, enums, and attributes")]
+    final class User extends Entity implements \Stringable
     {
-        public string $name;
-        public int|null $age = null;
         /** @var int */
         public const MIN_AGE = 0;
 
-        public function __construct(string $name, int|null $age = null)
-        {
-        }
+        public string $name;
+        public ?int $age;
+        public Role $role;
+        public Status $status;
 
-        public function getId(): int
-        {
-        }
+        public function __construct(
+            #[Tag("identifier")]
+            int $id,
+            string $name,
+            ?int $age = null,
+            Role $role = Role::User,
+            Status $status = Status::Active,
+        ) {}
 
-        public function handle(#[ExampleAttribute("identifier", "string or int")] string|int $id): void
-        {
-        }
+        public function label(): string {}
 
-        public function __toString(): string
-        {
-        }
-    }
-
-    class Dumper
-    {
-        public static function dump(mixed... $value): void
-        {
-        }
+        public function __toString(): string {}
     }
 
     final class Counter
     {
-        public function __construct(int $n = 0)
-        {
-        }
+        public function __construct(int $value = 0) {}
 
-        public function add(int $n): void
-        {
-        }
+        public function increment(int $by = 1): int {}
 
-        public function dec(int $n): void
-        {
-        }
+        public function decrement(int $by = 1): int {}
 
-        public function value(): int
-        {
-        }
+        public function value(): int {}
+
+        public function reset(int $value = 0): void {}
     }
 
-    class ArrayLike implements \ArrayAccess, \Countable, \Iterator
+    final class Dumper
     {
-        public function __construct(array $data = [])
-        {
-        }
-
-        public function toArray(): array
-        {
-        }
-
-        // ArrayAccess
-        public function offsetExists(mixed $offset): bool
-        {
-        }
-
-        public function offsetGet(mixed $offset): mixed
-        {
-        }
-
-        public function offsetSet(mixed $offset, mixed $value): void
-        {
-        }
-
-        public function offsetUnset(mixed $offset): void
-        {
-        }
-
-        // Countable
-        public function count(): int
-        {
-        }
-
-        // Iterator
-        public function current(): mixed
-        {
-        }
-
-        public function key(): mixed
-        {
-        }
-
-        public function next(): void
-        {
-        }
-
-        public function rewind(): void
-        {
-        }
-
-        public function valid(): bool
-        {
-        }
+        public static function dump(mixed ...$values): void {}
     }
+
+    final class Collection implements \ArrayAccess, \Countable, \Iterator
+    {
+        public function __construct(array $values = []) {}
+
+        public function toArray(): array {}
+
+        public function offsetExists(mixed $offset): bool {}
+
+        public function offsetGet(mixed $offset): mixed {}
+
+        public function offsetSet(mixed $offset, mixed $value): void {}
+
+        public function offsetUnset(mixed $offset): void {}
+
+        public function count(): int {}
+
+        public function current(): mixed {}
+
+        public function key(): mixed {}
+
+        public function next(): void {}
+
+        public function rewind(): void {}
+
+        public function valid(): bool {}
+    }
+
+    final class Config
+    {
+        public static function greeting(): string {}
+
+        public static function maxUsers(): int {}
+
+        public static function debugEnabled(): bool {}
+
+        public static function mode(): string {}
+    }
+
+    final class Metrics
+    {
+        private function __construct() {}
+
+        public static function snapshot(): array {}
+
+        public static function reset(): void {}
+    }
+}
+
+namespace MyPHPExt\Test {
+    function allocatorBailout(): array {}
 }
