@@ -2,7 +2,7 @@
     .name = .bench_zig,
     .version = "0.1.0",
     .fingerprint = 0x5dddb3f44fe50dfa,
-    .minimum_zig_version = "0.17.0-dev.1282+c0f9b51d8",
+    .minimum_zig_version = "0.17.0-dev.1387+01b60634c",
     .dependencies = .{
         .phpz = .{
             .path = "../..",

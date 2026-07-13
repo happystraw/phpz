@@ -95,7 +95,7 @@ if [ ! -d "$win_sdk" ]; then
     "$xwin" \
         --accept-license \
         --manifest-version "$vs_version" \
-        --arch x86_64,aarch64 \
+        --arch x86_64 \
         --variant desktop \
         --cache-dir "$HOME/.cache/xwin/$vs_toolset" \
         splat \

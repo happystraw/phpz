@@ -60,7 +60,7 @@ fn patch(
     source: [:0]const u8,
     options: Patcher.Options,
 ) !void {
-    var tree = try std.zig.Ast.parse(gpa, source, .zig);
+    var tree = try std.zig.Ast.parse(gpa, source, .{ .mode = .zig });
     defer tree.deinit(gpa);
 
     if (tree.errors.len != 0) {
