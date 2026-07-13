@@ -16,7 +16,6 @@ const phpz = @import("root.zig");
 const c = phpz.c;
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
-const native = Zval.native;
 
 /// PHP object handler overrides.
 ///
@@ -446,7 +445,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                 .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as object property"),
                 inline else => {
                     var zv: c.zval = undefined;
-                    native.set(&zv, zk, prop_value);
+                    Zval.raw.set(&zv, zk, prop_value);
                     c.zend_update_property(ce, &self.std, prop_name.ptr, prop_name.len, &zv);
                 },
             }
@@ -457,7 +456,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Ownership: returned pointer is either borrowed from the object/runtime
         /// or points at caller-provided scratch. Never dtor the returned pointer
-        /// directly; use `Zval.native.tryDtor(scratch)` for scratch cleanup.
+        /// directly; use `Zval.raw.tryDtor(scratch)` for scratch cleanup.
         ///
         /// Returns `error.PhpException` if a magic `__get` handler throws.
         ///

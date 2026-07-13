@@ -5,7 +5,7 @@ const Zval = @import("../zval.zig").Zval;
 pub const Object = opaque {
     /// Create a standard object (stdClass) in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s object value; call `Zval.native.dtor(zv)`
+    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.dtor(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn init(zv: *c.zval) *Object {
@@ -17,7 +17,7 @@ pub const Object = opaque {
 
     /// Create an object from a class entry in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s object value; call `Zval.native.dtor(zv)`
+    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.dtor(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) InitClassError!*Object {
@@ -47,7 +47,7 @@ pub const Object = opaque {
     ///
     /// Ownership: borrowed wrapper; no refcount change.
     pub fn from(zv: *c.zval) FromError!*Object {
-        if (Zval.native.getType(zv) != c.IS_OBJECT) return error.TypeMismatch;
+        if (Zval.raw.getType(zv) != c.IS_OBJECT) return error.TypeMismatch;
         if (zv.value.obj == null) return error.NullPointer;
         return @ptrCast(zv);
     }

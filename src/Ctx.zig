@@ -6,7 +6,6 @@ const errors = @import("errors.zig");
 const zend = @import("zend.zig");
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const Zval = @import("zval.zig").Zval;
-const native = Zval.native;
 
 /// Provides access to the current call frame and return value.
 /// Passed as `Ctx` to user-defined PHP function/method bindings.
@@ -79,7 +78,7 @@ pub const Call = opaque {
     ///   Pointer to the zval at position n
     pub inline fn arg(self: *Call, n: u32) *c.zval {
         const base: [*]c.zval = @ptrCast(self.ptr());
-        return &base[c.ZEND_CALL_FRAME_SLOT + n - 1];
+        return &base[@as(usize, @intCast(c.ZEND_CALL_FRAME_SLOT)) + @as(usize, n) - 1];
     }
 
     /// Get all arguments as a slice of zvals.
@@ -423,18 +422,18 @@ pub const Call = opaque {
                         if (php_union_type.len > 0) php_union_type = php_union_type ++ "|";
                         php_union_type = php_union_type ++ @tagName(kind);
                         const zk = comptime kind.toZvalKind();
-                        if (native.is(zv, zk)) {
-                            return @unionInit(Union, @tagName(kind), if (zk == .null) {} else native.asUnchecked(zv, zk));
+                        if (Zval.raw.is(zv, zk)) {
+                            return @unionInit(Union, @tagName(kind), if (zk == .null) {} else Zval.raw.asUnchecked(zv, zk));
                         }
                     }
-                    return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{native.kind(zv).cstr()});
+                    return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
                 } else {
                     return zv;
                 }
             },
             .callable => |s| {
                 const or_null = comptime if (s.nullable) " or null" else "";
-                if (comptime s.nullable) if (native.is(zv, .null)) return .null;
+                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return .null;
                 if (comptime s.resolve) {
                     var err: ?[*:0]u8 = null;
                     runtime.target.parse(zv, false, &err) catch {
@@ -450,34 +449,34 @@ pub const Call = opaque {
                 return if (comptime s.nullable) .{ .value = zv } else zv;
             },
             .reference => |s| {
-                return if (native.is(zv, .reference))
-                    if (comptime s.zval) zv else native.asUnchecked(zv, .reference)
+                return if (Zval.raw.is(zv, .reference))
+                    if (comptime s.zval) zv else Zval.raw.asUnchecked(zv, .reference)
                 else
-                    errors.argumentTypeError(n, "must be of type reference, %s given", .{native.kind(zv).cstr()});
+                    errors.argumentTypeError(n, "must be of type reference, %s given", .{Zval.raw.kind(zv).cstr()});
             },
             .object => |s| {
                 const or_null = comptime if (s.nullable) " or null" else "";
-                if (comptime s.nullable) if (native.is(zv, .null)) return .null;
+                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return .null;
                 if (comptime s.instanceof) {
                     const expected_type = runtime.type;
-                    const obj: *zend.Object = native.as(zv, .object) catch return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, native.kind(zv).cstr() });
+                    const obj: *zend.Object = Zval.raw.as(zv, .object) catch return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, Zval.raw.kind(zv).cstr() });
                     if (!obj.instanceof(expected_type)) return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, obj.class().name().ptr });
                     const raw = if (comptime s.zval) zv else obj;
                     return if (comptime s.nullable) .{ .value = raw } else raw;
-                } else if (!native.is(zv, .object)) {
-                    return errors.argumentTypeError(n, "must be of type object" ++ or_null ++ ", %s given", .{native.kind(zv).cstr()});
+                } else if (!Zval.raw.is(zv, .object)) {
+                    return errors.argumentTypeError(n, "must be of type object" ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
                 }
-                const raw = if (comptime s.zval) zv else native.asUnchecked(zv, .object);
+                const raw = if (comptime s.zval) zv else Zval.raw.asUnchecked(zv, .object);
                 return if (comptime s.nullable) .{ .value = raw } else raw;
             },
             inline else => |s| {
                 const tag: ExpectArgKind = spec;
                 const or_null = comptime if (s.nullable) " or null" else "";
-                if (comptime s.nullable) if (native.is(zv, .null)) return .null;
+                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return .null;
                 const zk = comptime tag.toZvalKind();
-                if (!native.is(zv, zk))
-                    return errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ or_null ++ ", %s given", .{native.kind(zv).cstr()});
-                const raw = if (comptime s.zval) zv else native.asUnchecked(zv, zk);
+                if (!Zval.raw.is(zv, zk))
+                    return errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
+                const raw = if (comptime s.zval) zv else Zval.raw.asUnchecked(zv, zk);
                 return if (comptime s.nullable) .{ .value = raw } else raw;
             },
         }

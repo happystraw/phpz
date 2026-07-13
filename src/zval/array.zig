@@ -5,7 +5,7 @@ const Zval = @import("../zval.zig").Zval;
 pub const Array = opaque {
     /// Create an empty array in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s array value; call `Zval.native.dtor(zv)`
+    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.dtor(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn empty(zv: *c.zval) *Array {
@@ -16,7 +16,7 @@ pub const Array = opaque {
 
     /// Create an array with initial capacity in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s array value; call `Zval.native.dtor(zv)`
+    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.dtor(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn init(zv: *c.zval, capacity: u32) *Array {
@@ -31,7 +31,7 @@ pub const Array = opaque {
     ///
     /// Ownership: borrowed wrapper; no refcount change.
     pub fn from(zv: *c.zval) FromError!*Array {
-        if (Zval.native.getType(zv) != c.IS_ARRAY) return error.TypeMismatch;
+        if (Zval.raw.getType(zv) != c.IS_ARRAY) return error.TypeMismatch;
         if (zv.value.arr == null) return error.NullPointer;
         return @ptrCast(zv);
     }

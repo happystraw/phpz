@@ -1,5 +1,5 @@
 const c = @import("../root.zig").c;
-const native = @import("../zval.zig").Zval.native;
+const Zval = @import("../zval.zig").Zval;
 
 pub const Array = opaque {
     pub const Error = error{
@@ -262,7 +262,7 @@ pub const Array = opaque {
     /// var sum: i64 = 0;
     /// arr.eachValue(&sum, struct {
     ///     fn body(zv: *c.zval, s: *i64) void {
-    ///         if (native.is(zv, .int)) s.* += native.asUnchecked(zv, .int);
+    ///         if (Zval.raw.is(zv, .int)) s.* += Zval.raw.asUnchecked(zv, .int);
     ///     }
     /// }.body);
     /// ```
@@ -282,7 +282,7 @@ pub const Array = opaque {
             el += el_size;
 
             // IS_UNDEF check in same scope as body → compiler can eliminate redundancy
-            if (native.is(zv, .undef)) {
+            if (Zval.raw.is(zv, .undef)) {
                 @branchHint(.unlikely);
                 continue;
             }
@@ -334,7 +334,7 @@ pub const Array = opaque {
                 el += el_size;
                 const key: Key = .{ .int = @as(isize, @intCast(idx)) };
                 idx += 1;
-                if (native.is(zv, .undef)) {
+                if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue; // IS_UNDEF check
                 }
@@ -355,7 +355,7 @@ pub const Array = opaque {
                     .{ .string = k.*.val()[0..k.*.len] }
                 else
                     .{ .int = @bitCast(bucket.h) };
-                if (native.is(zv, .undef)) {
+                if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue; // IS_UNDEF check
                 }
@@ -596,7 +596,7 @@ pub const Array = opaque {
                 const zv: *c.zval = @ptrCast(@alignCast(self.el));
                 self.el += self.el_size;
                 self.pos += 1;
-                if (native.is(zv, .undef)) {
+                if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue;
                 }
@@ -615,7 +615,7 @@ pub const Array = opaque {
                 const zv: *c.zval = @ptrCast(@alignCast(e));
                 e += self.el_size;
                 p += 1;
-                if (native.is(zv, .undef)) {
+                if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue;
                 }
@@ -668,7 +668,7 @@ pub const Array = opaque {
                     self.pos += 1;
                     const key: Key = .{ .int = @as(isize, @intCast(self.idx)) };
                     self.idx += 1;
-                    if (native.is(zv, .undef)) {
+                    if (Zval.raw.is(zv, .undef)) {
                         @branchHint(.unlikely);
                         continue;
                     }
@@ -684,7 +684,7 @@ pub const Array = opaque {
                         .{ .string = k.*.val()[0..k.*.len] }
                     else
                         .{ .int = @bitCast(bucket.h) };
-                    if (native.is(zv, .undef)) {
+                    if (Zval.raw.is(zv, .undef)) {
                         @branchHint(.unlikely);
                         continue;
                     }
@@ -708,7 +708,7 @@ pub const Array = opaque {
                     p += 1;
                     const key: Key = .{ .int = @as(isize, @intCast(i)) };
                     i += 1;
-                    if (native.is(zv, .undef)) {
+                    if (Zval.raw.is(zv, .undef)) {
                         @branchHint(.unlikely);
                         continue;
                     }
@@ -724,7 +724,7 @@ pub const Array = opaque {
                         .{ .string = k.*.val()[0..k.*.len] }
                     else
                         .{ .int = @bitCast(bucket.h) };
-                    if (native.is(zv, .undef)) {
+                    if (Zval.raw.is(zv, .undef)) {
                         @branchHint(.unlikely);
                         continue;
                     }

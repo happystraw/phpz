@@ -135,7 +135,7 @@ pub const ClassEntry = opaque {
             .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as static property"),
             inline else => blk: {
                 var zv: c.zval = undefined;
-                Zval.native.set(&zv, zk, prop_value);
+                Zval.raw.set(&zv, zk, prop_value);
                 break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
             },
         };
