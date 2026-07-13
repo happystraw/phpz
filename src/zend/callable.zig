@@ -4,7 +4,7 @@ const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const native = @import("../zval.zig").Zval.native;
 const Object = @import("object.zig").Object;
-const try_catch = @import("try_catch.zig");
+const bailout = @import("bailout.zig");
 
 /// Parsed callable ready for invocation.
 ///
@@ -81,7 +81,7 @@ pub const Callable = extern struct {
     }
 
     pub const CallError = error{ CallFailed, PhpException };
-    pub const TryCallError = CallError || try_catch.TryCatchError;
+    pub const TryCallError = CallError || bailout.Error;
 
     /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
     ///
@@ -162,7 +162,7 @@ pub const Callable = extern struct {
                 self.fci.param_count = 0;
                 self.fci.params = null;
                 self.fci.named_params = null;
-                break :blk try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
+                break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
             },
             else => blk: {
                 var arr: [n]c.zval = undefined;
@@ -170,7 +170,7 @@ pub const Callable = extern struct {
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
                 self.fci.named_params = null;
-                break :blk try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
+                break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
             },
         };
 
