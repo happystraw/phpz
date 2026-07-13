@@ -43,13 +43,6 @@ pub const String = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Get C string pointer (null-terminated).
-    ///
-    /// Ownership: borrowed view into this string.
-    pub inline fn cstr(self: *String) [*:0]const u8 {
-        return @ptrCast(self.ptr().val());
-    }
-
     /// Release one owned string reference.
     pub fn release(self: *String) void {
         c.zend_string_release(self.ptr());
@@ -60,11 +53,18 @@ pub const String = opaque {
         return self.ptr().len;
     }
 
-    /// Get string as a slice.
+    /// Get C string pointer (null-terminated).
+    ///
+    /// Ownership: borrowed raw pointer.
+    pub inline fn cstr(self: *String) [*:0]const u8 {
+        return @ptrCast(self.ptr().val());
+    }
+
+    /// Get string as a null-terminated slice.
     ///
     /// Ownership: borrowed view into this string.
-    pub fn slice(self: *String) []const u8 {
-        return self.cstr()[0..self.len()];
+    pub fn slice(self: *String) [:0]const u8 {
+        return self.cstr()[0..self.len() :0];
     }
 
     /// Check if string is empty

@@ -13,11 +13,12 @@ pub const Function = opaque {
     pub const TryCallError = Error || try_catch.TryCatchError;
 
     /// Function type classification.
-    pub const Kind = enum(u8) {
+    pub const Kind = enum(@TypeOf(c.ZEND_INTERNAL_FUNCTION)) {
         /// PHP internal function (written in C/Zig)
         internal = c.ZEND_INTERNAL_FUNCTION,
         /// PHP userland function (written in PHP)
         user = c.ZEND_USER_FUNCTION,
+        _,
     };
 
     /// Call context classification.
@@ -72,11 +73,11 @@ pub const Function = opaque {
     }
 
     /// Get the function name
-    pub fn name(self: *Function) []const u8 {
+    pub fn name(self: *Function) [:0]const u8 {
         const zfn = self.ptr();
         const fname = zfn.*.common.function_name;
         if (fname == null) return "";
-        return fname.*.val()[0..fname.*.len];
+        return fname.*.val()[0..fname.*.len :0];
     }
 
     /// Call as a global function (no object, no scope).

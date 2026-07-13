@@ -2,7 +2,6 @@ const errors = @import("../errors.zig");
 const phpz = @import("../root.zig");
 const c = phpz.c;
 const globals = phpz.globals;
-const native = @import("../zval.zig").Zval.native;
 const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
@@ -408,9 +407,10 @@ pub const Object = opaque {
     /// Get the case name from an enum case object.
     ///
     /// Ownership: borrowed string view owned by the enum case object.
-    pub fn enumCaseName(self: *Object) []const u8 {
+    pub fn enumCaseName(self: *Object) [:0]const u8 {
         const zv = c.zend_enum_fetch_case_name(self.ptr());
-        return native.asUnchecked(zv, .string);
+        const zstr = zv.*.value.str;
+        return zstr.*.val()[0..zstr.*.len :0];
     }
 
     /// Get the backing value from a backed enum case, or null if pure enum.

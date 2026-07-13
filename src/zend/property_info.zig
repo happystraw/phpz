@@ -1,6 +1,6 @@
 const c = @import("../root.zig").c;
-const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Array = @import("array.zig").Array;
+const ClassEntry = @import("class_entry.zig").ClassEntry;
 
 pub const PropertyInfo = opaque {
     pub const Error = error{
@@ -27,9 +27,9 @@ pub const PropertyInfo = opaque {
     }
 
     /// Get the property name as a byte slice
-    pub fn name(self: *PropertyInfo) []const u8 {
+    pub fn name(self: *PropertyInfo) [:0]const u8 {
         const n = self.ptr().name;
-        return n.*.val()[0..n.*.len];
+        return n.*.val()[0..n.*.len :0];
     }
 
     /// Get the declaring class entry.
