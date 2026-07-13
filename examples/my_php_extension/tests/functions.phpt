@@ -1,39 +1,30 @@
 --TEST--
-Functions
+my_php_extension functions
+--EXTENSIONS--
+my_php_extension
 --FILE--
 <?php
-
 hello();
-echo greet('Alice'), PHP_EOL;
+var_dump(greet('Zig'));
 
-echo 'increment(41): ';
-$n = 41;
-\MyPHPExt\increment($n);
-echo $n, PHP_EOL;
+$value = 10;
+MyPHPExt\increment($value, 5);
+var_dump($value);
 
-echo 'findById:', PHP_EOL;
-var_dump(\MyPHPExt\findById(1));
-var_dump(\MyPHPExt\findById("abc"));
-
-echo 'getDefaultUser: ';
-echo \MyPHPExt\getDefaultUser(), PHP_EOL;
-
-echo 'listStatuses: ';
-var_dump(\MyPHPExt\listStatuses());
-
+var_dump(MyPHPExt\mapValues(
+    ['first' => 2, 8 => 3],
+    static fn (int $value): int => $value * 2,
+));
+var_dump(MyPHPExt\VERSION);
 ?>
 --EXPECT--
 Hello from ZIG!
-Hello, Alice!
-increment(41): 42
-findById:
-Found user with ID 1: NULL
-Found user with name abc: NULL
-getDefaultUser: AbstractEntity::onLoad: getId() = 9527
-User(Default)
-listStatuses: array(2) {
-  ["Active"]=>
-  int(1)
-  ["Inactive"]=>
-  int(0)
+string(11) "Hello, Zig!"
+int(15)
+array(2) {
+  ["first"]=>
+  int(4)
+  [8]=>
+  int(6)
 }
+string(5) "0.1.0"

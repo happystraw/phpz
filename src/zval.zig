@@ -313,6 +313,18 @@ pub const Zval = opaque {
         raw.addref(self.ptr());
     }
 
+    /// Increment the refcount only when this zval contains a refcounted value.
+    ///
+    /// Ownership: caller owns the added reference and must `dtor`/delref it.
+    pub inline fn tryAddref(self: *Zval) void {
+        raw.tryAddref(self.ptr());
+    }
+
+    /// Decrement the refcount only when this zval contains a refcounted value.
+    pub inline fn tryDelref(self: *Zval) void {
+        raw.tryDelref(self.ptr());
+    }
+
     /// Destroy one owned zval value.
     pub inline fn dtor(self: *Zval) void {
         raw.dtor(self.ptr());
