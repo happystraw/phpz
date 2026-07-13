@@ -7,7 +7,7 @@ pub const debug = phpz.ini.boolean.new("my_php_extension.debug", false, .user);
 
 pub const Mode = enum { safe, fast };
 
-pub const mode = phpz.ini.typed(Mode).new(.{
+pub const mode = phpz.ini.Typed(Mode).new(.{
     .name = "my_php_extension.mode",
     .default = .safe,
     .default_text = "safe",

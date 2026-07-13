@@ -44,7 +44,7 @@ pub const SetError = error{ AlterIniFailed, FormatIniValueFailed };
 /// ```zig
 /// const Mode = enum { safe, fast };
 ///
-/// const mode = phpz.ini.typed(Mode).new(.{
+/// const mode = phpz.ini.Typed(Mode).new(.{
 ///     .name = "ext.mode",
 ///     .default = .safe,
 ///     .default_text = "safe",
@@ -53,7 +53,7 @@ pub const SetError = error{ AlterIniFailed, FormatIniValueFailed };
 ///     .format = formatMode,
 /// });
 /// ```
-pub fn typed(comptime T: type) type {
+pub fn Typed(comptime T: type) type {
     return struct {
         pub const ParseFn = fn ([:0]const u8) anyerror!T;
         pub const ParseWithEntryFn = fn (*c.zend_ini_entry, [:0]const u8) anyerror!T;
@@ -83,7 +83,7 @@ pub fn typed(comptime T: type) type {
 
                 pub fn setWith(new_value: T, opts: SetOptions) SetError!void {
                     const format = cfg.format orelse @compileError(
-                        "ini.typed(" ++ @typeName(T) ++ ").new(...) requires .format to use set()",
+                        "ini.Typed(" ++ @typeName(T) ++ ").new(...) requires .format to use set()",
                     );
                     var buffer: [256]u8 = undefined;
                     const text = format(new_value, &buffer) catch return error.FormatIniValueFailed;
@@ -129,7 +129,7 @@ pub fn typed(comptime T: type) type {
                     if (comptime cfg.parse_with_entry) |f| return f(entry, text);
                     if (comptime cfg.parse) |f| return f(text);
                     @compileError(
-                        "ini.typed(" ++ @typeName(T) ++ ").new(...) requires .parse or .parse_with_entry",
+                        "ini.Typed(" ++ @typeName(T) ++ ").new(...) requires .parse or .parse_with_entry",
                     );
                 }
             };
@@ -143,7 +143,7 @@ pub const string = struct {
         comptime default_value: [:0]const u8,
         comptime access: Access,
     ) type {
-        return typed([:0]const u8).new(.{
+        return Typed([:0]const u8).new(.{
             .name = name,
             .default = default_value,
             .default_text = default_value,
@@ -168,7 +168,7 @@ pub const int = struct {
         comptime default_value: i64,
         comptime access: Access,
     ) type {
-        return typed(i64).new(.{
+        return Typed(i64).new(.{
             .name = name,
             .default = default_value,
             .default_text = std.fmt.comptimePrint("{d}", .{default_value}),
@@ -195,7 +195,7 @@ pub const float = struct {
         comptime default_value: f64,
         comptime access: Access,
     ) type {
-        return typed(f64).new(.{
+        return Typed(f64).new(.{
             .name = name,
             .default = default_value,
             .default_text = std.fmt.comptimePrint("{d}", .{default_value}),
@@ -220,7 +220,7 @@ pub const boolean = struct {
         comptime default_value: bool,
         comptime access: Access,
     ) type {
-        return typed(bool).new(.{
+        return Typed(bool).new(.{
             .name = name,
             .default = default_value,
             .default_text = if (default_value) "1" else "0",
@@ -408,7 +408,7 @@ fn checkEntry(comptime Entry: type) void {
     if (!@hasDecl(Entry, "iniDef")) {
         @compileError(
             "module .ini entry '" ++ @typeName(Entry) ++ "' has no iniDef() function; " ++
-                "pass a value returned by phpz.ini.string/int/float/boolean/typed.new(...) or phpz.ini.custom(...)",
+                "pass a value returned by phpz.ini.string/int/float/boolean/Typed.new(...) or phpz.ini.custom(...)",
         );
     }
 
@@ -461,7 +461,7 @@ test {
     const greeting = string.new("test.greeting", "Hello", .all);
     const max = int.new("test.max", 100, .system);
     const debug = boolean.new("test.debug", false, .user);
-    const mode = typed(Mode).new(.{
+    const mode = Typed(Mode).new(.{
         .name = "test.mode",
         .default = .safe,
         .default_text = "safe",
