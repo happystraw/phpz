@@ -86,8 +86,8 @@ pub inline fn compiler() *c.zend_compiler_globals {
     return @ptrCast(c.phpz_compiler_globals());
 }
 
-pub inline fn core() *c.php_core_globals {
-    return @ptrCast(c.phpz_core_globals());
+pub inline fn core() *CoreGlobals {
+    return .from(c.phpz_core_globals());
 }
 
 pub inline fn sapi() *c.sapi_globals_struct {
@@ -98,7 +98,19 @@ pub inline fn file() *c.php_file_globals {
     return @ptrCast(c.phpz_file_globals());
 }
 
+pub const CoreGlobals = opaque {
+    pub inline fn from(core_globals: *c.php_core_globals) *CoreGlobals {
+        return @ptrCast(core_globals);
+    }
+    pub inline fn ptr(self: *CoreGlobals) *c.php_core_globals {
+        return @ptrCast(@alignCast(self));
+    }
+
+    // TODO: $_GET/$_POST/...
+};
+
 test {
     std.testing.refAllDecls(@This());
     std.testing.refAllDecls(@This().class);
+    std.testing.refAllDecls(CoreGlobals);
 }
