@@ -6,7 +6,7 @@ const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
-const try_catch = @import("try_catch.zig");
+const bailout = @import("bailout.zig");
 
 pub const Object = opaque {
     pub const InitError = error{InitFailed};
@@ -375,7 +375,7 @@ pub const Object = opaque {
             .retval = retval,
             .params = params,
         };
-        const result = try try_catch.tryCatchTyped(CallResult, CallFrame, &frame, CallFrame.call);
+        const result = try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
         if (result == c.FAILURE) return error.MethodCallFailed;
         if (errors.hasException()) return error.PhpException;
     }

@@ -4,13 +4,13 @@ const c = phpz.c;
 const globals = phpz.globals;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
-const try_catch = @import("try_catch.zig");
+const bailout = @import("bailout.zig");
 
 pub const Function = opaque {
     pub const Error = error{
         PhpException,
     };
-    pub const TryCallError = Error || try_catch.TryCatchError;
+    pub const TryCallError = Error || bailout.Error;
 
     /// Function type classification.
     pub const Kind = enum(@TypeOf(c.ZEND_INTERNAL_FUNCTION)) {
@@ -172,7 +172,7 @@ pub const Function = opaque {
                     .scope = scope,
                     .retval = retval,
                 };
-                try try_catch.tryCatchTyped(void, CallFrame, &frame, CallFrame.call);
+                try bailout.run(void, CallFrame, &frame, CallFrame.call);
             },
             else => {
                 var arr: [n]c.zval = undefined;
@@ -195,7 +195,7 @@ pub const Function = opaque {
                     .retval = retval,
                     .params = &arr,
                 };
-                try try_catch.tryCatchTyped(void, CallFrame, &frame, CallFrame.call);
+                try bailout.run(void, CallFrame, &frame, CallFrame.call);
             },
         }
         if (errors.hasException()) return error.PhpException;

@@ -51,7 +51,7 @@ test {
     _ = @import("zend/object.zig");
     _ = @import("zend/property_info.zig");
     _ = @import("zend/string.zig");
-    _ = @import("zend/try_catch.zig");
+    _ = @import("zend/bailout.zig");
     _ = @import("zval/array.zig");
     _ = @import("zval/object.zig");
 }

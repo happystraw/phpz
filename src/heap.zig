@@ -63,7 +63,7 @@ const php_allocator_impl = struct {
             .len = len,
             .return_address = return_address,
         };
-        zend.tryCatchRaw(Context.call, &ctx) catch return null;
+        zend.bailout.runRaw(Context.call, &ctx) catch return null;
         return @ptrCast(ctx.result);
     }
 
@@ -102,7 +102,7 @@ const php_allocator_impl = struct {
             .new_len = new_len,
             .return_address = return_address,
         };
-        zend.tryCatchRaw(Context.call, &ctx) catch return null;
+        zend.bailout.runRaw(Context.call, &ctx) catch return null;
         return @ptrCast(ctx.result);
     }
 
