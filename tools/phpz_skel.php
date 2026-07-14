@@ -570,15 +570,60 @@ final class ProcessRunner
     }
 }
 
+readonly class ZigTool
+{
+    public function __construct(
+        public string $bin,
+        public string $version,
+        public bool $anyzig,
+    ) {
+    }
+
+    public function label(): string
+    {
+        if ($this->anyzig) {
+            return 'anyzig (using ' . $this->version . ')';
+        }
+
+        return $this->version;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function initCommand(): array
+    {
+        if ($this->anyzig) {
+            return [$this->bin, $this->version, 'init', '--minimal'];
+        }
+
+        return [$this->bin, 'init', '--minimal'];
+    }
+}
+
 final class Environment
 {
-    public static function checkZigVersion(string $zig): string
+    public static function checkZigTool(string $zig): ZigTool
     {
+        if (self::isAnyzig($zig)) {
+            return new ZigTool($zig, MIN_ZIG_VERSION, true);
+        }
+
         $version = trim(ProcessRunner::runRequired([$zig, 'version'], PathUtil::cwd()));
         if (version_compare($version, MIN_ZIG_VERSION, '<')) {
             Console::fail("Unsupported Zig version $version. Expected >= " . MIN_ZIG_VERSION . '.');
         }
-        return $version;
+        return new ZigTool($zig, $version, false);
+    }
+
+    private static function isAnyzig(string $zig): bool
+    {
+        [$code, $output] = ProcessRunner::run([$zig, 'any', 'version'], PathUtil::cwd());
+        if ($code !== 0) {
+            return false;
+        }
+
+        return trim($output) !== '';
     }
 
     public static function checkPhpVersion(): string
@@ -750,7 +795,7 @@ final class ProjectInstaller
 
     public static function initZigProject(
         string $targetDir,
-        string $zig,
+        ZigTool $zig,
         bool $force,
         bool $keepCommandOutput,
     ): void {
@@ -771,7 +816,7 @@ final class ProjectInstaller
 
         ProcessRunner::runStep(
             'initializing Zig project',
-            [$zig, 'init', '--minimal'],
+            $zig->initCommand(),
             $targetDir,
             $keepCommandOutput,
         );
@@ -840,6 +885,7 @@ final class ProjectInstaller
 // Template definitions.
 const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
 
+    // Add PHPT test step.
     const test_step = b.step("test", "Run PHPT tests");
     const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
         "php",
@@ -847,37 +893,37 @@ const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
         "-q",
         "--show-diff",
         "-d",
-        b.fmt("extension=modules/{s}", .{ext_filename}),
+        b.fmt("extension=modules/{s}", .{extension_filename}),
     });
     test_phpt_cmd.step.dependOn(b.getInstallStep());
     test_step.dependOn(&test_phpt_cmd.step);
 ZIG;
 
 const PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE = <<<'ZIG'
-    const php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP SDK library directory (Windows only, contains php8*.lib)");
+    const php_lib_dir = b.option([]const u8, "php-lib-dir", "Windows only: required PHP SDK library directory containing php8*.lib");
     const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
     const windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false;
 ZIG;
 
 const PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE = <<<'ZIG'
-        .php_lib_dir = if (php_lib_dir) |dir| .{ .cwd_relative = dir } else null,
+        .php_lib_dir = if (php_lib_dir) |lib_dir| .{ .cwd_relative = lib_dir } else null,
         .windows_zts = windows_zts,
         .windows_debug = windows_debug,
 ZIG;
 
 const PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE = <<<'ZIG'
-    const ext_filename = if (target.result.os.tag == .windows)
-        "php_" ++ ext_name ++ ".dll"
+    const extension_filename = if (target.result.os.tag == .windows)
+        "php_" ++ extension_name ++ ".dll"
     else
-        ext_name ++ ".so";
+        extension_name ++ ".so";
 ZIG;
 
 const PHPZ_UNIX_FILENAME_TEMPLATE = <<<'ZIG'
-    const ext_filename = ext_name ++ ".so";
+    const extension_filename = extension_name ++ ".so";
 ZIG;
 
 const PHPZ_WINDOWS_FILENAME_TEMPLATE = <<<'ZIG'
-    const ext_filename = "php_" ++ ext_name ++ ".dll";
+    const extension_filename = "php_" ++ extension_name ++ ".dll";
 ZIG;
 
 const PHPZ_UNIX_TARGET_CHECK_TEMPLATE = <<<'ZIG'
@@ -894,16 +940,99 @@ ZIG;
 
 const PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE = <<<'MD'
 php -dextension=./modules/{{EXT_NAME}}.so -r 'hello();'
-php -dextension=./modules/{{EXT_NAME}}.so -r 'echo greet("World");'
+php -dextension=./modules/{{EXT_NAME}}.so -r 'echo greet("World"), PHP_EOL;'
+php -dextension=./modules/{{EXT_NAME}}.so -r '$c = new Counter(5); $c->add(3); echo $c->value(), PHP_EOL;'
 MD;
 
 const PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE = <<<'MD'
-php -dextension=./modules/php_{{EXT_NAME}}.dll -r 'hello();'
-php -dextension=./modules/php_{{EXT_NAME}}.dll -r 'echo greet("World");'
+php -dextension=.\modules\php_{{EXT_NAME}}.dll -r "hello();"
+php -dextension=.\modules\php_{{EXT_NAME}}.dll -r 'echo greet("World"), PHP_EOL;'
+php -dextension=.\modules\php_{{EXT_NAME}}.dll -r '$c = new Counter(5); $c->add(3); echo $c->value(), PHP_EOL;'
+MD;
+
+const PHPZ_UNIX_RUN_SECTION_TEMPLATE = <<<'MD'
+### Unix
+
+{{PHPZ_BUILD_ACTION}}:
+
+```bash
+{{PHPZ_TEST_COMMAND}} -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+If `php-config` is not available, pass the PHP include root directly:
+
+```bash
+{{PHPZ_TEST_COMMAND}} -Dphp-include-dir=/usr/include/php
+```
+
+Try it manually:
+
+```bash
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+{{PHPZ_UNIX_MANUAL_COMMANDS}}
+```
+MD;
+
+const PHPZ_WINDOWS_RUN_SECTION_TEMPLATE = <<<'MD'
+### Windows
+
+Windows builds require a PHP development package from php.net matching the runtime PHP version, architecture, thread safety mode, and debug mode.
+
+{{PHPZ_BUILD_ACTION}}:
+
+```powershell
+{{PHPZ_TEST_COMMAND}} `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib
+```
+
+For a thread-safe PHP SDK/runtime, add `-Dwindows-zts=true`:
+
+```powershell
+{{PHPZ_TEST_COMMAND}} `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib `
+  -Dwindows-zts=true
+```
+
+Try it manually:
+
+```powershell
+zig build `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib
+
+{{PHPZ_WINDOWS_MANUAL_COMMANDS}}
+```
+
+Windows build options:
+
+| Option                        | Meaning                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| `-Dtarget=native-native-msvc` | Use the MSVC ABI required by PHP for Windows extensions.                             |
+| `-Dphp-include-dir=...`       | PHP SDK include root containing `main`, `Zend`, `TSRM`, and `ext`.                   |
+| `-Dphp-lib-dir=...`           | PHP SDK library directory containing the matching `php8*.lib`; required on Windows.  |
+| `-Dwindows-zts=true`          | Link against the thread-safe PHP library, such as `php8ts.lib`. Omit for NTS builds. |
+| `-Dwindows-debug=true`        | Link against a debug PHP SDK/library. Omit for release PHP builds.                   |
+| `-Dlibc-file=...`             | Optional libc paths file, mainly useful for cross-compilation.                       |
+MD;
+
+const PHPZ_TEST_FILES_STRUCTURE_TEMPLATE = <<<'MD'
+├── run-tests.php          # PHP PHPT test runner
+MD;
+
+const PHPZ_TEST_DIR_STRUCTURE_TEMPLATE = <<<'MD'
+└── tests/
+    ├── hello.phpt
+    ├── greet.phpt
+    └── counter.phpt
 MD;
 
 const PHPZ_GEN_STUB_REGEN_TEMPLATE = <<<'MD'
-After changing `{{EXT_NAME}}.stub.php`, regenerate C arginfo:
+After changing `{{EXT_NAME}}.stub.php`, regenerate `{{EXT_NAME}}_arginfo.h`:
 
 ```bash
 php build/gen_stub.php {{EXT_NAME}}.stub.php
@@ -911,7 +1040,7 @@ php build/gen_stub.php {{EXT_NAME}}.stub.php
 MD;
 
 const PHPZ_GEN_STUB_MISSING_TEMPLATE = <<<'MD'
-Arginfo generation is not configured. To regenerate after changing `{{EXT_NAME}}.stub.php`,
+Arginfo generation is not configured. To regenerate `{{EXT_NAME}}_arginfo.h` after changing `{{EXT_NAME}}.stub.php`,
 copy gen_stub.php to `build/gen_stub.php`, then run:
 
 ```bash
@@ -932,15 +1061,21 @@ const std = @import("std");
 
 const Phpz = @import("phpz").Phpz;
 
+const package = @import("build.zig.zon");
+const extension_name = @tagName(package.name);
+const extension_version = package.version;
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 {{PHPZ_PLATFORM_TARGET_CHECK}}
 
-    const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include dir") orelse "{{PHP_INCLUDE_DIR}}";
-    const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
+    // PHP build options.
+    const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "{{PHP_INCLUDE_DIR}}";
 {{PHPZ_WINDOWS_BUILD_OPTIONS}}
+    const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
 
+    // Initialize phpz and translate PHP headers.
     const phpz_dep = b.dependency("phpz", .{});
     const phpz = Phpz.init(phpz_dep, .{
         .translator = .{
@@ -948,14 +1083,14 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         },
-        .libc_file = if (libc_file) |path| .{ .cwd_relative = path } else null,
+        .libc_file = if (libc_file) |file| .{ .cwd_relative = file } else null,
         .php_include_dir = .{ .cwd_relative = php_include_dir },
 {{PHPZ_WINDOWS_INIT_OPTIONS}}
     });
 
-    const ext_name = "{{EXT_NAME}}";
-    const ext_lib = phpz.addExtension(b, .{
-        .name = ext_name,
+    // Build the PHP extension library.
+    const extension = phpz.addExtension(b, .{
+        .name = extension_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
             .target = target,
@@ -964,10 +1099,17 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
     });
 
+    // Pass extension metadata to Zig source.
+    const extension_info = b.addOptions();
+    extension_info.addOption([:0]const u8, "name", extension_name);
+    extension_info.addOption([:0]const u8, "version", extension_version);
+    extension.root_module.addOptions("extension_info", extension_info);
+
+    // Copy the extension to modules/.
 {{PHPZ_EXT_FILENAME}}
 
     const ext_file = std.Build.Step.UpdateSourceFiles.create(b);
-    ext_file.addCopyFileToSource(ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{ext_filename}));
+    ext_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
     b.getInstallStep().dependOn(&ext_file.step);
 {{PHPZ_TEST_STEP}}
 }
@@ -978,26 +1120,30 @@ ZIG,
 
 A minimal PHP extension built with phpz.
 
-## Run
+## What's inside
 
-```bash
-{{PHPZ_GEN_STUB_RUN_COMMAND}}{{PHPZ_TEST_COMMAND}}
+- **Functions**: `hello()` prints a greeting, `greet(string $name): string` returns a personalized message
+- **Class**: `Counter` has an optional initial value, `add(int $n)`, `dec(int $n)`, and `value(): int`
+
+## Project structure
+
 ```
-
-Custom PHP include path:
-
-```bash
-{{PHPZ_TEST_COMMAND}} -Dphp-include-dir=/usr/local/include/php
+.
+├── build.zig              # Build config
+├── build.zig.zon          # Dependencies
+├── {{EXT_NAME}}.h             # C header: phpz.h + generated arginfo
+├── {{EXT_NAME}}.stub.php      # PHP API declarations
+├── {{EXT_NAME}}_arginfo.h     # Generated arginfo (do not edit directly)
+{{PHPZ_TEST_FILES_STRUCTURE}}{{PHPZ_SRC_TREE_ENTRY}}
+│   └── root.zig           # Module setup, functions, and Counter class
+{{PHPZ_TEST_DIR_STRUCTURE}}
 ```
 
 {{PHPZ_GEN_STUB_REGEN_SECTION}}
 
-## Try it manually
+## Build and run
 
-```bash
-zig build
-{{PHPZ_MANUAL_COMMANDS}}
-```
+{{PHPZ_BUILD_RUN_SECTIONS}}
 MD,
     '{{EXT_NAME}}.h' => <<<'C'
 #ifndef {{EXT_NAME_UPPER}}_H
@@ -1015,6 +1161,7 @@ C,
 <?php
 
 /**
+ * @generate-legacy-arginfo 80200
  * @generate-class-entries
  * @undocumentable
  */
@@ -1058,7 +1205,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Counter_value, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
 ZEND_METHOD(Counter, __construct);
@@ -1066,13 +1212,11 @@ ZEND_METHOD(Counter, add);
 ZEND_METHOD(Counter, dec);
 ZEND_METHOD(Counter, value);
 
-
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
 	ZEND_FE_END
 };
-
 
 static const zend_function_entry class_Counter_methods[] = {
 	ZEND_ME(Counter, __construct, arginfo_class_Counter___construct, ZEND_ACC_PUBLIC)
@@ -1087,7 +1231,11 @@ static zend_class_entry *register_class_Counter(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_CLASS_ENTRY(ce, "Counter", class_Counter_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
+#else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
+#endif
 
 	return class_entry;
 }
@@ -1097,16 +1245,29 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 
-const counter = @import("classes/counter.zig");
+// Create the PHP class wrapper for the Zig implementation.
+const CounterClass = phpz.Class("Counter", Counter);
 
 comptime {
+    // Bind Zig functions as methods of the PHP class wrapper.
+    CounterClass.method("__construct", .construct);
+    CounterClass.method("add", .add);
+    CounterClass.method("dec", .dec);
+    CounterClass.method("value", .value);
+}
+
+comptime {
+    const extension = @import("extension_info");
+
+    // Export Zig functions as PHP global functions.
     phpz.function("hello", hello);
     phpz.function("greet", greet);
 
+    // Create and export the PHP module entry. Listed classes are registered during MINIT.
     phpz.module(.{
-        .name = "{{EXT_NAME}}",
-        .version = "0.1.0",
-        .classes = &.{counter.Class},
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{CounterClass},
     });
 }
 
@@ -1129,9 +1290,7 @@ fn greet(ctx: phpz.Ctx) !void {
     ctx.ret.set(.string, result);
 }
 
-ZIG,
-    'src/classes/counter.zig' => <<<'ZIG'
-const phpz = @import("phpz");
+// --- Classes ---
 
 /// class Counter
 pub const Counter = extern struct {
@@ -1166,16 +1325,6 @@ pub const Counter = extern struct {
         ctx.ret.set(.int, self.n);
     }
 };
-
-pub const Class = phpz.Class("Counter", Counter);
-
-comptime {
-    Class.method("__construct", .construct);
-    Class.method("add", .add);
-    Class.method("dec", .dec);
-    Class.method("value", .value);
-}
-
 ZIG,
     'tests/hello.phpt' => <<<'PHPT'
 --TEST--
@@ -1270,14 +1419,20 @@ final class TemplateWriter
             $contents,
         );
         $contents = str_replace("{{PHPZ_EXT_FILENAME}}\n", $extFilename . "\n", $contents);
-        $manualCommands = PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE;
-        if ($unix && $windows) {
-            $manualCommands = "# Unix\n" . PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE
-                . "\n\n# Windows\n" . PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE;
-        } elseif ($windows) {
-            $manualCommands = PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE;
+        $runSections = [];
+        if ($unix) {
+            $runSections[] = PHPZ_UNIX_RUN_SECTION_TEMPLATE;
         }
-        $contents = str_replace('{{PHPZ_MANUAL_COMMANDS}}', $manualCommands, $contents);
+        if ($windows) {
+            $runSections[] = PHPZ_WINDOWS_RUN_SECTION_TEMPLATE;
+        }
+        $contents = str_replace('{{PHPZ_BUILD_RUN_SECTIONS}}', implode("\n\n", $runSections), $contents);
+        $contents = str_replace('{{PHPZ_UNIX_MANUAL_COMMANDS}}', PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE, $contents);
+        $contents = str_replace('{{PHPZ_WINDOWS_MANUAL_COMMANDS}}', PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE, $contents);
+        $contents = str_replace('{{PHPZ_BUILD_ACTION}}', $hasRunTests ? 'Build and run PHPT tests' : 'Build', $contents);
+        $contents = str_replace('{{PHPZ_TEST_FILES_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_FILES_STRUCTURE_TEMPLATE : '', $contents);
+        $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_DIR_STRUCTURE_TEMPLATE : '', $contents);
+        $contents = str_replace('{{PHPZ_SRC_TREE_ENTRY}}', $hasRunTests ? '├── src/' : '└── src/', $contents);
         $contents = str_replace(
             "{{PHPZ_TEST_STEP}}\n",
             $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE . "\n" : '',
@@ -1363,8 +1518,8 @@ final class Command
         $phpVersion = Environment::checkPhpVersion();
         Console::check('PHP version', $phpVersion);
         Console::check('PHP runtime support', 'yes');
-        $zigVersion = Environment::checkZigVersion($args->zig);
-        Console::check('Zig version', $zigVersion);
+        $zig = Environment::checkZigTool($args->zig);
+        Console::check('Zig version', $zig->label());
         Console::check('phpz package', $args->phpz);
         if ($args->phpConfig->isExplicit()) {
             Console::check('php-config', $args->phpConfig->bin);
@@ -1375,7 +1530,7 @@ final class Command
         $parentDir = PathUtil::absolute($args->dir);
         $targetDir = PathUtil::normalize($parentDir . '/' . $args->ext);
         ProjectInstaller::prepareTargetDir($targetDir, $args->force);
-        ProjectInstaller::initZigProject($targetDir, $args->zig, $args->force, $args->verbose);
+        ProjectInstaller::initZigProject($targetDir, $zig, $args->force, $args->verbose);
         ProjectInstaller::fetchPhpz($targetDir, $args->zig, $args->phpz, $args->verbose);
 
         $genStubPath = PhpToolResolver::resolveOptional(
