@@ -95,7 +95,7 @@ pub const Callable = extern struct {
         var discard: c.zval = undefined;
         const owns_retval = self.fci.retval == null;
         if (owns_retval) self.fci.retval = &discard;
-        defer if (owns_retval) Zval.raw.dtor(&discard);
+        defer if (owns_retval) Zval.raw.release(&discard);
 
         const n = info.@"struct".field_types.len;
         switch (n) {
@@ -143,7 +143,7 @@ pub const Callable = extern struct {
             self.fci.param_count = saved_param_count;
             self.fci.params = saved_params;
             self.fci.named_params = saved_named_params;
-            if (owns_retval) Zval.raw.tryDtor(&discard);
+            if (owns_retval) Zval.raw.tryRelease(&discard);
         }
 
         const n = info.@"struct".field_types.len;
@@ -187,7 +187,7 @@ pub const Callable = extern struct {
 
     /// Decrement refcounts on `function_name` and `fcc.object`.
     pub inline fn delref(self: *Callable) void {
-        Zval.raw.dtor(&self.fci.function_name);
+        Zval.raw.release(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.release(.from(obj));
     }
 

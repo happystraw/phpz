@@ -5,7 +5,7 @@ const Zval = @import("../zval.zig").Zval;
 pub const Array = opaque {
     /// Create an empty array in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.dtor(zv)`
+    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn empty(zv: *c.zval) *Array {
@@ -16,7 +16,7 @@ pub const Array = opaque {
 
     /// Create an array with initial capacity in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.dtor(zv)`
+    /// Ownership: caller owns `zv`'s array value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn init(zv: *c.zval, capacity: u32) *Array {
@@ -33,7 +33,14 @@ pub const Array = opaque {
     pub fn from(zv: *c.zval) FromError!*Array {
         if (Zval.raw.getType(zv) != c.IS_ARRAY) return error.TypeMismatch;
         if (zv.value.arr == null) return error.NullPointer;
-        return @ptrCast(zv);
+        return fromUnchecked(zv);
+    }
+
+    /// Create from an existing zval pointer without checking its type.
+    ///
+    /// Caller must guarantee that `zv` is an array zval.
+    pub inline fn fromUnchecked(zv: *c.zval) *Array {
+        return @ptrCast(@alignCast(zv));
     }
 
     /// Get the underlying zval pointer.
@@ -43,10 +50,15 @@ pub const Array = opaque {
         return @ptrCast(@alignCast(self));
     }
 
+    /// View this array zval as a generic `Zval`.
+    pub inline fn zval(self: *Array) *Zval {
+        return @ptrCast(@alignCast(self));
+    }
+
     /// Get the underlying zend.Array pointer.
     ///
     /// Ownership: borrowed array pointer owned by this zval.
-    pub fn array(self: *Array) *zend.Array {
+    pub fn zendArray(self: *Array) *zend.Array {
         return .from(self.ptr().value.arr);
     }
 
@@ -64,7 +76,7 @@ pub const Array = opaque {
 
     /// Get the number of elements
     pub fn len(self: *Array) usize {
-        return self.ptr().value.arr.*.nNumOfElements;
+        return self.zendArray().len();
     }
 
     /// Set a value by string key.
