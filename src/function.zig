@@ -1,21 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const abi = @import("abi.zig");
 const c = @import("root.zig").c;
 const Ctx = @import("Ctx.zig");
 const errors = @import("errors.zig");
 const zend = @import("zend.zig");
 
-const fn_cc: std.builtin.CallingConvention = if (builtin.os.tag == .windows and builtin.abi == .msvc)
-    switch (builtin.cpu.arch) {
-        .x86_64 => .{ .x86_64_vectorcall = .{} },
-        .x86 => .{ .x86_vectorcall = .{} },
-        else => .c,
-    }
-else
-    .c;
-
-const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(fn_cc) void;
+const Fn = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
 /// Register a Zig function as a PHP function.
 ///
@@ -102,7 +94,7 @@ pub fn methodWithClass(comptime Class: anytype, comptime class_name: [:0]const u
 fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     return struct {
-        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(fn_cc) void {
+        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args = switch (Args) {
                 @Tuple(&.{Ctx}) => .{ctx},
@@ -132,7 +124,7 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
     } else .static;
     const impl_offset = comptime @intFromBool(kind == .object);
     return struct {
-        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(fn_cc) void {
+        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args: Args = (if (kind == .object) blk: {
                 const obj: *Class = .from(.std, ctx.call.thisObject().?.ptr());
