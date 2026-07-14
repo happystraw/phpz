@@ -117,6 +117,14 @@ pub const Array = opaque {
         return c.zend_hash_str_find(self.ptr(), key.ptr, key.len);
     }
 
+    /// Find a pointer stored under a string key.
+    ///
+    /// Ownership: borrowed pointer owned by the array.
+    pub fn findPtr(self: *Array, comptime T: type, key: []const u8) ?*T {
+        const value = c.zend_hash_str_find_ptr(self.ptr(), key.ptr, key.len);
+        return if (value != null) @ptrCast(@alignCast(value)) else null;
+    }
+
     /// Find a value by index.
     ///
     /// Ownership: borrowed zval pointer owned by the array; addref/copy before

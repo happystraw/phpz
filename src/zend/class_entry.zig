@@ -7,7 +7,7 @@ const PropertyInfo = @import("property_info.zig").PropertyInfo;
 
 pub const ClassEntry = opaque {
     /// Enum backing type classification.
-    pub const EnumBackingType = enum(u32) {
+    pub const EnumBackingType = enum(c_int) {
         undef = c.IS_UNDEF,
         int = c.IS_LONG,
         string = c.IS_STRING,
@@ -81,6 +81,12 @@ pub const ClassEntry = opaque {
     /// Iterate over this class's own declared properties
     pub fn propertyInfoIterator(self: *ClassEntry) Array.PtrValueIterator(PropertyInfo) {
         return PropertyInfo.iterator(self);
+    }
+
+    /// Get the class method table.
+    /// Ownership: borrowed array owned by this class entry.
+    pub inline fn methods(self: *ClassEntry) *Array {
+        return Array.from(&self.ptr().*.function_table);
     }
 
     /// Find a method by name (lowercase) in the class function table

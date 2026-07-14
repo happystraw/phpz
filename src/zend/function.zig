@@ -43,20 +43,12 @@ pub const Function = opaque {
 
     /// Look up a function in the global function table
     pub fn find(func_name: []const u8) ?*Function {
-        return @ptrCast(@alignCast(c.zend_hash_str_find_ptr(
-            globals.executor().function_table,
-            func_name.ptr,
-            func_name.len,
-        )));
+        return globals.executor().functions().findPtr(Function, func_name);
     }
 
     /// Look up a method directly from a class's function table
     pub fn findMethod(ce: *ClassEntry, method_name: []const u8) ?*Function {
-        return @ptrCast(@alignCast(c.zend_hash_str_find_ptr(
-            &ce.ptr().*.function_table,
-            method_name.ptr,
-            method_name.len,
-        )));
+        return ce.methods().findPtr(Function, method_name);
     }
 
     /// Get the function type (internal vs userland).
