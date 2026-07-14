@@ -260,8 +260,14 @@ final class PathUtil
     public static function normalize(string $path): string
     {
         $path = str_replace('\\', '/', $path);
+        $drive = '';
+        if (preg_match('/^[A-Za-z]:\//', $path) === 1) {
+            $drive = substr($path, 0, 2);
+            $path = substr($path, 2);
+        }
+
         $parts = [];
-        $absolute = str_starts_with($path, '/');
+        $absolute = $drive !== '' || str_starts_with($path, '/');
         foreach (explode('/', $path) as $part) {
             if ($part === '' || $part === '.') {
                 continue;
@@ -276,12 +282,13 @@ final class PathUtil
             }
             $parts[] = $part;
         }
-        return ($absolute ? '/' : '') . implode('/', $parts);
+
+        return $drive . ($absolute ? '/' : '') . implode('/', $parts);
     }
 
     public static function absolute(string $path): string
     {
-        if (str_starts_with($path, '/')) {
+        if (self::isAbsolute($path)) {
             return self::normalize($path);
         }
         return self::normalize(self::cwd() . '/' . $path);
@@ -289,10 +296,15 @@ final class PathUtil
 
     public static function resolveBin(string $bin): string
     {
-        if (str_contains($bin, '/') && !str_starts_with($bin, '/')) {
+        if (str_contains($bin, '/') && !self::isAbsolute($bin)) {
             return self::absolute($bin);
         }
         return $bin;
+    }
+
+    private static function isAbsolute(string $path): bool
+    {
+        return str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\/\\\\]/', $path) === 1;
     }
 
     public static function mkdir(string $dir): void
@@ -1108,9 +1120,9 @@ pub fn build(b: *std.Build) void {
     // Copy the extension to modules/.
 {{PHPZ_EXT_FILENAME}}
 
-    const ext_file = std.Build.Step.UpdateSourceFiles.create(b);
-    ext_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
-    b.getInstallStep().dependOn(&ext_file.step);
+    const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
+    extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
+    b.getInstallStep().dependOn(&extension_file.step);
 {{PHPZ_TEST_STEP}}
 }
 
@@ -1404,21 +1416,21 @@ final class TemplateWriter
         }
 
         $contents = str_replace(
-            "{{PHPZ_PLATFORM_TARGET_CHECK}}\n",
-            $targetCheck === '' ? '' : $targetCheck . "\n",
+            "{{PHPZ_PLATFORM_TARGET_CHECK}}",
+            $targetCheck,
             $contents,
         );
         $contents = str_replace(
-            "{{PHPZ_WINDOWS_BUILD_OPTIONS}}\n",
-            $windows ? PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE . "\n" : '',
+            "{{PHPZ_WINDOWS_BUILD_OPTIONS}}",
+            $windows ? PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE : '',
             $contents,
         );
         $contents = str_replace(
-            "{{PHPZ_WINDOWS_INIT_OPTIONS}}\n",
-            $windows ? PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE . "\n" : '',
+            "{{PHPZ_WINDOWS_INIT_OPTIONS}}",
+            $windows ? PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE : '',
             $contents,
         );
-        $contents = str_replace("{{PHPZ_EXT_FILENAME}}\n", $extFilename . "\n", $contents);
+        $contents = str_replace("{{PHPZ_EXT_FILENAME}}", $extFilename, $contents);
         $runSections = [];
         if ($unix) {
             $runSections[] = PHPZ_UNIX_RUN_SECTION_TEMPLATE;
@@ -1434,8 +1446,8 @@ final class TemplateWriter
         $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_DIR_STRUCTURE_TEMPLATE : '', $contents);
         $contents = str_replace('{{PHPZ_SRC_TREE_ENTRY}}', $hasRunTests ? '├── src/' : '└── src/', $contents);
         $contents = str_replace(
-            "{{PHPZ_TEST_STEP}}\n",
-            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE . "\n" : '',
+            "{{PHPZ_TEST_STEP}}",
+            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE : '',
             $contents,
         );
         $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build test' : 'zig build', $contents);

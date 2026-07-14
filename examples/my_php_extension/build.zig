@@ -55,9 +55,9 @@ pub fn build(b: *std.Build) void {
     else
         extension_name ++ ".so";
 
-    const ext_file = std.Build.Step.UpdateSourceFiles.create(b);
-    ext_file.addCopyFileToSource(ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
-    b.getInstallStep().dependOn(&ext_file.step);
+    const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
+    extension_file.addCopyFileToSource(ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
+    b.getInstallStep().dependOn(&extension_file.step);
 
     // Add PHPT test step.
     const test_step = b.step("test", "Run PHPT tests");
