@@ -50,6 +50,18 @@ pub const Array = opaque {
         return .from(self.ptr().value.arr);
     }
 
+    /// Ensure this array zval owns writable storage before in-place mutation.
+    ///
+    /// This applies PHP's copy-on-write array separation to the owner zval. If
+    /// the underlying array is shared, the zval is updated to point at a
+    /// duplicated array; otherwise this is a no-op.
+    ///
+    /// Ownership: the wrapper remains borrowed from the same zval. No caller
+    /// reference is added or transferred.
+    pub fn separate(self: *Array) void {
+        c.phpz_separate_array(self.ptr());
+    }
+
     /// Get the number of elements
     pub fn len(self: *Array) usize {
         return self.ptr().value.arr.*.nNumOfElements;

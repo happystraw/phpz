@@ -118,13 +118,12 @@ pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]co
 
 /// Check whether a PHP exception is pending (EG(exception) != null).
 pub inline fn hasException() bool {
-    return globals.executor().exception != null;
+    return globals.executor().exception() != null;
 }
 
 /// Get the pending PHP exception object (EG(exception)). Returns null if no exception is set.
 pub inline fn exception() ?*zend.Object {
-    const obj = globals.executor().exception;
-    return if (obj) |o| zend.Object.from(o) else null;
+    return globals.executor().exception();
 }
 
 /// Clear the pending PHP exception. Does nothing if no exception is set.

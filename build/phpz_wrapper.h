@@ -97,6 +97,10 @@ static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, boo
     ZVAL_ZVAL(z, src, copy, dtor_src);
 }
 
+static zend_always_inline void phpz_separate_array(zval *z) {
+    SEPARATE_ARRAY(z);
+}
+
 /* Bridge helpers for anonymous unions.
  * translate-c numbers unnamed unions (unnamed_0, unnamed_1, ...),
  * which break when PHP headers change union layout. These inline
