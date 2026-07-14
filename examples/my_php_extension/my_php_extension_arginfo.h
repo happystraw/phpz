@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: ba87d13bceef0140a0cc97bbc91d3d4a8b203335 */
+ * Stub hash: 59ff8af4c0b6ce18b2d5453d93bc2e4818a4d36c */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -20,6 +20,10 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_allocatorBailout, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_superglobalsSnapshot arginfo_MyPHPExt_Test_allocatorBailout
+
+#define arginfo_MyPHPExt_Test_mutateSuperglobals arginfo_hello
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
@@ -128,6 +132,8 @@ ZEND_FUNCTION(greet);
 ZEND_FUNCTION(MyPHPExt_increment);
 ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_Test_allocatorBailout);
+ZEND_FUNCTION(MyPHPExt_Test_superglobalsSnapshot);
+ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
 ZEND_METHOD(MyPHPExt_Tag, __construct);
 ZEND_METHOD(MyPHPExt_Entity, __construct);
 ZEND_METHOD(MyPHPExt_Entity, getId);
@@ -167,6 +173,8 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_NS_FALIAS("MyPHPExt", increment, MyPHPExt_increment, arginfo_MyPHPExt_increment)
 	ZEND_NS_FALIAS("MyPHPExt", mapValues, MyPHPExt_mapValues, arginfo_MyPHPExt_mapValues)
 	ZEND_NS_FALIAS("MyPHPExt\\Test", allocatorBailout, MyPHPExt_Test_allocatorBailout, arginfo_MyPHPExt_Test_allocatorBailout)
+	ZEND_NS_FALIAS("MyPHPExt\\Test", superglobalsSnapshot, MyPHPExt_Test_superglobalsSnapshot, arginfo_MyPHPExt_Test_superglobalsSnapshot)
+	ZEND_NS_FALIAS("MyPHPExt\\Test", mutateSuperglobals, MyPHPExt_Test_mutateSuperglobals, arginfo_MyPHPExt_Test_mutateSuperglobals)
 	ZEND_FE_END
 };
 
