@@ -6,6 +6,7 @@ const functions = @import("functions.zig");
 const ini = @import("ini.zig");
 const metrics = @import("metrics.zig");
 const bailout = @import("testing/bailout.zig");
+const superglobals = @import("testing/superglobals.zig");
 
 fn info(_: *c.zend_module_entry) void {
     phpz.info.table.start();
@@ -17,6 +18,7 @@ fn info(_: *c.zend_module_entry) void {
 comptime {
     _ = functions;
     _ = bailout;
+    _ = superglobals;
 
     phpz.module(.{
         .name = "my_php_extension",

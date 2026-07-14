@@ -157,4 +157,8 @@ namespace MyPHPExt {
 
 namespace MyPHPExt\Test {
     function allocatorBailout(): array {}
+
+    function superglobalsSnapshot(): array {}
+
+    function mutateSuperglobals(): void {}
 }
