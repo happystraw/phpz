@@ -1,15 +1,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const abi = @import("abi.zig");
 const c = @import("c.zig").c;
-
-const use_dll_import = builtin.os.tag == .windows and builtin.abi == .msvc;
 
 pub const GlobalAccess = enum { ptr, value };
 
 fn Global(comptime access: GlobalAccess, comptime T: type, comptime name: []const u8) type {
     return switch (access) {
-        .ptr => if (use_dll_import) *T else @TypeOf(&@field(c, name)),
+        .ptr => if (abi.use_dll_import) *T else @TypeOf(&@field(c, name)),
         .value => T,
     };
 }
@@ -20,11 +19,11 @@ pub inline fn global(
     comptime name: []const u8,
 ) Global(access, T, name) {
     return switch (access) {
-        .ptr => if (comptime use_dll_import)
+        .ptr => if (comptime abi.use_dll_import)
             @extern(*T, .{ .name = name, .is_dll_import = true })
         else
             &@field(c, name),
-        .value => if (comptime use_dll_import)
+        .value => if (comptime abi.use_dll_import)
             @extern(*T, .{ .name = name, .is_dll_import = true }).*
         else
             @field(c, name),

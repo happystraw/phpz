@@ -1,8 +1,10 @@
 const std = @import("std");
 
+const abi = @import("abi.zig");
 const c = @import("root.zig").c;
 const Ctx = @import("Ctx.zig");
 const errors = @import("errors.zig");
+const globals = @import("globals.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
 
@@ -119,12 +121,12 @@ fn ErrorAdapter(comptime config: Error) type {
 
 fn ExceptionAdapter(comptime config: Exception) type {
     return struct {
-        const Hook = *const fn (?*c.zend_object) callconv(.c) void;
+        const Hook = *const fn (?*c.zend_object) callconv(abi.fn_cc) void;
 
         var previous: ?Hook = null;
         var installed = false;
 
-        fn callback(exception: ?*c.zend_object) callconv(.c) void {
+        fn callback(exception: ?*c.zend_object) callconv(abi.fn_cc) void {
             config.observe(zend.Object.from(exception.?));
             if (previous) |previous_hook| {
                 previous_hook(exception);
@@ -133,14 +135,16 @@ fn ExceptionAdapter(comptime config: Exception) type {
 
         fn register() void {
             if (installed) return;
-            previous = c.zend_throw_exception_hook;
-            c.zend_throw_exception_hook = &callback;
+            const hook = globals.global(.ptr, ?Hook, "zend_throw_exception_hook");
+            previous = hook.*;
+            hook.* = &callback;
             installed = true;
         }
 
         fn unregister() void {
-            if (installed and c.zend_throw_exception_hook == &callback) {
-                c.zend_throw_exception_hook = previous;
+            const hook = globals.global(.ptr, ?Hook, "zend_throw_exception_hook");
+            if (installed and hook.* == &callback) {
+                hook.* = previous;
             }
             installed = false;
             previous = null;
