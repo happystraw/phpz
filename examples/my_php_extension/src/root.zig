@@ -1,5 +1,4 @@
 const phpz = @import("phpz");
-pub const c = phpz.c;
 
 const api = @import("api.zig");
 const functions = @import("functions.zig");
@@ -8,21 +7,23 @@ const metrics = @import("metrics.zig");
 const bailout = @import("testing/bailout.zig");
 const superglobals = @import("testing/superglobals.zig");
 
-fn info(_: *c.zend_module_entry) void {
+fn info(m: *phpz.ModuleEntry) void {
     phpz.info.table.start();
     phpz.info.table.header(.{ "my_php_extension support", "enabled" });
-    phpz.info.table.row(.{ "Version", "0.1.0" });
+    phpz.info.table.row(.{ "version", m.version });
     phpz.info.table.end();
 }
 
 comptime {
+    const extension = @import("extension_info");
+
     _ = functions;
     _ = bailout;
     _ = superglobals;
 
     phpz.module(.{
-        .name = "my_php_extension",
-        .version = "0.1.0",
+        .name = extension.name,
+        .version = extension.version,
         .classes = api.classes,
         .ini = ini.definitions,
         .globals = metrics.Globals,
