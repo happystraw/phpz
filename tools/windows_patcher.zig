@@ -2,8 +2,12 @@ const std = @import("std");
 
 const default_dllimport_data_symbols = [_][]const u8{
     "std_object_handlers",
+    "zend_empty_array",
     "zend_empty_string",
+    "zend_known_strings",
+    "zend_new_interned_string",
     "zend_one_char_string",
+    "zend_string_init_existing_interned",
     "zend_string_init_interned",
 
     // NTS
