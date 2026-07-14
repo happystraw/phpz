@@ -17,7 +17,7 @@ const Impl = extern struct {
     pub fn getId(self: *const Impl, ctx: phpz.Ctx) !void {
         const entity: *Class = .from(.impl, @constCast(self));
         var scratch = phpz.Zval.raw.undef;
-        defer phpz.Zval.raw.tryDtor(&scratch);
+        defer phpz.Zval.raw.tryRelease(&scratch);
 
         const id = try entity.property("id", false, &scratch);
         ctx.ret.set(.int, phpz.Zval.raw.asUnchecked(id.ptr(), .int));
