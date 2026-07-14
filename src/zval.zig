@@ -143,6 +143,16 @@ pub const Zval = opaque {
         return @ptrCast(@alignCast(self));
     }
 
+    /// View this zval as an array zval after checking its type.
+    pub fn array(self: *Zval) Array.FromError!*Array {
+        return Array.from(self.ptr());
+    }
+
+    /// View this zval as an object zval after checking its type.
+    pub fn object(self: *Zval) Object.FromError!*Object {
+        return Object.from(self.ptr());
+    }
+
     /// Get the type (Kind) of this zval.
     ///
     /// Returns:
@@ -308,14 +318,14 @@ pub const Zval = opaque {
 
     /// Increment the refcount of this zval's refcounted payload.
     ///
-    /// Ownership: caller owns the added reference and must `dtor`/delref it.
+    /// Ownership: caller owns the added reference and must `release()`/delref it.
     pub inline fn addref(self: *Zval) void {
         raw.addref(self.ptr());
     }
 
     /// Increment the refcount only when this zval contains a refcounted value.
     ///
-    /// Ownership: caller owns the added reference and must `dtor`/delref it.
+    /// Ownership: caller owns the added reference and must `release()`/delref it.
     pub inline fn tryAddref(self: *Zval) void {
         raw.tryAddref(self.ptr());
     }
@@ -325,9 +335,9 @@ pub const Zval = opaque {
         raw.tryDelref(self.ptr());
     }
 
-    /// Destroy one owned zval value.
-    pub inline fn dtor(self: *Zval) void {
-        raw.dtor(self.ptr());
+    /// Release one owned zval value.
+    pub inline fn release(self: *Zval) void {
+        raw.release(self.ptr());
     }
 
     pub inline fn refcount(self: *Zval) u32 {
@@ -434,7 +444,7 @@ pub const Zval = opaque {
         /// Initialize a raw zval value.
         ///
         /// Ownership: caller owns the returned zval contents and must call
-        /// `dtor()`/`tryDtor()` when the value is refcounted and not transferred.
+        /// `release()`/`tryRelease()` when the value is refcounted and not transferred.
         pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
             var z: c.zval = undefined;
             raw.set(&z, zk, val);
@@ -614,14 +624,14 @@ pub const Zval = opaque {
         ///
         /// Ownership: caller owns the added reference and must `dtor`/delref it.
         pub const addref = c.zval_add_ref;
-        /// Destroy one owned raw zval value.
-        pub const dtor = c.zval_ptr_dtor;
+        /// Release one owned raw zval value using PHP's `zval_ptr_dtor`.
+        pub const release = c.zval_ptr_dtor;
         pub const refcount = c.zval_refcount_p;
-        /// Destroy a scratch/optional zval only if it was initialized.
+        /// Release a scratch/optional zval only if it was initialized.
         ///
         /// Ownership: caller-provided scratch cleanup helper.
-        pub inline fn tryDtor(z: *c.zval) void {
-            if (!raw.is(z, .undef)) raw.dtor(z);
+        pub inline fn tryRelease(z: *c.zval) void {
+            if (!raw.is(z, .undef)) raw.release(z);
         }
         /// Increment the refcount only when the zval is refcounted.
         ///

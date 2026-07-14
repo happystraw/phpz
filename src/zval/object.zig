@@ -5,7 +5,7 @@ const Zval = @import("../zval.zig").Zval;
 pub const Object = opaque {
     /// Create a standard object (stdClass) in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.dtor(zv)`
+    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn init(zv: *c.zval) *Object {
@@ -17,7 +17,7 @@ pub const Object = opaque {
 
     /// Create an object from a class entry in caller-provided zval storage.
     ///
-    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.dtor(zv)`
+    /// Ownership: caller owns `zv`'s object value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
     pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) InitClassError!*Object {
@@ -49,7 +49,14 @@ pub const Object = opaque {
     pub fn from(zv: *c.zval) FromError!*Object {
         if (Zval.raw.getType(zv) != c.IS_OBJECT) return error.TypeMismatch;
         if (zv.value.obj == null) return error.NullPointer;
-        return @ptrCast(zv);
+        return fromUnchecked(zv);
+    }
+
+    /// Create from an existing zval pointer without checking its type.
+    ///
+    /// Caller must guarantee that `zv` is an object zval.
+    pub inline fn fromUnchecked(zv: *c.zval) *Object {
+        return @ptrCast(@alignCast(zv));
     }
 
     /// Get the underlying zval pointer.
@@ -59,10 +66,15 @@ pub const Object = opaque {
         return @ptrCast(@alignCast(self));
     }
 
+    /// View this object zval as a generic `Zval`.
+    pub inline fn zval(self: *Object) *Zval {
+        return @ptrCast(@alignCast(self));
+    }
+
     /// Get the underlying zend.Object pointer.
     ///
     /// Ownership: borrowed object pointer owned by this zval.
-    pub fn object(self: *Object) *zend.Object {
+    pub fn zendObject(self: *Object) *zend.Object {
         return .from(self.ptr().value.obj);
     }
 
@@ -70,7 +82,7 @@ pub const Object = opaque {
     ///
     /// Ownership: borrowed class entry pointer owned by PHP.
     pub fn class(self: *Object) *zend.ClassEntry {
-        return self.object().class();
+        return self.zendObject().class();
     }
 
     /// Set a property value.

@@ -456,7 +456,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Ownership: returned pointer is either borrowed from the object/runtime
         /// or points at caller-provided scratch. Never dtor the returned pointer
-        /// directly; use `Zval.raw.tryDtor(scratch)` for scratch cleanup.
+        /// directly; use `Zval.raw.tryRelease(scratch)` for scratch cleanup.
         ///
         /// Returns `error.PhpException` if a magic `__get` handler throws.
         ///
