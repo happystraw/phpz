@@ -52,7 +52,7 @@ const Impl = extern struct {
     fn returnName(self: *const Impl, ctx: phpz.Ctx) !void {
         const user: *Class = .from(.impl, @constCast(self));
         var scratch = phpz.Zval.raw.undef;
-        defer phpz.Zval.raw.tryDtor(&scratch);
+        defer phpz.Zval.raw.tryRelease(&scratch);
 
         const name = try user.property("name", false, &scratch);
         ctx.ret.set(.string, phpz.Zval.raw.asUnchecked(name.ptr(), .string));

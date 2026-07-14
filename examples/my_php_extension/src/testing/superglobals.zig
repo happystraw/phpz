@@ -16,13 +16,18 @@ fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
     const request = executor.superglobal(.REQUEST) orelse return error.SuperglobalUnavailable;
 
     const result = Zval.Array.empty(ctx.ret.ptr());
-    result.set(.mixed, "GET", get.ptr());
-    result.set(.mixed, "POST", post.ptr());
-    result.set(.mixed, "COOKIE", cookie.ptr());
-    result.set(.mixed, "SERVER", server.ptr());
-    result.set(.mixed, "ENV", env.ptr());
-    result.set(.mixed, "FILES", files.ptr());
-    result.set(.mixed, "REQUEST", request.ptr());
+    setBorrowed(result, "GET", get);
+    setBorrowed(result, "POST", post);
+    setBorrowed(result, "COOKIE", cookie);
+    setBorrowed(result, "SERVER", server);
+    setBorrowed(result, "ENV", env);
+    setBorrowed(result, "FILES", files);
+    setBorrowed(result, "REQUEST", request);
+}
+
+fn setBorrowed(result: *Zval.Array, key: []const u8, value: *Zval.Array) void {
+    value.zval().addref();
+    result.set(.mixed, key, value.ptr());
 }
 
 /// PHP: MyPHPExt\Test\mutateSuperglobals(): void

@@ -50,7 +50,7 @@ fn mapValues(ctx: phpz.Ctx) !void {
     var iterator = values.fastIterator();
     while (iterator.next()) |entry| {
         var mapped = Zval.raw.undef;
-        defer Zval.raw.tryDtor(&mapped);
+        defer Zval.raw.tryRelease(&mapped);
 
         try mapper.withRetval(&mapped).call(.{entry.value.*});
         switch (entry.key) {
