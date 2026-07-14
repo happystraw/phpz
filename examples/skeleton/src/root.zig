@@ -14,14 +14,16 @@ comptime {
 }
 
 comptime {
+    const extension = @import("extension_info");
+
     // Export Zig functions as PHP global functions.
     phpz.function("hello", hello);
     phpz.function("greet", greet);
 
     // Create and export the PHP module entry. Listed classes are registered during MINIT.
     phpz.module(.{
-        .name = "skeleton",
-        .version = "0.1.0",
+        .name = extension.name,
+        .version = extension.version,
         .classes = &.{CounterClass},
     });
 }
