@@ -2,12 +2,12 @@
     .name = .phpz,
     .version = "0.0.0",
     .fingerprint = 0x935004cc3861700f,
-    .minimum_zig_version = "0.17.0-dev.1387+01b60634c",
+    .minimum_zig_version = "0.17.0-dev.1398+cb5635714",
     .minimum_php_version = "8.2",
     .dependencies = .{
         .translate_c = .{
-            .url = "git+https://codeberg.org/happystraw/translate-c?ref=fn-callconv-stuff#e487ee52747cf308af3cc26b34e6e1bbae896a17",
-            .hash = "translate_c-0.0.0-Q_BUWiQ7BwC08JMURgqiXUf_j-jbG-ALr-e3ZHBsw8uj",
+            .url = "git+https://codeberg.org/ziglang/translate-c#12c1515c074cfa9c69a799eb33506464a27c6332",
+            .hash = "translate_c-0.0.0-Q_BUWvo6BwAVl3qDhMeQNrgCAljvDeGUnwqpnGvB0_YM",
         },
     },
     .paths = .{
