@@ -1,11 +1,10 @@
 <?php
 
 /**
+ * @generate-legacy-arginfo 80200
  * @generate-class-entries
  * @undocumentable
  */
-
-/* ========== global namespace ========== */
 
 namespace {
     require "Zend/zend_attributes.stub.php";
