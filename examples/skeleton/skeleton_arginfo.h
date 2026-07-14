@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: d84374eb3cc93ebb1e1cf6f0dfa2ee49381bec07 */
+ * Stub hash: d22e894300526c4a17a44dc8302dcfe201cf73d0 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -21,7 +21,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Counter_value, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
 ZEND_METHOD(Counter, __construct);
@@ -29,13 +28,11 @@ ZEND_METHOD(Counter, add);
 ZEND_METHOD(Counter, dec);
 ZEND_METHOD(Counter, value);
 
-
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
 	ZEND_FE(greet, arginfo_greet)
 	ZEND_FE_END
 };
-
 
 static const zend_function_entry class_Counter_methods[] = {
 	ZEND_ME(Counter, __construct, arginfo_class_Counter___construct, ZEND_ACC_PUBLIC)
@@ -50,7 +47,11 @@ static zend_class_entry *register_class_Counter(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_CLASS_ENTRY(ce, "Counter", class_Counter_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
+#else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
+#endif
 
 	return class_entry;
 }
