@@ -194,30 +194,35 @@ pub const Array = opaque {
     ///
     /// Return `.keep` to retain the element, `.remove` to delete it from the array,
     /// or `.stop` to halt iteration. Use `.remove` for filtering.
-    pub fn applyEach(self: *Array, comptime apply_fn: fn (*c.zval) ApplyResult) void {
+    pub fn applyEach(self: *Array, apply_fn: fn (*c.zval) ApplyResult) void {
         const Cb = struct {
-            fn cb(zv: *c.zval) callconv(.c) c_int {
-                return @intFromEnum(apply_fn(zv));
+            fn cb(zv: ?*c.zval) callconv(.c) c_int {
+                return @intFromEnum(apply_fn(zv.?));
             }
         };
         c.zend_hash_apply(self.ptr(), Cb.cb);
     }
 
     /// Apply a callback to each element, passing a user-provided argument pointer.
-    pub fn applyEachWithArg(self: *Array, comptime apply_fn: fn (*c.zval, *anyopaque) ApplyResult, arg: *anyopaque) void {
+    pub fn applyEachWithArg(
+        self: *Array,
+        comptime ArgType: type,
+        apply_fn: fn (*c.zval, *ArgType) ApplyResult,
+        arg: *ArgType,
+    ) void {
         const Cb = struct {
-            fn cb(zv: *c.zval, a: *anyopaque) callconv(.c) c_int {
-                return @intFromEnum(apply_fn(zv, a));
+            fn cb(zv: ?*c.zval, a: ?*anyopaque) callconv(.c) c_int {
+                return @intFromEnum(apply_fn(zv.?, @ptrCast(@alignCast(a.?))));
             }
         };
         c.zend_hash_apply_with_argument(self.ptr(), Cb.cb, arg);
     }
 
     /// Sort the array in-place with a custom compare function and optional renumbering.
-    pub fn sort(self: *Array, comptime compare_fn: fn (*c.zval, *c.zval) c_int, renumber: bool) void {
+    pub fn sort(self: *Array, compare_fn: fn (*c.zval, *c.zval) c_int, renumber: bool) void {
         const Cb = struct {
-            fn cb(a: *c.Bucket, b: *c.Bucket) callconv(.c) c_int {
-                return compare_fn(&a.val, &b.val);
+            fn cb(a: ?*c.Bucket, b: ?*c.Bucket) callconv(.c) c_int {
+                return compare_fn(&a.?.val, &b.?.val);
             }
         };
         c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
