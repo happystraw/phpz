@@ -16,9 +16,11 @@ comptime {
     // 3b. Array sum — parse style
     phpz.function("bench_zig_array_sum_parse", benchArraySumParse);
 
+    const extension = @import("extension_info");
+
     phpz.module(.{
-        .name = "bench_zig",
-        .version = "0.2.0",
+        .name = extension.name,
+        .version = extension.version,
     });
 }
 
@@ -77,8 +79,8 @@ fn benchArraySumExpect(ctx: phpz.Ctx) !void {
     var sum: i64 = 0;
     arr.eachValue(&sum, struct {
         fn body(zv: *phpz.c.zval, s: *i64) void {
-            if (phpz.Zval.native.is(zv, .int)) {
-                s.* += phpz.Zval.native.asUnchecked(zv, .int);
+            if (phpz.Zval.raw.is(zv, .int)) {
+                s.* += phpz.Zval.raw.asUnchecked(zv, .int);
             }
         }
     }.body);
@@ -91,13 +93,13 @@ fn benchArraySumExpect(ctx: phpz.Ctx) !void {
 fn benchArraySumParse(ctx: phpz.Ctx) !void {
     var arr_zv: *phpz.c.zval = undefined;
     try ctx.call.parseArgs("a", .{&arr_zv});
-    const arr = phpz.Zval.native.asUnchecked(arr_zv, .array);
+    const arr = phpz.Zval.raw.asUnchecked(arr_zv, .array);
 
     var sum: i64 = 0;
     arr.eachValue(&sum, struct {
         fn body(zv: *phpz.c.zval, s: *i64) void {
-            if (phpz.Zval.native.is(zv, .int)) {
-                s.* += phpz.Zval.native.asUnchecked(zv, .int);
+            if (phpz.Zval.raw.is(zv, .int)) {
+                s.* += phpz.Zval.raw.asUnchecked(zv, .int);
             }
         }
     }.body);

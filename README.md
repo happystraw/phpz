@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel
 
 # Run tests
 cd my_php_extension
-zig build test
+zig build run-tests
 ```
 
 ## Manual Setup

@@ -23,7 +23,7 @@ echo "=== Building Zig extension ==="
     cp "$SCRIPT_DIR/c_ext/run-tests.php" .
     zig build -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
     echo "  Zig extension built"
-    zig build test -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
+    zig build run-tests -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
 )
 
 echo ""

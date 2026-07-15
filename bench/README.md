@@ -58,7 +58,7 @@ make test
 ```bash
 cd zig_ext
 zig build -Doptimize=ReleaseFast -Dphp-include-dir=$(php-config --include-dir)
-zig build test -Doptimize=ReleaseFast -Dphp-include-dir=$(php-config --include-dir)
+zig build run-tests -Doptimize=ReleaseFast -Dphp-include-dir=$(php-config --include-dir)
 ```
 
 ### Run

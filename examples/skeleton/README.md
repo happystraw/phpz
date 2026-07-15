@@ -40,13 +40,13 @@ php /path/to/php-src/build/gen_stub.php skeleton.stub.php
 Build and run PHPT tests:
 
 ```bash
-zig build test -Dphp-include-dir="$(php-config --include-dir)"
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
 ```
 
 If `php-config` is not available, pass the PHP include root directly:
 
 ```bash
-zig build test -Dphp-include-dir=/usr/include/php
+zig build run-tests -Dphp-include-dir=/usr/include/php
 ```
 
 Try it manually:
@@ -65,7 +65,7 @@ Windows builds require a PHP development package from php.net matching the runti
 Build and run PHPT tests:
 
 ```powershell
-zig build test `
+zig build run-tests `
   -Dtarget=native-native-msvc `
   -Dphp-include-dir=C:\php-sdk\include `
   -Dphp-lib-dir=C:\php-sdk\lib
@@ -74,7 +74,7 @@ zig build test `
 For a thread-safe PHP SDK/runtime, add `-Dwindows-zts=true`:
 
 ```powershell
-zig build test `
+zig build run-tests `
   -Dtarget=native-native-msvc `
   -Dphp-include-dir=C:\php-sdk\include `
   -Dphp-lib-dir=C:\php-sdk\lib `

@@ -125,7 +125,7 @@ fn addTestExamplesStep(b: *std.Build, options: BuildOptions) void {
         "my_php_extension",
     };
     inline for (examples) |test_example| {
-        const test_cmd = b.addSystemCommand(&[_][]const u8{ "zig", "build", "test" });
+        const test_cmd = b.addSystemCommand(&[_][]const u8{ "zig", "build", "run-tests" });
         test_cmd.addArg(b.fmt("-Dphp-include-dir={s}", .{options.php_include_dir}));
         test_cmd.addArg(b.fmt("-Doptimize={s}", .{@tagName(options.optimize)}));
         if (options.libc_file) |libc_file| {

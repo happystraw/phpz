@@ -898,7 +898,7 @@ final class ProjectInstaller
 const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
 
     // Add PHPT test step.
-    const test_step = b.step("test", "Run PHPT tests");
+    const run_tests_step = b.step("run-tests", "Run PHPT tests");
     const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
         "php",
         "run-tests.php",
@@ -908,7 +908,7 @@ const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
         b.fmt("extension=modules/{s}", .{extension_filename}),
     });
     test_phpt_cmd.step.dependOn(b.getInstallStep());
-    test_step.dependOn(&test_phpt_cmd.step);
+    run_tests_step.dependOn(&test_phpt_cmd.step);
 ZIG;
 
 const PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE = <<<'ZIG'
@@ -1450,7 +1450,7 @@ final class TemplateWriter
             $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE : '',
             $contents,
         );
-        $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build test' : 'zig build', $contents);
+        $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build run-tests' : 'zig build', $contents);
         $contents = str_replace('{{PHP_INCLUDE_DIR}}', TemplateVars::escapeZigString($phpIncludeDir), $contents);
         $contents = str_replace(
             '{{PHPZ_GEN_STUB_RUN_COMMAND}}',
@@ -1706,7 +1706,7 @@ USAGE;
         echo "  PHPT tests:   $testsStatus\n";
         echo "\nQuick start:\n";
         echo '  $ cd ' . ProcessRunner::shellArg($targetDir) . "\n";
-        echo $hasRunTests ? "  $ zig build test\n" : "  $ zig build\n";
+        echo $hasRunTests ? "  $ zig build run-tests\n" : "  $ zig build\n";
         echo "\nRegenerate arginfo after changing $stubFile:\n";
         if ($hasGenStub) {
             echo "  $ php build/gen_stub.php $stubFile\n";

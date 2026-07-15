@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // Build the PHP extension library.
-    const ext_lib = phpz.addExtension(b, .{
+    const extension = phpz.addExtension(b, .{
         .name = extension_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
     const extension_info = b.addOptions();
     extension_info.addOption([:0]const u8, "name", extension_name);
     extension_info.addOption([:0]const u8, "version", extension_version);
-    ext_lib.root_module.addOptions("extension_info", extension_info);
+    extension.root_module.addOptions("extension_info", extension_info);
 
     // Copy the extension to modules/.
     const extension_filename = if (target.result.os.tag == .windows)
@@ -56,11 +56,11 @@ pub fn build(b: *std.Build) void {
         extension_name ++ ".so";
 
     const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
-    extension_file.addCopyFileToSource(ext_lib.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
+    extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
     b.getInstallStep().dependOn(&extension_file.step);
 
     // Add PHPT test step.
-    const test_step = b.step("test", "Run PHPT tests");
+    const run_tests_step = b.step("run-tests", "Run PHPT tests");
     const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
         "php",
         "run-tests.php",
@@ -70,5 +70,5 @@ pub fn build(b: *std.Build) void {
         b.fmt("extension=modules/{s}", .{extension_filename}),
     });
     test_phpt_cmd.step.dependOn(b.getInstallStep());
-    test_step.dependOn(&test_phpt_cmd.step);
+    run_tests_step.dependOn(&test_phpt_cmd.step);
 }

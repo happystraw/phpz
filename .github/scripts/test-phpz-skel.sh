@@ -173,7 +173,7 @@ note "lint and help"
 assert_contains "$TMP_ROOT/help" "--with-php-config <path>"
 assert_contains "$TMP_ROOT/help" "--without-run-tests"
 
-note "default + zig build test"
+note "default + zig build run-tests"
 new_case default_build
 run_skel \
     --ext DemoExt \
@@ -192,11 +192,11 @@ assert_contains "$(target_dir)/build.zig" 'extension_info.addOption([:0]const u8
 assert_contains "$(target_dir)/src/root.zig" ".name = extension.name,"
 assert_contains "$(target_dir)/demo_ext.h" "extern zend_module_entry demo_ext_module_entry;"
 assert_contains "$CASE_DIR/stdout" "extension:    demo_ext"
-run_zig default-build-test build test
+run_zig default-build-run-tests build run-tests
 run_php_ri default-ri
 
 if [ -n "$PHP_CONFIG_BIN" ]; then
-    note "explicit php-config + zig build test"
+    note "explicit php-config + zig build run-tests"
     new_case explicit_php_config
     run_skel \
         --ext demo_ext \
@@ -207,10 +207,10 @@ if [ -n "$PHP_CONFIG_BIN" ]; then
     assert_contains "$CASE_DIR/stderr" "checking php-config... $PHP_CONFIG_BIN"
     assert_contains "$(target_dir)/build.zig" "orelse \"$PHP_INCLUDE_DIR\""
     assert_not_contains "$(target_dir)/build.zig" "php-config"
-    run_zig explicit-php-config-build-test build test
+    run_zig explicit-php-config-build-run-tests build run-tests
     run_php_ri explicit-php-config-ri
 else
-    note "explicit php-config + zig build test skipped"
+    note "explicit php-config + zig build run-tests skipped"
 fi
 
 note "without run-tests"
@@ -225,11 +225,11 @@ assert_no_path "$(target_dir)/run-tests.php"
 assert_platform_template
 assert_not_contains "$(target_dir)/build.zig" "Run PHPT tests"
 assert_not_contains "$(target_dir)/build.zig" "run-tests.php"
-assert_not_contains "$(target_dir)/README.md" "zig build test"
+assert_not_contains "$(target_dir)/README.md" "zig build run-tests"
 run_zig without-run-tests-build build
 run_php_ri without-run-tests-ri
 
-note "without gen-stub + zig build test"
+note "without gen-stub + zig build run-tests"
 new_case without_gen_stub
 run_skel \
     --ext demo_ext \
@@ -240,7 +240,7 @@ assert_no_path "$(target_dir)/build/gen_stub.php"
 assert_file "$(target_dir)/demo_ext_arginfo.h"
 assert_dir "$(target_dir)/tests"
 assert_platform_template
-run_zig without-gen-stub-build-test build test
+run_zig without-gen-stub-build-run-tests build run-tests
 run_php_ri without-gen-stub-ri
 
 note "ok"

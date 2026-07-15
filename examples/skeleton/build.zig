@@ -60,7 +60,7 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&extension_file.step);
 
     // Add PHPT test step.
-    const test_step = b.step("test", "Run PHPT tests");
+    const run_tests_step = b.step("run-tests", "Run PHPT tests");
     const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
         "php",
         "run-tests.php",
@@ -70,5 +70,5 @@ pub fn build(b: *std.Build) void {
         b.fmt("extension=modules/{s}", .{extension_filename}),
     });
     test_phpt_cmd.step.dependOn(b.getInstallStep());
-    test_step.dependOn(&test_phpt_cmd.step);
+    run_tests_step.dependOn(&test_phpt_cmd.step);
 }

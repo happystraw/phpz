@@ -7,11 +7,11 @@
 
 ## Running
 
-Each example has its own `build.zig` with a `test` step:
+Each example has its own `build.zig` with a `run-tests` step:
 
 ```bash
 cd examples/<name>
-zig build test
+zig build run-tests
 ```
 
 > PHP include path defaults to `/usr/include/php`. Override with `-Dphp-include-dir=<path>`.

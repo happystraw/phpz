@@ -75,19 +75,19 @@ the metrics and test APIs are excluded so observing a snapshot does not alter it
 Run this extension's PHPT tests from this directory:
 
 ```sh
-zig build test
+zig build run-tests
 ```
 
 Pass build options with `-D...` when the PHP installation is not in the default
 location:
 
 ```sh
-zig build test -Dphp-include-dir=/path/to/php/include/php
-zig build test -Dcheck-arginfo=false
+zig build run-tests -Dphp-include-dir=/path/to/php/include/php
+zig build run-tests -Dcheck-arginfo=false
 ```
 
 On Windows, use the MSVC target and pass the matching PHP SDK library directory:
 
 ```sh
-zig build test -Dtarget=native-windows-msvc -Dphp-include-dir=C:\path\to\php\include -Dphp-lib-dir=C:\path\to\php\lib
+zig build run-tests -Dtarget=native-windows-msvc -Dphp-include-dir=C:\path\to\php\include -Dphp-lib-dir=C:\path\to\php\lib
 ```
