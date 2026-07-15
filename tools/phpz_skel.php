@@ -230,14 +230,14 @@ final class Console
 {
     public static function fail(string $message): never
     {
-        fwrite(STDERR, "Error: $message\n");
+        fwrite(\STDERR, "Error: $message\n");
         exit(1);
     }
 
     public static function info(string $message): void
     {
-        fwrite(STDERR, "$message\n");
-        fflush(STDERR);
+        fwrite(\STDERR, "$message\n");
+        fflush(\STDERR);
     }
 
     public static function check(string $subject, string $result): void
@@ -463,7 +463,7 @@ final class ProcessRunner
             if ($chunk !== false && $chunk !== '') {
                 $output .= $chunk;
                 if ($echoOutput) {
-                    self::writeOutput(STDERR, $chunk, $outputLineStart);
+                    self::writeOutput(\STDERR, $chunk, $outputLineStart);
                 }
                 $read = true;
             }
@@ -472,7 +472,7 @@ final class ProcessRunner
             if ($chunk !== false && $chunk !== '') {
                 $error .= $chunk;
                 if ($echoOutput) {
-                    self::writeOutput(STDERR, $chunk, $outputLineStart);
+                    self::writeOutput(\STDERR, $chunk, $outputLineStart);
                 }
                 $read = true;
             }
@@ -486,7 +486,7 @@ final class ProcessRunner
         fclose($pipes[2]);
 
         if ($echoOutput && !$outputLineStart) {
-            fwrite(STDERR, "\n");
+            fwrite(\STDERR, "\n");
         }
 
         $code = proc_close($proc);
@@ -507,8 +507,8 @@ final class ProcessRunner
         if ($keepOutput) {
             Console::info("$label...");
         } else {
-            fwrite(STDERR, "$label...");
-            fflush(STDERR);
+            fwrite(\STDERR, "$label...");
+            fflush(\STDERR);
         }
 
         [$code, $output] = self::run($command, $cwd, $keepOutput);
@@ -516,14 +516,14 @@ final class ProcessRunner
             if ($keepOutput) {
                 Console::info("$label... done");
             } else {
-                fwrite(STDERR, " done\n");
-                fflush(STDERR);
+                fwrite(\STDERR, " done\n");
+                fflush(\STDERR);
             }
             return [$code, $output];
         }
 
         if (!$keepOutput) {
-            fwrite(STDERR, "\n");
+            fwrite(\STDERR, "\n");
             Console::info('$ ' . self::commandLine($command));
             self::writeBufferedOutput($output);
         }
@@ -575,9 +575,9 @@ final class ProcessRunner
         }
 
         $atLineStart = true;
-        self::writeOutput(STDERR, $output, $atLineStart);
+        self::writeOutput(\STDERR, $output, $atLineStart);
         if (!$atLineStart) {
-            fwrite(STDERR, "\n");
+            fwrite(\STDERR, "\n");
         }
     }
 }
@@ -640,7 +640,7 @@ final class Environment
 
     public static function checkPhpVersion(): string
     {
-        $version = PHP_VERSION;
+        $version = \PHP_VERSION;
         if (version_compare($version, MIN_PHP_VERSION, '<')) {
             Console::fail("Unsupported PHP version $version. Expected >= " . MIN_PHP_VERSION . '.');
         }
@@ -886,7 +886,7 @@ final class ProjectInstaller
     ): void {
         ProcessRunner::runStep(
             'generating arginfo',
-            [PHP_BINARY, $localGenStub, $ext . '.stub.php'],
+            [\PHP_BINARY, $localGenStub, $ext . '.stub.php'],
             $targetDir,
             $keepCommandOutput,
             true,

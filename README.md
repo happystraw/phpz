@@ -28,10 +28,15 @@ Generate a PHP extension skeleton:
 
 ```bash
 # Generate a new PHP extension skeleton
+# PHP >= 8.3:
 curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php \
   | php -- --ext my_php_extension
 
-# Run tests
+# PHP 8.2:
+curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php
+php phpz_skel.php --ext my_php_extension
+
+# Run tests (Optional)
 cd my_php_extension
 zig build run-tests
 ```
