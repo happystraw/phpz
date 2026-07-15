@@ -11,9 +11,10 @@
 
 const std = @import("std");
 
+const c = @import("c.zig").c;
+const errors = @import("errors.zig");
 const function_helper = @import("function.zig");
-const phpz = @import("root.zig");
-const c = phpz.c;
+const globals = @import("globals.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
 
@@ -145,8 +146,9 @@ pub const ObjectHandlers = struct {
 /// ```
 pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     comptime {
-        if (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".layout != .@"extern")
-            @compileError("Class type T must be an extern struct");
+        if (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".layout != .@"extern" or @sizeOf(T) == 0) {
+            @compileError("T must be a non-empty extern struct");
+        }
     }
     return extern struct {
         /// The wrapped Zig data structure
@@ -234,7 +236,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// }
         /// ```
         pub fn register() void {
-            handlers = phpz.globals.global(.value, c.zend_object_handlers, "std_object_handlers");
+            handlers = globals.global(.value, c.zend_object_handlers, "std_object_handlers");
             handlers.free_obj = &deinit;
             handlers.offset = @offsetOf(Self, "std");
 
@@ -431,10 +433,10 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             return instance;
         }
 
-        /// Update object property value.
+        /// Set object property value.
         ///
         /// Returns `error.PhpException` if a magic `__set` handler throws.
-        pub fn updateProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) zend.Function.Error!void {
+        pub fn setProperty(self: *Self, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) zend.Function.Error!void {
             const ce = entry.ptr();
             switch (zk) {
                 .null => c.zend_update_property_null(ce, &self.std, prop_name.ptr, prop_name.len),
@@ -449,7 +451,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
                     c.zend_update_property(ce, &self.std, prop_name.ptr, prop_name.len, &zv);
                 },
             }
-            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
+            if (errors.hasException()) return error.PhpException;
         }
 
         /// Read object property.
@@ -464,7 +466,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// longer IS_UNDEF after the call, destroy it when done.
         pub fn property(self: *Self, prop_name: []const u8, silent: bool, scratch: *c.zval) zend.Function.Error!*Zval {
             const val = c.zend_read_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len, silent, scratch);
-            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
+            if (errors.hasException()) return error.PhpException;
             return .from(val);
         }
 
@@ -473,7 +475,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// Returns `error.PhpException` if a magic `__unset` handler throws.
         pub fn unsetProperty(self: *Self, prop_name: []const u8) zend.Function.Error!void {
             c.zend_unset_property(entry.ptr(), &self.std, prop_name.ptr, prop_name.len);
-            if (phpz.errors.hasException()) return zend.Function.Error.PhpException;
+            if (errors.hasException()) return error.PhpException;
         }
     };
 }
@@ -511,7 +513,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 ///
 /// // Throw the exception
 /// pub fn throw(message: [:0]const u8) void {
-///     _ = phpz.errors.throwException(MyException.entry, message, 0);
+///     _ = errors.throwException(MyException.entry, message, 0);
 /// }
 ///
 /// // Register during module initialization
@@ -520,6 +522,11 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
 /// }
 /// ```
 pub fn SimpleClass(comptime class_name: [:0]const u8, comptime T: type) type {
+    comptime {
+        if (T != void and (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".field_types.len > 0)) {
+            @compileError("T must be void or an empty struct (namespace struct)");
+        }
+    }
     return struct {
         /// The PHP class entry
         pub var entry: *zend.ClassEntry = undefined;
@@ -564,7 +571,7 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
     return result;
 }
 
-fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *phpz.ClassEntry {
+fn callRegisterClassFn(comptime class_name: [:0]const u8, comptime T: type) *zend.ClassEntry {
     const register_class_fn = @field(c, getRegisterClassFnName(class_name));
     return switch (T) {
         void => .from(@call(.auto, register_class_fn, .{})),

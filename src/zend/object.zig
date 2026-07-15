@@ -1,12 +1,12 @@
+const c = @import("../c.zig").c;
 const errors = @import("../errors.zig");
-const phpz = @import("../root.zig");
-const c = phpz.c;
-const globals = phpz.globals;
+const globals = @import("../globals.zig");
+const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
+const bailout = @import("bailout.zig");
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
-const bailout = @import("bailout.zig");
 
 pub const Object = opaque {
     pub const InitError = error{InitFailed};
@@ -137,8 +137,8 @@ pub const Object = opaque {
         return self.class().findMethod(method_name);
     }
 
-    /// Property read fetch mode, passed to `readProperty`.
-    pub const PropertyRead = enum(c_int) {
+    /// Property read fetch mode, passed to `readStdProperty`.
+    pub const StdPropertyReadMode = enum(c_int) {
         /// Normal read: `$obj->prop`.
         read = c.BP_VAR_R,
         /// Read for `isset()` / `empty()` style checks.
@@ -162,10 +162,10 @@ pub const Object = opaque {
     /// directly; use `Zval.raw.tryRelease(scratch)` for scratch cleanup.
     ///
     /// Returns `error.PhpException` if a magic `__get` handler throws.
-    pub fn readProperty(
+    pub fn readStdProperty(
         self: *Object,
         name: []const u8,
-        comptime read: PropertyRead,
+        comptime read: StdPropertyReadMode,
         scratch: *c.zval,
     ) Function.Error!*c.zval {
         const zstr = String.init(name, false);
@@ -189,7 +189,7 @@ pub const Object = opaque {
     /// addref/copy it before calling. The returned pointer is borrowed.
     ///
     /// Returns `error.PhpException` if a magic `__set` handler throws.
-    pub fn writeProperty(
+    pub fn writeStdProperty(
         self: *Object,
         name: []const u8,
         value: *c.zval,
@@ -237,11 +237,61 @@ pub const Object = opaque {
     /// Unset a property.
     ///
     /// Returns `error.PhpException` if a magic `__unset` handler throws.
-    pub fn unsetProperty(self: *Object, name: []const u8) Function.Error!void {
+    pub fn unsetStdProperty(self: *Object, name: []const u8) Function.Error!void {
         const zstr = String.init(name, false);
         defer zstr.release();
 
         c.zend_std_unset_property(self.ptr(), zstr.ptr(), null);
+        if (errors.hasException()) return error.PhpException;
+    }
+
+    /// Set object property value.
+    ///
+    /// Returns `error.PhpException` if a magic `__set` handler throws.
+    pub fn setProperty(self: *Object, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) Function.Error!void {
+        const ce = self.class().ptr();
+        const obj = self.ptr();
+        switch (zk) {
+            .null => c.zend_update_property_null(ce, obj, prop_name.ptr, prop_name.len),
+            .bool => c.zend_update_property_bool(ce, obj, prop_name.ptr, prop_name.len, if (prop_value) 1 else 0),
+            .int => c.zend_update_property_long(ce, obj, prop_name.ptr, prop_name.len, prop_value),
+            .float => c.zend_update_property_double(ce, obj, prop_name.ptr, prop_name.len, prop_value),
+            .string => c.zend_update_property_stringl(ce, obj, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+            .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as object property"),
+            inline else => {
+                var zv: c.zval = undefined;
+                Zval.raw.set(&zv, zk, prop_value);
+                c.zend_update_property(ce, obj, prop_name.ptr, prop_name.len, &zv);
+            },
+        }
+        if (errors.hasException()) return error.PhpException;
+    }
+
+    /// Read object property.
+    ///
+    /// Ownership: returned pointer is either borrowed from the object/runtime
+    /// or points at caller-provided scratch. Never dtor the returned pointer
+    /// directly; use `Zval.raw.tryRelease(scratch)` for scratch cleanup.
+    ///
+    /// Returns `error.PhpException` if a magic `__get` handler throws.
+    ///
+    /// Initialize `scratch` to IS_UNDEF before calling. If `scratch` is no
+    /// longer IS_UNDEF after the call, destroy it when done.
+    pub fn property(self: *Object, prop_name: []const u8, silent: bool, scratch: *c.zval) Function.Error!*Zval {
+        const ce = self.class().ptr();
+        const obj = self.ptr();
+        const val = c.zend_read_property(ce, obj, prop_name.ptr, prop_name.len, silent, scratch);
+        if (errors.hasException()) return error.PhpException;
+        return .from(val);
+    }
+
+    /// Unset (delete) object property.
+    ///
+    /// Returns `error.PhpException` if a magic `__unset` handler throws.
+    pub fn unsetProperty(self: *Object, prop_name: []const u8) Function.Error!void {
+        const ce = self.class().ptr();
+        const obj = self.ptr();
+        c.zend_unset_property(ce, obj, prop_name.ptr, prop_name.len);
         if (errors.hasException()) return error.PhpException;
     }
 
