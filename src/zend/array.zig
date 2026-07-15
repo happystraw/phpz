@@ -218,11 +218,13 @@ pub const Array = opaque {
         c.zend_hash_apply_with_argument(self.ptr(), Cb.cb, arg);
     }
 
+    pub const SortOrder = enum(c_int) { less = -1, equal = 0, greater = 1 };
+
     /// Sort the array in-place with a custom compare function and optional renumbering.
-    pub fn sort(self: *Array, compare_fn: fn (*c.zval, *c.zval) c_int, renumber: bool) void {
+    pub fn sort(self: *Array, compare_fn: fn (*c.Bucket, *c.Bucket) SortOrder, renumber: bool) void {
         const Cb = struct {
             fn cb(a: ?*c.Bucket, b: ?*c.Bucket) callconv(.c) c_int {
-                return compare_fn(&a.?.val, &b.?.val);
+                return @intFromEnum(compare_fn(a.?, b.?));
             }
         };
         c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
