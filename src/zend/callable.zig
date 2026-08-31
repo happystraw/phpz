@@ -8,14 +8,17 @@ const bailout = @import("bailout.zig");
 
 /// Parsed callable ready for invocation.
 ///
-/// Typically obtained via `ctx.call.parseArgs("f", .{&callable.fci, &callable.fcc})`.
+/// Typically resolved through `ctx.call.expectArgs`.
 ///
 /// ```zig
-/// var cb: Callable = undefined;
-/// try ctx.call.parseArgs("f", .{ &cb.fci, &cb.fcc });
+/// var cb: Callable = .nil;
+/// _ = try ctx.call.expectArgs(
+///     &.{.{ .callable = .{ .resolve = true } }},
+///     .{.{ .target = &cb }},
+/// );
 /// try cb.call(.{ arg1 });
 /// ```
-pub const Callable = extern struct {
+pub const Callable = struct {
     /// Call info: function name, params, retval pointer.
     fci: c.zend_fcall_info,
     /// Cache: resolved function handler, scope, object.

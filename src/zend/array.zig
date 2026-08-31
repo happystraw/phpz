@@ -288,13 +288,13 @@ pub const Array = opaque {
     ) void {
         const ht = self.ptr();
         const count = ht.nNumUsed;
-        const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var el: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
+        const stride: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
+        var cursor: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
 
         var i: u32 = 0;
         while (i < count) : (i += 1) {
-            const zv: *c.zval = @ptrCast(@alignCast(el));
-            el += el_size;
+            const zv: *c.zval = @ptrCast(@alignCast(cursor));
+            cursor += stride;
 
             // IS_UNDEF check in same scope as body → compiler can eliminate redundancy
             if (Zval.raw.is(zv, .undef)) {
@@ -337,16 +337,16 @@ pub const Array = opaque {
         const ht = self.ptr();
         const count = ht.nNumUsed;
         const is_packed = (ht.u.flags & c.HASH_FLAG_PACKED) != 0;
-        const el_size: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var el: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
+        const stride: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
+        var cursor: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
 
         if (is_packed) {
             // Packed
             var idx: u32 = 0;
             var i: u32 = 0;
             while (i < count) : (i += 1) {
-                const zv: *c.zval = @ptrCast(@alignCast(el));
-                el += el_size;
+                const zv: *c.zval = @ptrCast(@alignCast(cursor));
+                cursor += stride;
                 const key: Key = .{ .int = @as(isize, @intCast(idx)) };
                 idx += 1;
                 if (Zval.raw.is(zv, .undef)) {
@@ -363,9 +363,9 @@ pub const Array = opaque {
             // Hash
             var i: u32 = 0;
             while (i < count) : (i += 1) {
-                const bucket: *c.Bucket = @ptrCast(@alignCast(el));
+                const bucket: *c.Bucket = @ptrCast(@alignCast(cursor));
                 const zv: *c.zval = &bucket.val;
-                el += el_size;
+                cursor += stride;
                 const key: Key = if (bucket.key) |k|
                     .{ .string = k.*.val()[0..k.*.len] }
                 else
@@ -383,7 +383,7 @@ pub const Array = opaque {
         }
     }
 
-    pub const Iterator = extern struct {
+    pub const Iterator = struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -468,7 +468,7 @@ pub const Array = opaque {
         }
     };
 
-    pub const KeyIterator = extern struct {
+    pub const KeyIterator = struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -525,7 +525,7 @@ pub const Array = opaque {
         }
     };
 
-    pub const ValueIterator = extern struct {
+    pub const ValueIterator = struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
 
@@ -576,12 +576,13 @@ pub const Array = opaque {
         }
     };
 
-    /// Fast value-only iterator that walks the raw bucket array directly.
+    /// Fast value-only iterator that walks the raw HashTable element storage directly.
     /// Zero C function calls — same performance as `eachValue`.
     /// Automatically skips IS_UNDEF slots.
-    pub const FastValueIterator = extern struct {
-        el: [*]u8,
-        el_size: usize,
+    /// Do not structurally modify the HashTable while this iterator is in use.
+    pub const FastValueIterator = struct {
+        cursor: [*]u8,
+        stride: usize,
         pos: u32,
         count: u32,
 
@@ -589,8 +590,8 @@ pub const Array = opaque {
         pub fn init(array: *Array) FastValueIterator {
             const ht = array.ptr();
             return .{
-                .el = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
-                .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
+                .cursor = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
+                .stride = c.ZEND_HASH_ELEMENT_SIZE(ht),
                 .pos = 0,
                 .count = ht.nNumUsed,
             };
@@ -598,7 +599,7 @@ pub const Array = opaque {
 
         /// Reset to the beginning of the array.
         pub fn reset(self: *FastValueIterator) void {
-            self.el = @ptrCast(self.el - self.pos * self.el_size);
+            self.cursor = @ptrCast(self.cursor - self.pos * self.stride);
             self.pos = 0;
         }
 
@@ -608,8 +609,8 @@ pub const Array = opaque {
         /// Automatically skips IS_UNDEF slots.
         pub inline fn next(self: *FastValueIterator) ?*c.zval {
             while (self.pos < self.count) {
-                const zv: *c.zval = @ptrCast(@alignCast(self.el));
-                self.el += self.el_size;
+                const zv: *c.zval = @ptrCast(@alignCast(self.cursor));
+                self.cursor += self.stride;
                 self.pos += 1;
                 if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
@@ -625,10 +626,10 @@ pub const Array = opaque {
         /// Ownership: borrowed zval pointer owned by the array.
         pub fn current(self: *FastValueIterator) ?*c.zval {
             var p = self.pos;
-            var e = self.el;
+            var cursor = self.cursor;
             while (p < self.count) {
-                const zv: *c.zval = @ptrCast(@alignCast(e));
-                e += self.el_size;
+                const zv: *c.zval = @ptrCast(@alignCast(cursor));
+                cursor += self.stride;
                 p += 1;
                 if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
@@ -640,12 +641,13 @@ pub const Array = opaque {
         }
     };
 
-    /// Fast key+value iterator that walks the raw bucket array directly.
+    /// Fast key+value iterator that walks the raw HashTable element storage directly.
     /// Zero C function calls — same performance as `each`.
     /// Extracts keys inline and automatically skips IS_UNDEF slots.
-    pub const FastIterator = extern struct {
-        el: [*]u8,
-        el_size: usize,
+    /// Do not structurally modify the HashTable while this iterator is in use.
+    pub const FastIterator = struct {
+        cursor: [*]u8,
+        stride: usize,
         pos: u32,
         count: u32,
         idx: u32,
@@ -655,8 +657,8 @@ pub const Array = opaque {
         pub fn init(array: *Array) FastIterator {
             const ht = array.ptr();
             return .{
-                .el = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
-                .el_size = c.ZEND_HASH_ELEMENT_SIZE(ht),
+                .cursor = @ptrCast(c.phpz_hash_table_get_ar_packed(ht)),
+                .stride = c.ZEND_HASH_ELEMENT_SIZE(ht),
                 .pos = 0,
                 .count = ht.nNumUsed,
                 .idx = 0,
@@ -666,7 +668,7 @@ pub const Array = opaque {
 
         /// Reset to the beginning of the array.
         pub fn reset(self: *FastIterator) void {
-            self.el = @ptrCast(self.el - self.pos * self.el_size);
+            self.cursor = @ptrCast(self.cursor - self.pos * self.stride);
             self.pos = 0;
             self.idx = 0;
         }
@@ -678,8 +680,8 @@ pub const Array = opaque {
         pub inline fn next(self: *FastIterator) ?Entry {
             if (self.is_packed) {
                 while (self.pos < self.count) {
-                    const zv: *c.zval = @ptrCast(@alignCast(self.el));
-                    self.el += self.el_size;
+                    const zv: *c.zval = @ptrCast(@alignCast(self.cursor));
+                    self.cursor += self.stride;
                     self.pos += 1;
                     const key: Key = .{ .int = @as(isize, @intCast(self.idx)) };
                     self.idx += 1;
@@ -691,9 +693,9 @@ pub const Array = opaque {
                 }
             } else {
                 while (self.pos < self.count) {
-                    const bucket: *c.Bucket = @ptrCast(@alignCast(self.el));
+                    const bucket: *c.Bucket = @ptrCast(@alignCast(self.cursor));
                     const zv: *c.zval = &bucket.val;
-                    self.el += self.el_size;
+                    self.cursor += self.stride;
                     self.pos += 1;
                     const key: Key = if (bucket.key) |k|
                         .{ .string = k.*.val()[0..k.*.len] }
@@ -714,12 +716,12 @@ pub const Array = opaque {
         /// Ownership: borrowed key/value owned by the array.
         pub fn current(self: *FastIterator) ?Entry {
             var p = self.pos;
-            var e = self.el;
+            var cursor = self.cursor;
             var i = self.idx;
             if (self.is_packed) {
                 while (p < self.count) {
-                    const zv: *c.zval = @ptrCast(@alignCast(e));
-                    e += self.el_size;
+                    const zv: *c.zval = @ptrCast(@alignCast(cursor));
+                    cursor += self.stride;
                     p += 1;
                     const key: Key = .{ .int = @as(isize, @intCast(i)) };
                     i += 1;
@@ -731,9 +733,9 @@ pub const Array = opaque {
                 }
             } else {
                 while (p < self.count) {
-                    const bucket: *c.Bucket = @ptrCast(@alignCast(e));
+                    const bucket: *c.Bucket = @ptrCast(@alignCast(cursor));
                     const zv: *c.zval = &bucket.val;
-                    e += self.el_size;
+                    cursor += self.stride;
                     p += 1;
                     const key: Key = if (bucket.key) |k|
                         .{ .string = k.*.val()[0..k.*.len] }
@@ -751,7 +753,7 @@ pub const Array = opaque {
     };
 
     pub fn PtrValueIterator(comptime T: type) type {
-        return extern struct {
+        return struct {
             ht: *c.HashTable,
             pos: c.HashPosition,
 
@@ -824,13 +826,13 @@ pub const Array = opaque {
         return ValueIterator.init(self);
     }
 
-    /// Create a fast key+value iterator that walks the raw bucket array.
+    /// Create a fast key+value iterator that walks the raw HashTable element storage.
     /// Zero C function calls — same performance as `each`.
     pub fn fastIterator(self: *Array) FastIterator {
         return FastIterator.init(self);
     }
 
-    /// Create a fast value-only iterator that walks the raw bucket array.
+    /// Create a fast value-only iterator that walks the raw HashTable element storage.
     /// Zero C function calls — same performance as `eachValue`.
     pub fn fastValueIterator(self: *Array) FastValueIterator {
         return FastValueIterator.init(self);
