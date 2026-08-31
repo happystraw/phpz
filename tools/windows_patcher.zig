@@ -162,7 +162,7 @@ const Patcher = struct {
 
         var changed = false;
         for (0..self.tree.nodes.len) |node_i| {
-            const node: std.zig.Ast.Node.Index = @enumFromInt(node_i);
+            const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(node_i));
             if (self.tree.nodeTag(node) != .address_of) continue;
             if (!self.nodeInTokenRanges(node, fn_body_ranges.items)) continue;
 
@@ -177,7 +177,7 @@ const Patcher = struct {
         }
 
         for (0..self.tree.nodes.len) |node_i| {
-            const node: std.zig.Ast.Node.Index = @enumFromInt(node_i);
+            const node: std.zig.Ast.Node.Index = @fromBackingInt(@intCast(node_i));
             if (self.tree.nodeTag(node) != .identifier) continue;
             // Its parent &identifier node already has a replacement; avoid overlapping fixups.
             if (addressed_identifiers.contains(node)) continue;

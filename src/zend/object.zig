@@ -174,7 +174,7 @@ pub const Object = opaque {
         const result = c.zend_std_read_property(
             self.ptr(),
             zstr.ptr(),
-            @intFromEnum(read),
+            @backingInt(read),
             null,
             scratch,
         );
@@ -229,7 +229,7 @@ pub const Object = opaque {
         const zstr = String.init(name, false);
         defer zstr.release();
 
-        const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @intFromEnum(check), null);
+        const result = c.zend_std_has_property(self.ptr(), zstr.ptr(), @backingInt(check), null);
         if (errors.hasException()) return error.PhpException;
         return result != 0;
     }

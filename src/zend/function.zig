@@ -13,7 +13,7 @@ pub const Function = opaque {
     pub const TryCallError = Error || bailout.Error;
 
     /// Function type classification.
-    pub const Kind = enum(@TypeOf(c.ZEND_INTERNAL_FUNCTION)) {
+    pub const Kind = enum(@FieldType(c.zend_function, "type")) {
         /// PHP internal function (written in C/Zig)
         internal = c.ZEND_INTERNAL_FUNCTION,
         /// PHP userland function (written in PHP)
@@ -53,7 +53,7 @@ pub const Function = opaque {
 
     /// Get the function type (internal vs userland).
     pub fn kind(self: *Function) Kind {
-        return @enumFromInt(self.ptr().*.type);
+        return @fromBackingInt(self.ptr().*.type);
     }
 
     /// Get the call context (function / static method / instance method).

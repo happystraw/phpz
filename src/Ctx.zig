@@ -326,7 +326,7 @@ pub const Call = opaque {
                         field_names[i] = @tagName(kind);
                         field_types[i] = kind.InnerType();
                         field_attrs[i] = .{};
-                        field_values[i] = @intFromEnum(kind);
+                        field_values[i] = @backingInt(kind);
                     }
 
                     const PhpUnionType = @Union(

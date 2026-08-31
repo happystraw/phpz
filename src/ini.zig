@@ -109,7 +109,7 @@ pub fn Typed(comptime T: type) type {
                         .displayer = null,
                         .value_length = @intCast(cfg.default_text.len),
                         .name_length = @intCast(cfg.name.len),
-                        .modifiable = @intFromEnum(cfg.access),
+                        .modifiable = @backingInt(cfg.access),
                     };
                 }
 
@@ -267,7 +267,7 @@ pub fn custom(
                 .displayer = null,
                 .value_length = @intCast(default_value.len),
                 .name_length = @intCast(name.len),
-                .modifiable = @intFromEnum(access),
+                .modifiable = @backingInt(access),
             };
         }
     };
@@ -428,9 +428,9 @@ fn alter(comptime name: [:0]const u8, value: []const u8, opts: SetOptions) SetEr
     defer c.zend_string_release(zname);
 
     const result = if (opts.force)
-        c.zend_alter_ini_entry_chars_ex(zname, value.ptr, value.len, @intFromEnum(opts.modify), @intFromEnum(opts.stage), 1)
+        c.zend_alter_ini_entry_chars_ex(zname, value.ptr, value.len, @backingInt(opts.modify), @backingInt(opts.stage), 1)
     else
-        c.zend_alter_ini_entry_chars(zname, value.ptr, value.len, @intFromEnum(opts.modify), @intFromEnum(opts.stage));
+        c.zend_alter_ini_entry_chars(zname, value.ptr, value.len, @backingInt(opts.modify), @backingInt(opts.stage));
     if (result != c.SUCCESS) return error.AlterIniFailed;
 }
 
@@ -480,7 +480,7 @@ test {
         .displayer = null,
         .value_length = 3,
         .name_length = 8,
-        .modifiable = @intFromEnum(Access.all),
+        .modifiable = @backingInt(Access.all),
     };
     _ = collect(.{ raw, &raw });
     _ = &unpackMhArgs;

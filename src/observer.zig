@@ -101,7 +101,7 @@ fn ErrorAdapter(comptime config: Error) type {
             error_line: u32,
             message: ?*c.zend_string,
         ) callconv(.c) void {
-            const level: errors.Level = @enumFromInt(error_type);
+            const level: errors.Level = @fromBackingInt(error_type);
             if (config.filter) |filter| {
                 if (!filter(level)) return;
             }

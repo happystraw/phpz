@@ -197,7 +197,7 @@ pub const Array = opaque {
     pub fn applyEach(self: *Array, apply_fn: fn (*c.zval) ApplyResult) void {
         const Cb = struct {
             fn cb(zv: ?*c.zval) callconv(.c) c_int {
-                return @intFromEnum(apply_fn(zv.?));
+                return @backingInt(apply_fn(zv.?));
             }
         };
         c.zend_hash_apply(self.ptr(), Cb.cb);
@@ -212,7 +212,7 @@ pub const Array = opaque {
     ) void {
         const Cb = struct {
             fn cb(zv: ?*c.zval, a: ?*anyopaque) callconv(.c) c_int {
-                return @intFromEnum(apply_fn(zv.?, @ptrCast(@alignCast(a.?))));
+                return @backingInt(apply_fn(zv.?, @ptrCast(@alignCast(a.?))));
             }
         };
         c.zend_hash_apply_with_argument(self.ptr(), Cb.cb, arg);
@@ -224,7 +224,7 @@ pub const Array = opaque {
     pub fn sort(self: *Array, compare_fn: fn (*c.Bucket, *c.Bucket) SortOrder, renumber: bool) void {
         const Cb = struct {
             fn cb(a: ?*c.Bucket, b: ?*c.Bucket) callconv(.c) c_int {
-                return @intFromEnum(compare_fn(a.?, b.?));
+                return @backingInt(compare_fn(a.?, b.?));
             }
         };
         c.zend_hash_sort(self.ptr(), Cb.cb, renumber);

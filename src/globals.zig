@@ -224,7 +224,7 @@ pub const PhpGlobals = opaque {
         }
 
         pub fn index(comptime self: HttpSuperglobal) usize {
-            return @intCast(@intFromEnum(self));
+            return @intCast(@backingInt(self));
         }
     };
 

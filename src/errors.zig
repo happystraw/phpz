@@ -41,7 +41,7 @@ pub const Level = enum(c_int) {
 
     /// Return whether this value contains any bit in `mask`.
     pub inline fn matches(self: Level, mask: c_int) bool {
-        return (@intFromEnum(self) & mask) != 0;
+        return (@backingInt(self) & mask) != 0;
     }
 
     /// Return whether this value contains a core error-level bit.
@@ -131,7 +131,7 @@ pub const clearException = c.zend_clear_exception;
 
 /// Trigger a PHP error
 pub inline fn err(level: Level, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.zend_error, .{ @intFromEnum(level), format.ptr } ++ args);
+    @call(.auto, c.zend_error, .{ @backingInt(level), format.ptr } ++ args);
 }
 
 /// Trigger a deprecation warning

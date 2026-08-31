@@ -7,7 +7,7 @@ const PropertyInfo = @import("property_info.zig").PropertyInfo;
 
 pub const ClassEntry = opaque {
     /// Enum backing type classification.
-    pub const EnumBackingType = enum(c_int) {
+    pub const EnumBackingType = enum(u32) {
         undef = c.IS_UNDEF,
         int = c.IS_LONG,
         string = c.IS_STRING,
@@ -118,7 +118,7 @@ pub const ClassEntry = opaque {
 
     /// Get the backing type of this enum class
     pub inline fn enumBackingType(self: *ClassEntry) EnumBackingType {
-        return @enumFromInt(self.ptr().*.enum_backing_type);
+        return @fromBackingInt(self.ptr().*.enum_backing_type);
     }
 
     /// Get an enum case object by name from this enum class
