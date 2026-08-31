@@ -1,4 +1,4 @@
-const Impl = extern struct {
+const Impl = struct {
     current_value: i64,
 
     /// PHP: MyPHPExt\Counter::__construct(int $value = 0): void

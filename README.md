@@ -14,7 +14,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Modules** — extension metadata, lifecycle hooks, phpinfo, INI, globals, observers, and exports.
 - **Stub integration** — arginfo, function entries, constants, attributes, class metadata, and arginfo checks.
 - **Functions and methods** — typed `Ctx` arguments, returns, nullable values, raw zvals, and PHP argument errors.
-- **Classes and OOP** — bind Zig `extern struct` lifecycles to PHP objects, with class entries, methods, inheritance, interfaces, enums, exceptions, and handlers.
+- **Classes and OOP** — bind Zig `struct` lifecycles to PHP objects, with class entries, methods, inheritance, interfaces, enums, exceptions, and handlers.
 - **Runtime state** — typed module globals, PHP/Zend globals, and superglobal access for NTS/ZTS builds.
 - **Zval and Zend APIs** — zval conversions, ownership helpers, arrays, strings, objects, callables, functions, and resources.
 - **INI, phpinfo, and errors** — typed INI values, phpinfo helpers, PHP errors, exceptions, and bailout-safe cleanup.
@@ -117,10 +117,10 @@ Check out the [`examples/`](./examples/) directory for complete working examples
 2. **Compile-time** — `phpz.function()` exports `zif_*` wrappers, `phpz.Class()` creates wrapper types, `phpz.module()` exports `get_module()` for the dynamic loader.
 3. **Runtime** — PHP loads `.so` → `get_module()`:
 
-   | What | Registered by | When | How |
-   | --- | --- | --- | --- |
-   | Functions | `ext_functions` | Module init | Auto: set in module entry struct |
-   | Constants | `register_{name}_symbols` | MINIT | Auto: called by `module_startup_func` |
-   | Classes | `register_class_*` | MINIT | Manual: `Class.register()` in `module_startup_fn` |
+   | What      | Registered by             | When        | How                                               |
+   | --------- | ------------------------- | ----------- | ------------------------------------------------- |
+   | Functions | `ext_functions`           | Module init | Auto: set in module entry struct                  |
+   | Constants | `register_{name}_symbols` | MINIT       | Auto: called by `module_startup_func`             |
+   | Classes   | `register_class_*`        | MINIT       | Manual: `Class.register()` in `module_startup_fn` |
 
    > Functions are resolved from the module entry when the extension loads; constants are registered during MINIT via the auto-generated `register_{name}_symbols`. Classes require an explicit `Class.register()` call in `module_startup_fn` — this gives you control over registration order and the opportunity to configure `ObjectHandlers` or parent classes.

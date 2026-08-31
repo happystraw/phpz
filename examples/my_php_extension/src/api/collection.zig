@@ -1,7 +1,7 @@
 const phpz = @import("phpz");
 const Zval = phpz.Zval;
 
-const Collection = extern struct {
+const Collection = struct {
     data: *phpz.zend.Array,
     iterator: phpz.zend.Array.Iterator,
 

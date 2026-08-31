@@ -5,7 +5,8 @@ const Alignment = std.mem.Alignment;
 const c = @import("root.zig").c;
 const zend = @import("zend.zig");
 
-/// A wrapper around the PHP Memory Manager API which supports the full `Allocator` interface.
+/// A wrapper around the PHP Memory Manager API which supports the full `Allocator` interface
+/// for alignments up to PHP's configured `ZEND_MM_ALIGNMENT`.
 ///
 /// This allocator delegates all memory operations to PHP's internal memory manager (`emalloc`,
 /// `erealloc`, `efree`), ensuring that allocations are tracked and managed within the PHP
@@ -40,8 +41,8 @@ const php_allocator_impl = struct {
 
     fn alloc(context: *anyopaque, len: usize, alignment: Alignment, return_address: usize) ?[*]u8 {
         _ = context;
-        // same as raw c allocator alignment
-        std.debug.assert(alignment.compare(.lte, .of(std.c.max_align_t)));
+        // Same as Zend MM allocator alignment.
+        std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
 
         const Context = struct {
             len: usize,
@@ -78,7 +79,8 @@ const php_allocator_impl = struct {
 
     fn remap(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) ?[*]u8 {
         _ = context;
-        _ = alignment;
+        // Same as Zend MM allocator alignment.
+        std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
 
         const Context = struct {
             memory: []u8,

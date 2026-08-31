@@ -2,8 +2,8 @@
 //!
 //! This module provides utilities for creating PHP classes from Zig types:
 //!
-//! - `Class`: Full-featured class wrapper with Zig data binding and lifecycle management
-//! - `SimpleClass`: Lightweight class and method registration without Zig data binding
+//! - `Class`: Full-featured class wrapper with Zig instance binding and lifecycle management
+//! - `SimpleClass`: Lightweight class and method registration without Zig instance binding
 //!
 //! Both functions generate class wrappers that integrate with PHP's object system,
 //! handling registration through auto-generated `register_class_*` functions from
@@ -62,6 +62,13 @@ pub const ObjectHandlers = struct {
     get_properties_for: c.zend_object_get_properties_for_t = null,
 };
 
+fn allFieldsHaveDefaults(comptime T: type) bool {
+    for (@typeInfo(T).@"struct".field_attrs) |attrs| {
+        if (attrs.default_value_ptr == null) return false;
+    }
+    return true;
+}
+
 /// Create a PHP class wrapper around a Zig type.
 ///
 /// This function generates a wrapper structure that bridges Zig code with PHP's
@@ -71,16 +78,17 @@ pub const ObjectHandlers = struct {
 /// The generated wrapper structure layout:
 /// ```
 /// extern struct {
-///     impl: T,               // Your Zig data structure
-///     std: zend_object,      // PHP object header (must be last field)
+///     storage: [@sizeOf(T)]u8 align(@alignOf(T)), // Storage for the Zig instance
+///     std: zend_object,                        // PHP object header (must be last field)
 /// }
 /// ```
 ///
 /// Parameters:
 ///   - class_name: PHP class name (supports namespaces with backslash, e.g., "MyExt\\Student")
-///   - T: The Zig type to wrap (your data structure)
+///   - T: A non-empty Zig struct whose alignment does not exceed `ZEND_MM_ALIGNMENT`
 ///
 /// Optional T declarations:
+///   - When every field has a default value, the instance is initialized with `.{}`.
 ///   - `init()`: Called after object allocation, before constructor.
 ///     Supported signatures: `fn(self: *T)` or `fn(self: *T, ce: *phpz.ClassEntry)`
 ///   - `deinit()`: Called during object destruction, before deallocation
@@ -88,13 +96,13 @@ pub const ObjectHandlers = struct {
 ///
 /// Example:
 /// ```zig
-/// const Student = extern struct {
-///     name: [*]u8,
-///     name_len: usize,
+/// const Student = struct {
+///     name: []const u8,
 ///     age: u8,
 ///
 ///     // Optional: Initialize default values
 ///     pub fn init(self: *Student) void {
+///         self.name = "";
 ///         self.age = 0;
 ///     }
 ///
@@ -103,7 +111,7 @@ pub const ObjectHandlers = struct {
 ///
 ///     // Optional: Clean up resources
 ///     pub fn deinit(self: *Student) void {
-///         // Free any allocated resources
+///         if (self.name.len != 0) phpz.heap.php_allocator.free(self.name);
 ///     }
 ///
 ///     // Optional: Custom registration (e.g., inherit from parent class)
@@ -112,20 +120,23 @@ pub const ObjectHandlers = struct {
 ///     }
 ///
 ///     pub fn construct(self: *Student, ctx: Ctx) !void {
-///         var name: []u8 = undefined;
-///         try ctx.call.parseArgs("s", .{ &name.ptr, &name.len });
-///         self.name = name.ptr;
-///         self.name_len = name.len;
+///         const args = try ctx.call.expectArgs(&.{
+///             .{ .string = .{} },
+///         }, {});
+///         const owned = try phpz.heap.php_allocator.dupe(u8, args[0]);
+///         if (self.name.len != 0) phpz.heap.php_allocator.free(self.name);
+///         self.name = owned;
 ///     }
 ///
 ///     pub fn getName(self: Student, ctx: Ctx) void {
-///         ctx.ret.set(.string, self.name[0..self.name_len]);
+///         ctx.ret.set(.string, self.name);
 ///     }
 ///
 ///     pub fn setAge(self: *Student, ctx: Ctx) !void {
-///         var age: i64 = undefined;
-///         try ctx.call.parseArgs("l", .{&age});
-///         self.age = @intCast(age);
+///         const args = try ctx.call.expectArgs(&.{
+///             .{ .int = .{} },
+///         }, {});
+///         self.age = @intCast(args[0]);
 ///     }
 /// };
 ///
@@ -146,18 +157,24 @@ pub const ObjectHandlers = struct {
 /// ```
 pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     comptime {
-        if (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".layout != .@"extern" or @sizeOf(T) == 0) {
-            @compileError("T must be a non-empty extern struct");
+        if (@typeInfo(T) != .@"struct" or @sizeOf(T) == 0) {
+            @compileError("T must be a non-empty struct");
+        }
+        if (@alignOf(T) > c.ZEND_MM_ALIGNMENT) {
+            @compileError("T alignment exceeds Zend MM alignment");
         }
     }
     return extern struct {
-        /// The wrapped Zig data structure
-        impl: T,
+        /// Storage for the Zig instance.
+        storage: [@sizeOf(T)]u8 align(@alignOf(T)),
 
         /// PHP object header (must be the last field for proper memory layout)
         std: c.zend_object,
 
         const Self = @This();
+
+        /// Zig instance type stored in each PHP object.
+        pub const Instance = T;
 
         /// The PHP class entry
         pub var entry: *zend.ClassEntry = undefined;
@@ -171,23 +188,27 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// This function:
         /// 1. Allocates memory for the object
         /// 2. Initializes the PHP object header
-        /// 3. Calls T.init() if defined (supports `fn(self: *T)` or
+        /// 3. Applies field defaults with `.{}` when every field has a default value
+        /// 4. Calls T.init() if defined (supports `fn(self: *T)` or
         ///    `fn(self: *T, ce: *phpz.ClassEntry)`)
-        /// 4. Sets up object handlers
+        /// 5. Sets up object handlers
         ///
         /// Note: This is an internal function called by PHP's object system.
         fn init(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
             var intern: *Self = @ptrCast(@alignCast(c.zend_object_alloc(@sizeOf(Self), ce.?)));
             c.zend_object_std_init(&intern.std, ce);
             c.object_properties_init(&intern.std, ce);
+            if (comptime allFieldsHaveDefaults(T)) {
+                intern.instance().* = .{};
+            }
             if (@hasDecl(T, "init")) {
                 if (comptime @typeInfo(@TypeOf(T.init)).@"fn".param_types.len == 1) {
-                    intern.impl.init();
+                    intern.instance().init();
                 } else {
                     comptime {
                         if (@typeInfo(@TypeOf(T.init)).@"fn".param_types.len != 2) @compileError("T.init must take 1 or 2 parameters");
                     }
-                    intern.impl.init(entry);
+                    intern.instance().init(entry);
                 }
             }
             intern.std.handlers = &handlers;
@@ -204,7 +225,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// Note: This is an internal function called by PHP's garbage collector.
         fn deinit(obj: ?*c.zend_object) callconv(.c) void {
             var intern: *Self = .from(.std, obj.?);
-            if (@hasDecl(T, "deinit")) intern.impl.deinit();
+            if (@hasDecl(T, "deinit")) intern.instance().deinit();
             c.zend_object_std_dtor(obj);
         }
 
@@ -248,21 +269,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Only non-null fields override the current handler entries.
         /// Call from `T.register` — the class wrapper type is accessible in
-        /// the same scope as the impl struct.
-        ///
-        /// Example:
-        /// ```zig
-        /// const User = extern struct {
-        ///     pub fn register(impl: anytype) *phpz.ClassEntry {
-        ///         Class.setObjectHandlers(.{ .clone_obj = &myClone });
-        ///         return .from(impl(phpz.globals.class.entry("Stringable")));
-        ///     }
-        ///     fn myClone(self: *User) ?*c.zend_object {
-        ///         // Custom clone implementation
-        ///     }
-        /// };
-        /// pub const Class = phpz.Class("User", User);
-        /// ```
+        /// the same scope as the Zig instance type.
         pub fn setObjectHandlers(comptime hs: ObjectHandlers) void {
             inline for (@typeInfo(ObjectHandlers).@"struct".field_names) |field_name| {
                 const fv = @field(hs, field_name);
@@ -286,7 +293,7 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///   - "__get", "__set": Property accessors for dynamic properties
         ///   - Other PHP magic methods are supported
         ///
-        /// Supported method signatures (T is the impl type):
+        /// Supported method signatures (T is the Zig instance type):
         ///   Object methods — first parameter is self (T, *T, or *const T):
         ///   - `fn (T|*T|*const T, Ctx) void|!void`
         ///   - `fn (T|*T|*const T) void|!void`
@@ -296,14 +303,26 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///
         /// Example:
         /// ```zig
-        /// const Student = extern struct {
+        /// const Student = struct {
         ///     name: []const u8,
         ///     age: u8,
         ///
+        ///     pub fn init(self: *Student) void {
+        ///         self.name = "";
+        ///         self.age = 0;
+        ///     }
+        ///
+        ///     pub fn deinit(self: *Student) void {
+        ///         if (self.name.len != 0) phpz.heap.php_allocator.free(self.name);
+        ///     }
+        ///
         ///     pub fn construct(self: *Student, ctx: Ctx) !void {
-        ///         var name: []u8 = undefined;
-        ///         try ctx.call.parseArgs("s", .{ &name.ptr, &name.len });
-        ///         self.name = name;
+        ///         const args = try ctx.call.expectArgs(&.{
+        ///             .{ .string = .{} },
+        ///         }, {});
+        ///         const owned = try phpz.heap.php_allocator.dupe(u8, args[0]);
+        ///         if (self.name.len != 0) phpz.heap.php_allocator.free(self.name);
+        ///         self.name = owned;
         ///     }
         ///
         ///     pub fn getName(self: Student, ctx: Ctx) void {
@@ -311,9 +330,10 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///     }
         ///
         ///     pub fn setAge(self: *Student, ctx: Ctx) !void {
-        ///         var age: i64 = undefined;
-        ///         try ctx.call.parseArgs("l", .{&age});
-        ///         self.age = @intCast(age);
+        ///         const args = try ctx.call.expectArgs(&.{
+        ///             .{ .int = .{} },
+        ///         }, {});
+        ///         self.age = @intCast(args[0]);
         ///     }
         /// };
         ///
@@ -325,8 +345,13 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         ///     StudentClass.method("setAge", .setAge);
         /// }
         /// ```
-        pub fn method(comptime func_name: [:0]const u8, comptime func_decl: std.meta.DeclEnum(T)) void {
-            function_helper.methodWithClass(Self, class_name, func_name, @field(T, @tagName(func_decl)));
+        pub fn method(comptime func_name: [:0]const u8, comptime func_decl: std.meta.DeclEnum(Instance)) void {
+            function_helper.methodWithClass(Self, class_name, func_name, @field(Instance, @tagName(func_decl)));
+        }
+
+        /// Returns the Zig instance stored in this PHP object.
+        pub inline fn instance(self: *Self) *Instance {
+            return @ptrCast(@alignCast(&self.storage));
         }
 
         /// Increments the reference count of the object.
@@ -344,15 +369,22 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
             zend.Object.release(.from(&self.std));
         }
 
-        /// Retrieves the parent struct pointer from a field pointer.
-        pub fn from(comptime field: std.meta.FieldEnum(Self), field_ptr: *@FieldType(Self, @tagName(field))) *Self {
-            return @fieldParentPtr(
-                @tagName(field),
-                @as(
-                    *align(@alignOf(Self)) @FieldType(Self, @tagName(field)),
-                    @alignCast(field_ptr),
+        /// Retrieves the PHP object wrapper from its Zend object or Zig instance.
+        /// The `.instance` pointer must originate from `instance()` on the same object.
+        pub inline fn from(
+            comptime field: enum { std, instance },
+            field_ptr: switch (field) {
+                .std => *c.zend_object,
+                .instance => *Instance,
+            },
+        ) *Self {
+            return switch (field) {
+                .std => @fieldParentPtr("std", field_ptr),
+                .instance => @fieldParentPtr(
+                    "storage",
+                    @as(*align(@alignOf(Self)) [@sizeOf(T)]u8, @ptrCast(@alignCast(field_ptr))),
                 ),
-            );
+            };
         }
 
         /// Creates an instance of the class from a Zval.Object.
@@ -419,18 +451,18 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
         /// Returns `error.AccessDenied` if the constructor is inaccessible.
         /// Returns `error.PhpException` if the constructor throws a PHP exception.
         pub fn new(params: anytype) ConstructError!*Self {
-            const instance = create();
-            errdefer instance.release();
-            try instance.construct(params);
-            return instance;
+            const obj = create();
+            errdefer obj.release();
+            try obj.construct(params);
+            return obj;
         }
 
         /// Create a new instance, call its constructor, and convert a Zend bailout into `error.ZendBailout`.
         pub fn tryNew(params: anytype) TryConstructError!*Self {
-            const instance = create();
-            errdefer instance.release();
-            try instance.tryConstruct(params);
-            return instance;
+            const obj = create();
+            errdefer obj.release();
+            try obj.tryConstruct(params);
+            return obj;
         }
 
         /// Set object property value.
@@ -480,11 +512,25 @@ pub fn Class(comptime class_name: [:0]const u8, comptime T: type) type {
     };
 }
 
-/// Create a simple PHP class without Zig data binding.
+test "detect whether all struct fields have defaults" {
+    const AllDefaults = struct {
+        number: usize = 1,
+        name: []const u8 = "default",
+    };
+    const PartialDefaults = struct {
+        number: usize = 1,
+        name: []const u8,
+    };
+
+    try std.testing.expect(allFieldsHaveDefaults(AllDefaults));
+    try std.testing.expect(!allFieldsHaveDefaults(PartialDefaults));
+}
+
+/// Create a simple PHP class without Zig instance binding.
 ///
 /// This function creates a lightweight PHP class wrapper for class and method
 /// registration. Unlike `Class`, it does not manage object lifecycle or bind
-/// Zig data structures. The internal implementation is handled by PHP's native
+/// Zig instances. The internal implementation is handled by PHP's native
 /// object system.
 ///
 /// Use cases:
@@ -562,9 +608,13 @@ fn getRegisterClassFnName(comptime class_name: [:0]const u8) [:0]const u8 {
             \\ class register function not found:
         ++ result ++
             \\
-            \\ You need to generate arginfo header file and include it in your C code:
-            \\ 1. Generate the arginfo header: php build/gen_stub.php your_extension.stub.php
-            \\ 2. Include in your extension: #include "your_extension_arginfo.h"
+            \\ Class entry generation must be enabled in your stub file.
+            \\ 1. Add @generate-class-entries to the file-level docblock:
+            \\    /**
+            \\     * @generate-class-entries
+            \\     */
+            \\ 2. Regenerate the arginfo header: php build/gen_stub.php your_extension.stub.php
+            \\ 3. Include the generated header in your C code: #include "your_extension_arginfo.h"
         );
     }
 

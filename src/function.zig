@@ -79,9 +79,9 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
 
 /// Register a Zig function as a PHP class method with Class type.
 ///
-/// Accepts a Class type (returned by `class.Class()`) which enables automatic
-/// detection of static vs object methods based on the function signature.
-pub fn methodWithClass(comptime Class: anytype, comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
+/// Accepts a Class type returned by `class.Class()`, enabling automatic
+/// static/object method detection from the function signature.
+pub fn methodWithClass(comptime Class: type, comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
         exportFn(
             .method,
@@ -115,12 +115,12 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
 }
 
 fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime func: anytype) Fn {
+    const T = Class.Instance;
     const Args = std.meta.ArgsTuple(@TypeOf(func));
     const args_type_info = @typeInfo(Args).@"struct";
-    const impl_type = @FieldType(Class, "impl");
     const kind: enum { static, object } = comptime if (args_type_info.field_types.len > 0) blk: {
         const first = args_type_info.field_types[0];
-        break :blk if (first == impl_type or first == *impl_type or first == *const impl_type) .object else .static;
+        break :blk if (first == T or first == *T or first == *const T) .object else .static;
     } else .static;
     const impl_offset = comptime @intFromBool(kind == .object);
     return struct {
@@ -128,7 +128,8 @@ fn wrapMethod(comptime Class: type, comptime func_desc: [:0]const u8, comptime f
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const args: Args = (if (kind == .object) blk: {
                 const obj: *Class = .from(.std, ctx.call.thisObject().?.ptr());
-                break :blk if (impl_type == args_type_info.field_types[0]) .{obj.impl} else .{&obj.impl};
+                const instance = obj.instance();
+                break :blk if (T == args_type_info.field_types[0]) .{instance.*} else .{instance};
             } else .{}) ++ rest: {
                 const rest_count = args_type_info.field_types.len - impl_offset;
                 break :rest if (rest_count == 1)

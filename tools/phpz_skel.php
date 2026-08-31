@@ -1305,7 +1305,7 @@ fn greet(ctx: phpz.Ctx) !void {
 // --- Classes ---
 
 /// class Counter
-pub const Counter = extern struct {
+pub const Counter = struct {
     n: i64,
 
     /// public function __construct(int $n = 0): void
