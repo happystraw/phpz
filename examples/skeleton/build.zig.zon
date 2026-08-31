@@ -2,7 +2,7 @@
     .name = .skeleton,
     .version = "0.0.0",
     .fingerprint = 0xddd8a92a8b2a4054,
-    .minimum_zig_version = "0.17.0-dev.1552+79dc16a0e",
+    .minimum_zig_version = "0.17.0-dev.1946+d813faaf0",
     .dependencies = .{
         .phpz = .{
             .path = "../..",

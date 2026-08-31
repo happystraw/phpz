@@ -98,7 +98,7 @@ pub fn Typed(comptime T: type) type {
                     return alter(cfg.name, new_value, opts);
                 }
 
-                fn iniDef() c.zend_ini_entry_def {
+                pub fn iniDef() c.zend_ini_entry_def {
                     return .{
                         .name = cfg.name,
                         .on_modify = @ptrCast(onModify(&value)),
