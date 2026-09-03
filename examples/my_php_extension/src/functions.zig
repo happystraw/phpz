@@ -4,12 +4,12 @@ const phpz = @import("phpz");
 const Zval = phpz.Zval;
 
 /// PHP: hello(): void
-fn hello() void {
+pub fn hello() void {
     _ = phpz.printf("Hello from ZIG!\n", .{});
 }
 
 /// PHP: greet(string $name): string
-fn greet(ctx: phpz.Ctx) !void {
+pub fn greet(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
     }, {});
@@ -20,7 +20,7 @@ fn greet(ctx: phpz.Ctx) !void {
 }
 
 /// PHP: MyPHPExt\increment(int &$value, int $by = 1): void
-fn increment(ctx: phpz.Ctx) !void {
+pub fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .reference = .{} },
         .{ .int = .{ .optional = true } },
@@ -33,7 +33,7 @@ fn increment(ctx: phpz.Ctx) !void {
 }
 
 /// PHP: MyPHPExt\mapValues(array $values, callable $mapper): array
-fn mapValues(ctx: phpz.Ctx) !void {
+pub fn mapValues(ctx: phpz.Ctx) !void {
     var mapper: phpz.zend.Callable = .nil;
     const values, _ = try ctx.call.expectArgs(
         &.{
@@ -58,11 +58,4 @@ fn mapValues(ctx: phpz.Ctx) !void {
             .int => |key| try result.setAt(.mixed, key, &mapped),
         }
     }
-}
-
-comptime {
-    phpz.function("hello", hello);
-    phpz.function("greet", greet);
-    phpz.function("MyPHPExt\\increment", increment);
-    phpz.function("MyPHPExt\\mapValues", mapValues);
 }

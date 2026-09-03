@@ -64,7 +64,7 @@ namespace MyPHPExt {
     }
 
     #[Tag("model", "Demonstrates properties, inheritance, enums, and attributes")]
-    final class User extends Entity implements \Stringable
+    class User extends Entity implements \Stringable
     {
         /** @var int */
         public const MIN_AGE = 0;
@@ -85,6 +85,7 @@ namespace MyPHPExt {
 
         public function label(): string {}
 
+        /** @alias MyPHPExt\User::label */
         public function __toString(): string {}
     }
 
@@ -106,7 +107,7 @@ namespace MyPHPExt {
         public static function dump(mixed ...$values): void {}
     }
 
-    final class Collection implements \ArrayAccess, \Countable, \Iterator
+    class Collection implements \ArrayAccess, \Countable, \Iterator
     {
         public function __construct(array $values = []) {}
 
@@ -133,7 +134,7 @@ namespace MyPHPExt {
         public function valid(): bool {}
     }
 
-    final class Config
+    class Config
     {
         public static function greeting(): string {}
 
@@ -144,10 +145,8 @@ namespace MyPHPExt {
         public static function mode(): string {}
     }
 
-    final class Metrics
+    class Metrics
     {
-        private function __construct() {}
-
         public static function snapshot(): array {}
 
         public static function reset(): void {}

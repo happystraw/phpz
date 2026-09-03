@@ -2,63 +2,56 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 
-// Create the PHP class wrapper for the Zig implementation.
-const CounterClass = phpz.Class("Counter", Counter);
-
-comptime {
-    // Bind Zig functions as methods of the PHP class wrapper.
-    CounterClass.method("__construct", .construct);
-    CounterClass.method("add", .add);
-    CounterClass.method("dec", .dec);
-    CounterClass.method("value", .value);
-}
-
 comptime {
     const extension = @import("extension_info");
 
-    // Export Zig functions as PHP global functions.
-    phpz.function("hello", hello);
-    phpz.function("greet", greet);
+    // Export every public function declared by functions.
+    phpz.functions(functions, .{});
 
     // Create and export the PHP module entry. Listed classes are registered during MINIT.
     phpz.module(.{
         .name = extension.name,
         .version = extension.version,
-        .classes = &.{CounterClass},
+        .classes = &.{
+            // Create the PHP class wrapper and export all public methods.
+            phpz.Class("Counter", Counter, .{}),
+        },
     });
 }
 
 // --- Functions ---
 
-/// function hello(): void
-fn hello() void {
-    _ = phpz.printf("Hello from Zig!\n", .{});
-}
+const functions = struct {
+    /// function hello(): void
+    pub fn hello() void {
+        _ = phpz.printf("Hello from Zig!\n", .{});
+    }
 
-/// function greet(string $name): string
-fn greet(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-    }, {});
-    const name = args[0];
+    /// function greet(string $name): string
+    pub fn greet(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .string = .{} },
+        }, {});
+        const name = args[0];
 
-    var buffer: [256]u8 = undefined;
-    const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
-    ctx.ret.set(.string, result);
-}
+        var buffer: [256]u8 = undefined;
+        const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
+        ctx.ret.set(.string, result);
+    }
+};
 
 // --- Classes ---
 
 /// class Counter
-pub const Counter = struct {
+const Counter = struct {
     n: i64,
 
     /// public function __construct(int $n = 0): void
-    pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
+    pub fn __construct(ctx: phpz.Ctx) !Counter {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{ .optional = true } },
         }, {});
-        self.n = args[0] orelse 0;
+        return .{ .n = args[0] orelse 0 };
     }
 
     /// public function add(int $n): void
@@ -78,7 +71,7 @@ pub const Counter = struct {
     }
 
     /// public function value(): int
-    pub fn value(self: Counter, ctx: phpz.Ctx) void {
+    pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
         ctx.ret.set(.int, self.n);
     }
 };

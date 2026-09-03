@@ -17,13 +17,14 @@ pub const zend = @import("zend.zig");
 
 const class_helper = @import("class.zig");
 pub const Class = class_helper.Class;
-pub const SimpleClass = class_helper.SimpleClass;
+pub const ClassDecl = class_helper.ClassDecl;
 pub const ObjectHandlers = class_helper.ObjectHandlers;
 pub const ClassEntry = zend.ClassEntry;
 
 const function_helper = @import("function.zig");
 pub const function = function_helper.function;
-pub const method = function_helper.method;
+pub const functions = function_helper.functions;
+pub const namedFunctions = function_helper.namedFunctions;
 
 pub const Ctx = @import("Ctx.zig");
 pub const Zval = @import("zval.zig").Zval;
@@ -44,6 +45,7 @@ test {
     _ = @import("info.zig");
     _ = @import("module.zig");
     _ = @import("observer.zig");
+    _ = @import("stub.zig");
     _ = @import("zend.zig");
     _ = @import("zval.zig");
     _ = @import("zend/array.zig");

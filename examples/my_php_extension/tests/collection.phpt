@@ -26,6 +26,10 @@ $copy = $collection->toArray();
 $copy["local"] = true;
 var_dump(isset($collection["local"]));
 
+$clone = clone $collection;
+$clone["a"] = 99;
+var_dump($collection["a"], $clone["a"]);
+
 ?>
 --EXPECT--
 array(2) {
@@ -64,3 +68,5 @@ array(3) {
   int(4)
 }
 bool(false)
+int(1)
+int(99)

@@ -36,6 +36,7 @@ pub const Config = struct {
 
     /// Typed module globals managed by PHP for the extension lifetime.
     /// In ZTS builds, each TSRM thread receives a separate instance.
+    /// The type must be a non-zero-sized struct that can be initialized with `.{}`.
     globals: ?type = null,
 
     /// Observer configuration for profiling, error monitoring, and exception tracking.
@@ -115,31 +116,6 @@ fn makePhpHookFn(comptime hook_fn: PhpHookFn) *const fn (c_int, c_int) callconv(
     }.handle;
 }
 
-fn checkModuleClass(comptime Class: type) void {
-    if (!@hasDecl(Class, "register")) {
-        @compileError(
-            "module .classes entry '" ++ @typeName(Class) ++ "' has no register() function; " ++
-                "pass the wrapper type returned by phpz.Class()/phpz.SimpleClass(), e.g. .classes = &.{ classes.user.Class }",
-        );
-    }
-
-    const register_info = @typeInfo(@TypeOf(Class.register));
-    if (register_info != .@"fn") {
-        @compileError(
-            "module .classes entry '" ++ @typeName(Class) ++ "' has a register declaration, but it is not a function; " ++
-                "expected pub fn register() void",
-        );
-    }
-
-    const fn_info = register_info.@"fn";
-    if (fn_info.param_types.len != 0 or fn_info.return_type.? != void) {
-        @compileError(
-            "module .classes entry '" ++ @typeName(Class) ++ "' register declaration must be pub fn register() void; " ++
-                "pass the phpz class wrapper type, not the implementation type",
-        );
-    }
-}
-
 fn makePhpModuleStartupFn(
     comptime module_name: [:0]const u8,
     comptime hook_fn: ?PhpHookFn,
@@ -164,8 +140,10 @@ fn makePhpModuleStartupFn(
             }
             if (comptime classes) |items| {
                 inline for (items) |Class| {
-                    checkModuleClass(Class);
-                    Class.register();
+                    Class.register() catch |err| {
+                        errors.err(.err, "Class registration failed: %s", .{@errorName(err).ptr});
+                        return c.FAILURE;
+                    };
                 }
             }
             if (comptime observer_cfg) |cfg| {
@@ -267,29 +245,6 @@ inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
     return entry;
 }
 
-fn checkModuleGlobalsHook(comptime T: type, comptime name: []const u8) void {
-    if (!@hasDecl(T, name)) return;
-
-    const hook_info = @typeInfo(@TypeOf(@field(T, name)));
-    if (hook_info != .@"fn") {
-        @compileError(@typeName(T) ++ "." ++ name ++ " must be a function");
-    }
-
-    const fn_info = hook_info.@"fn";
-    if (fn_info.param_types.len != 1) {
-        @compileError(@typeName(T) ++ "." ++ name ++ " must have the signature fn (*" ++ @typeName(T) ++ ") void");
-    }
-    const param_type = fn_info.param_types[0] orelse {
-        @compileError(@typeName(T) ++ "." ++ name ++ " must have a concrete receiver type");
-    };
-    const return_type = fn_info.return_type orelse {
-        @compileError(@typeName(T) ++ "." ++ name ++ " must have a concrete return type");
-    };
-    if (param_type != *T or return_type != void) {
-        @compileError(@typeName(T) ++ "." ++ name ++ " must have the signature fn (*" ++ @typeName(T) ++ ") void");
-    }
-}
-
 /// Creates a typed namespace for PHP module globals.
 ///
 /// The globals type must be a non-zero-sized struct whose fields can be
@@ -303,9 +258,6 @@ pub fn ModuleGlobals(comptime T: type) type {
         if (@sizeOf(T) == 0) {
             @compileError("phpz.ModuleGlobals does not support zero-sized globals");
         }
-        _ = @as(T, .{});
-        checkModuleGlobalsHook(T, "init");
-        checkModuleGlobalsHook(T, "deinit");
     }
 
     if (comptime c.USING_ZTS != 0) {

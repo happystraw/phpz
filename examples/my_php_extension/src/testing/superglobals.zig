@@ -2,7 +2,7 @@ const phpz = @import("phpz");
 const Zval = phpz.Zval;
 
 /// PHP: MyPHPExt\Test\superglobalsSnapshot(): array
-fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
+pub fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
     _ = try ctx.call.expectArgs(&.{}, {});
 
     const php = phpz.globals.php();
@@ -31,7 +31,7 @@ fn setBorrowed(result: *Zval.Array, key: []const u8, value: *Zval.Array) void {
 }
 
 /// PHP: MyPHPExt\Test\mutateSuperglobals(): void
-fn mutateSuperglobals(ctx: phpz.Ctx) !void {
+pub fn mutateSuperglobals(ctx: phpz.Ctx) !void {
     _ = try ctx.call.expectArgs(&.{}, {});
 
     const executor = phpz.globals.executor();
@@ -50,9 +50,4 @@ fn mutateSuperglobals(ctx: phpz.Ctx) !void {
     env.set(.string, "from_zig", "env");
     files.set(.string, "from_zig", "files");
     request.set(.string, "from_zig", "request");
-}
-
-comptime {
-    phpz.function("MyPHPExt\\Test\\superglobalsSnapshot", superglobalsSnapshot);
-    phpz.function("MyPHPExt\\Test\\mutateSuperglobals", mutateSuperglobals);
 }

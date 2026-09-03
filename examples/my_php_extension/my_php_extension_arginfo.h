@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: df4435a2cb93ec57d2b80b6029b1eb3c9ade2c2d */
+ * Stub hash: d4726857059b1672b200e18c755b083d3328a63e */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -119,9 +119,6 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Config_mode arginfo_class_MyPHPExt_Entity_label
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Metrics___construct, 0, 0, 0)
-ZEND_END_ARG_INFO()
-
 #define arginfo_class_MyPHPExt_Metrics_snapshot arginfo_MyPHPExt_Test_allocatorBailout
 
 #define arginfo_class_MyPHPExt_Metrics_reset arginfo_hello
@@ -138,7 +135,6 @@ ZEND_METHOD(MyPHPExt_Entity, __construct);
 ZEND_METHOD(MyPHPExt_Entity, getId);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, label);
-ZEND_METHOD(MyPHPExt_User, __toString);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, increment);
 ZEND_METHOD(MyPHPExt_Counter, decrement);
@@ -161,7 +157,6 @@ ZEND_METHOD(MyPHPExt_Config, greeting);
 ZEND_METHOD(MyPHPExt_Config, maxUsers);
 ZEND_METHOD(MyPHPExt_Config, debugEnabled);
 ZEND_METHOD(MyPHPExt_Config, mode);
-ZEND_METHOD(MyPHPExt_Metrics, __construct);
 ZEND_METHOD(MyPHPExt_Metrics, snapshot);
 ZEND_METHOD(MyPHPExt_Metrics, reset);
 
@@ -224,7 +219,11 @@ static const zend_function_entry class_MyPHPExt_Entity_methods[] = {
 static const zend_function_entry class_MyPHPExt_User_methods[] = {
 	ZEND_ME(MyPHPExt_User, __construct, arginfo_class_MyPHPExt_User___construct, ZEND_ACC_PUBLIC)
 	ZEND_ME(MyPHPExt_User, label, arginfo_class_MyPHPExt_User_label, ZEND_ACC_PUBLIC)
-	ZEND_ME(MyPHPExt_User, __toString, arginfo_class_MyPHPExt_User___toString, ZEND_ACC_PUBLIC)
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_User_label, arginfo_class_MyPHPExt_User___toString, ZEND_ACC_PUBLIC, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_User_label, arginfo_class_MyPHPExt_User___toString, ZEND_ACC_PUBLIC)
+#endif
 	ZEND_FE_END
 };
 
@@ -267,7 +266,6 @@ static const zend_function_entry class_MyPHPExt_Config_methods[] = {
 };
 
 static const zend_function_entry class_MyPHPExt_Metrics_methods[] = {
-	ZEND_ME(MyPHPExt_Metrics, __construct, arginfo_class_MyPHPExt_Metrics___construct, ZEND_ACC_PRIVATE)
 	ZEND_ME(MyPHPExt_Metrics, snapshot, arginfo_class_MyPHPExt_Metrics_snapshot, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(MyPHPExt_Metrics, reset, arginfo_class_MyPHPExt_Metrics_reset, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
@@ -334,7 +332,9 @@ static zend_class_entry *register_class_MyPHPExt_Tag(void)
 
 	zval property_name_default_value;
 	ZVAL_UNDEF(&property_name_default_value);
-	zend_declare_typed_property(class_entry, ZSTR_KNOWN(ZEND_STR_NAME), &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string *property_name_name = zend_string_init("name", sizeof("name") - 1, 1);
+	zend_declare_typed_property(class_entry, property_name_name, &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string_release(property_name_name);
 
 	zval property_description_default_value;
 	ZVAL_UNDEF(&property_description_default_value);
@@ -345,7 +345,9 @@ static zend_class_entry *register_class_MyPHPExt_Tag(void)
 	zend_string *attribute_name_Attribute_class_MyPHPExt_Tag_0 = zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
 	zend_attribute *attribute_Attribute_class_MyPHPExt_Tag_0 = zend_add_class_attribute(class_entry, attribute_name_Attribute_class_MyPHPExt_Tag_0, 1);
 	zend_string_release(attribute_name_Attribute_class_MyPHPExt_Tag_0);
-	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_Tag_0->args[0].value, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
+	zval attribute_Attribute_class_MyPHPExt_Tag_0_arg0;
+	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_Tag_0_arg0, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
+	ZVAL_COPY_VALUE(&attribute_Attribute_class_MyPHPExt_Tag_0->args[0].value, &attribute_Attribute_class_MyPHPExt_Tag_0_arg0);
 
 	return class_entry;
 }
@@ -372,8 +374,10 @@ static zend_class_entry *register_class_MyPHPExt_Entity(zend_class_entry *class_
 	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0, 1);
 	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0);
+	zval attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str = zend_string_init("entity", strlen("entity"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0, attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0->args[0].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0);
 
 	return class_entry;
 }
@@ -384,10 +388,9 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "User", class_MyPHPExt_User_methods);
 #if (PHP_VERSION_ID >= 80400)
-	class_entry = zend_register_internal_class_with_flags(&ce, class_entry_MyPHPExt_Entity, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, class_entry_MyPHPExt_Entity, 0);
 #else
 	class_entry = zend_register_internal_class_ex(&ce, class_entry_MyPHPExt_Entity);
-	class_entry->ce_flags |= ZEND_ACC_FINAL;
 #endif
 	zend_class_implements(class_entry, 1, class_entry_Stringable);
 
@@ -399,7 +402,9 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 
 	zval property_name_default_value;
 	ZVAL_UNDEF(&property_name_default_value);
-	zend_declare_typed_property(class_entry, ZSTR_KNOWN(ZEND_STR_NAME), &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string *property_name_name = zend_string_init("name", sizeof("name") - 1, 1);
+	zend_declare_typed_property(class_entry, property_name_name, &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string_release(property_name_name);
 
 	zval property_age_default_value;
 	ZVAL_UNDEF(&property_age_default_value);
@@ -424,17 +429,23 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0, 2);
 	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0);
+	zval attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str = zend_string_init("model", strlen("model"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[0].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0);
+	zval attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1;
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str = zend_string_init("Demonstrates properties, inheritance, enums, and attributes", strlen("Demonstrates properties, inheritance, enums, and attributes"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[1].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[1].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1);
 
 
 	zend_string *attribute_name_MyPHPExt_Tag_func___construct_arg0_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_func___construct_arg0_0 = zend_add_parameter_attribute(zend_hash_str_find_ptr(&class_entry->function_table, "__construct", sizeof("__construct") - 1), 0, attribute_name_MyPHPExt_Tag_func___construct_arg0_0, 1);
 	zend_string_release(attribute_name_MyPHPExt_Tag_func___construct_arg0_0);
+	zval attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str = zend_string_init("identifier", strlen("identifier"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
+	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, &attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0);
 
 	return class_entry;
 }
@@ -475,10 +486,9 @@ static zend_class_entry *register_class_MyPHPExt_Collection(zend_class_entry *cl
 
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Collection", class_MyPHPExt_Collection_methods);
 #if (PHP_VERSION_ID >= 80400)
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
 #else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
-	class_entry->ce_flags |= ZEND_ACC_FINAL;
 #endif
 	zend_class_implements(class_entry, 3, class_entry_ArrayAccess, class_entry_Countable, class_entry_Iterator);
 
@@ -491,10 +501,9 @@ static zend_class_entry *register_class_MyPHPExt_Config(void)
 
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Config", class_MyPHPExt_Config_methods);
 #if (PHP_VERSION_ID >= 80400)
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
 #else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
-	class_entry->ce_flags |= ZEND_ACC_FINAL;
 #endif
 
 	return class_entry;
@@ -506,10 +515,9 @@ static zend_class_entry *register_class_MyPHPExt_Metrics(void)
 
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Metrics", class_MyPHPExt_Metrics_methods);
 #if (PHP_VERSION_ID >= 80400)
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
 #else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
-	class_entry->ce_flags |= ZEND_ACC_FINAL;
 #endif
 
 	return class_entry;

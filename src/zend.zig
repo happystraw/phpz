@@ -5,6 +5,7 @@ pub const bailout = @import("zend/bailout.zig");
 pub const Callable = @import("zend/callable.zig").Callable;
 pub const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 pub const Function = @import("zend/function.zig").Function;
+pub const FunctionEntry = @import("zend/function_entry.zig").FunctionEntry;
 pub const Object = @import("zend/object.zig").Object;
 pub const PropertyInfo = @import("zend/property_info.zig").PropertyInfo;
 pub const Reference = @import("zend/reference.zig").Reference;

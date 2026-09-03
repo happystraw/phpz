@@ -1044,6 +1044,8 @@ const PHPZ_TEST_DIR_STRUCTURE_TEMPLATE = <<<'MD'
 MD;
 
 const PHPZ_GEN_STUB_REGEN_TEMPLATE = <<<'MD'
+## Regenerate arginfo
+
 After changing `{{EXT_NAME}}.stub.php`, regenerate `{{EXT_NAME}}_arginfo.h`:
 
 ```bash
@@ -1052,6 +1054,8 @@ php build/gen_stub.php {{EXT_NAME}}.stub.php
 MD;
 
 const PHPZ_GEN_STUB_MISSING_TEMPLATE = <<<'MD'
+## Regenerate arginfo
+
 Arginfo generation is not configured. To regenerate `{{EXT_NAME}}_arginfo.h` after changing `{{EXT_NAME}}.stub.php`,
 copy gen_stub.php to `build/gen_stub.php`, then run:
 
@@ -1062,6 +1066,11 @@ MD;
 
 const PHPZ_TEMPLATE_FILES = [
     '.gitignore' => <<<'TXT'
+/.vscode
+/.cursor
+/.idea
+/.claude
+/*.lua
 /build/
 /modules/
 /zig-out/
@@ -1081,7 +1090,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 {{PHPZ_PLATFORM_TARGET_CHECK}}
-
     // PHP build options.
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "{{PHP_INCLUDE_DIR}}";
 {{PHPZ_WINDOWS_BUILD_OPTIONS}}
@@ -1257,63 +1265,56 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 
-// Create the PHP class wrapper for the Zig implementation.
-const CounterClass = phpz.Class("Counter", Counter);
-
-comptime {
-    // Bind Zig functions as methods of the PHP class wrapper.
-    CounterClass.method("__construct", .construct);
-    CounterClass.method("add", .add);
-    CounterClass.method("dec", .dec);
-    CounterClass.method("value", .value);
-}
-
 comptime {
     const extension = @import("extension_info");
 
-    // Export Zig functions as PHP global functions.
-    phpz.function("hello", hello);
-    phpz.function("greet", greet);
+    // Export every public function declared by functions.
+    phpz.functions(functions, .{});
 
     // Create and export the PHP module entry. Listed classes are registered during MINIT.
     phpz.module(.{
         .name = extension.name,
         .version = extension.version,
-        .classes = &.{CounterClass},
+        .classes = &.{
+            // Create the PHP class wrapper and export all public methods.
+            phpz.Class("Counter", Counter, .{}),
+        },
     });
 }
 
 // --- Functions ---
 
-/// function hello(): void
-fn hello() void {
-    _ = phpz.printf("Hello from Zig!\n", .{});
-}
+const functions = struct {
+    /// function hello(): void
+    pub fn hello() void {
+        _ = phpz.printf("Hello from Zig!\n", .{});
+    }
 
-/// function greet(string $name): string
-fn greet(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-    }, {});
-    const name = args[0];
+    /// function greet(string $name): string
+    pub fn greet(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .string = .{} },
+        }, {});
+        const name = args[0];
 
-    var buffer: [256]u8 = undefined;
-    const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
-    ctx.ret.set(.string, result);
-}
+        var buffer: [256]u8 = undefined;
+        const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
+        ctx.ret.set(.string, result);
+    }
+};
 
 // --- Classes ---
 
 /// class Counter
-pub const Counter = struct {
+const Counter = struct {
     n: i64,
 
     /// public function __construct(int $n = 0): void
-    pub fn construct(self: *Counter, ctx: phpz.Ctx) !void {
+    pub fn __construct(ctx: phpz.Ctx) !Counter {
         const args = try ctx.call.expectArgs(&.{
             .{ .int = .{ .optional = true } },
         }, {});
-        self.n = args[0] orelse 0;
+        return .{ .n = args[0] orelse 0 };
     }
 
     /// public function add(int $n): void
@@ -1333,7 +1334,7 @@ pub const Counter = struct {
     }
 
     /// public function value(): int
-    pub fn value(self: Counter, ctx: phpz.Ctx) void {
+    pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
         ctx.ret.set(.int, self.n);
     }
 };
@@ -1442,7 +1443,7 @@ final class TemplateWriter
         $contents = str_replace('{{PHPZ_UNIX_MANUAL_COMMANDS}}', PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE, $contents);
         $contents = str_replace('{{PHPZ_WINDOWS_MANUAL_COMMANDS}}', PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE, $contents);
         $contents = str_replace('{{PHPZ_BUILD_ACTION}}', $hasRunTests ? 'Build and run PHPT tests' : 'Build', $contents);
-        $contents = str_replace('{{PHPZ_TEST_FILES_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_FILES_STRUCTURE_TEMPLATE : '', $contents);
+        $contents = str_replace('{{PHPZ_TEST_FILES_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_FILES_STRUCTURE_TEMPLATE . "\n" : '', $contents);
         $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_DIR_STRUCTURE_TEMPLATE : '', $contents);
         $contents = str_replace('{{PHPZ_SRC_TREE_ENTRY}}', $hasRunTests ? '├── src/' : '└── src/', $contents);
         $contents = str_replace(
@@ -1462,13 +1463,18 @@ final class TemplateWriter
             $hasGenStub ? PHPZ_GEN_STUB_REGEN_TEMPLATE : PHPZ_GEN_STUB_MISSING_TEMPLATE,
             $contents,
         );
-        $stub = TemplateVars::replace(PHPZ_TEMPLATE_FILES['{{EXT_NAME}}.stub.php'], $ext);
+        $stub = self::withFinalNewline(TemplateVars::replace(PHPZ_TEMPLATE_FILES['{{EXT_NAME}}.stub.php'], $ext));
         $contents = str_replace(
             '{{PHPZ_STUB_HASH}}',
             sha1(str_replace("\r\n", "\n", $stub)),
             $contents,
         );
         return TemplateVars::replace($contents, $ext);
+    }
+
+    private static function withFinalNewline(string $contents): string
+    {
+        return str_ends_with($contents, "\n") ? $contents : $contents . "\n";
     }
 
     /**
@@ -1501,12 +1507,10 @@ final class TemplateWriter
                 Console::fail("Refusing to overwrite $destPath");
             }
 
-            if (
-                file_put_contents(
-                    $destPath,
-                    self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows),
-                ) === false
-            ) {
+            $rendered = self::withFinalNewline(
+                self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows),
+            );
+            if (file_put_contents($destPath, $rendered) === false) {
                 Console::fail("Unable to write $destPath");
             }
             $written++;

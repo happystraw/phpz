@@ -22,7 +22,7 @@ fn exhaustPhpAllocator(scope_defer: *bool, cleanup_defer: *bool, freed_blocks: *
 }
 
 /// PHP: MyPHPExt\Test\allocatorBailout(): array
-fn allocatorBailout(ctx: phpz.Ctx) !void {
+pub fn allocatorBailout(ctx: phpz.Ctx) !void {
     _ = try ctx.call.expectArgs(&.{}, {});
 
     var scope_defer = false;
@@ -39,8 +39,4 @@ fn allocatorBailout(ctx: phpz.Ctx) !void {
     result.set(.bool, "scope_defer", scope_defer);
     result.set(.bool, "cleanup_defer", cleanup_defer);
     result.set(.bool, "freed_blocks", freed_blocks > 0);
-}
-
-comptime {
-    phpz.function("MyPHPExt\\Test\\allocatorBailout", allocatorBailout);
 }

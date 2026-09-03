@@ -3,7 +3,7 @@ const std = @import("std");
 const phpz = @import("phpz");
 
 /// PHP: MyPHPExt\Dumper::dump(mixed ...$values): void
-fn dump(ctx: phpz.Ctx) !void {
+pub fn dump(ctx: phpz.Ctx) !void {
     for (ctx.call.args()) |*zv| {
         dumpValue(.from(zv), 0);
     }
@@ -173,8 +173,6 @@ fn printPropertyVisibility(raw: []const u8) void {
     _ = phpz.printf("public $%.*s", .{ raw.len, raw.ptr });
 }
 
-pub const Class = phpz.SimpleClass("MyPHPExt\\Dumper", void);
-
-comptime {
-    Class.method("dump", dump);
-}
+pub const Class = phpz.ClassDecl("MyPHPExt\\Dumper", .{
+    .methods = .{ .dump = dump },
+});

@@ -5,37 +5,44 @@ const Collection = struct {
     data: *phpz.zend.Array,
     iterator: phpz.zend.Array.Iterator,
 
-    pub fn register(impl: anytype) *phpz.ClassEntry {
-        return .from(impl(
+    fn register(register_fn: anytype) *phpz.ClassEntry {
+        return register_fn(.{
             phpz.globals.class.entry("ArrayAccess"),
             phpz.globals.class.entry("Countable"),
             phpz.globals.class.entry("Iterator"),
-        ));
+        });
     }
 
-    pub fn init(self: *Collection) void {
-        self.data = phpz.zend.Array.empty();
-        self.iterator = self.data.iterator();
+    fn init() Collection {
+        const data = phpz.zend.Array.empty();
+        return .{ .data = data, .iterator = data.iterator() };
     }
 
-    pub fn deinit(self: *Collection) void {
+    fn deinit(self: *Collection) void {
         self.data.release();
     }
 
+    fn clone(self: *const Collection) Collection {
+        const data = self.data.dupe();
+        return .{ .data = data, .iterator = data.iterator() };
+    }
+
     /// PHP: MyPHPExt\Collection::__construct(array $values = [])
-    pub fn construct(self: *Collection, ctx: phpz.Ctx) !void {
+    pub fn __construct(ctx: phpz.Ctx) !Collection {
         const args = try ctx.call.expectArgs(&.{
             .{ .array = .{ .optional = true } },
         }, {});
 
+        var self = init();
         if (args[0]) |values| {
             self.data.copy(values);
         }
+        return self;
     }
 
     /// PHP: MyPHPExt\Collection::toArray(): array
-    pub fn toArray(self: Collection, ctx: phpz.Ctx) void {
-        ctx.ret.set(.array, self.data.duplicate());
+    pub fn toArray(self: *const Collection, ctx: phpz.Ctx) void {
+        ctx.ret.set(.array, self.data.dupe());
     }
 
     /// PHP: MyPHPExt\Collection::offsetExists(mixed $offset): bool
@@ -128,7 +135,7 @@ const Collection = struct {
     }
 
     /// PHP: MyPHPExt\Collection::count(): int
-    pub fn count(self: Collection, ctx: phpz.Ctx) void {
+    pub fn count(self: *const Collection, ctx: phpz.Ctx) void {
         ctx.ret.set(.int, @intCast(self.data.len()));
     }
 
@@ -170,19 +177,9 @@ const Collection = struct {
     }
 };
 
-pub const Class = phpz.Class("MyPHPExt\\Collection", Collection);
-
-comptime {
-    Class.method("__construct", .construct);
-    Class.method("toArray", .toArray);
-    Class.method("offsetExists", .offsetExists);
-    Class.method("offsetGet", .offsetGet);
-    Class.method("offsetSet", .offsetSet);
-    Class.method("offsetUnset", .offsetUnset);
-    Class.method("count", .count);
-    Class.method("current", .current);
-    Class.method("key", .key);
-    Class.method("next", .next);
-    Class.method("rewind", .rewind);
-    Class.method("valid", .valid);
-}
+pub const Class = phpz.Class("MyPHPExt\\Collection", Collection, .{
+    .init = Collection.init,
+    .deinit = Collection.deinit,
+    .clone = Collection.clone,
+    .register = Collection.register,
+});

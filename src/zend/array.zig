@@ -63,7 +63,7 @@ pub const Array = opaque {
     /// Duplicate the array.
     ///
     /// Ownership: caller owns the returned array; call `release()` when done.
-    pub fn duplicate(self: *Array) *Array {
+    pub fn dupe(self: *Array) *Array {
         return @ptrCast(c.zend_array_dup(self.ptr()));
     }
 

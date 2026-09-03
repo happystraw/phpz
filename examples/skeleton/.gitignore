@@ -3,7 +3,8 @@
 /.idea
 /.claude
 /*.lua
-zig-out
-.zig-cache
-/modules
-/zig-pkg
+/build/
+/modules/
+/zig-out/
+/.zig-cache/
+/zig-pkg/

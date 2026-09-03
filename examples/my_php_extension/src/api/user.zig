@@ -1,12 +1,12 @@
-pub fn register(impl: anytype) *phpz.ClassEntry {
-    return .from(impl(
+fn register(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{
         entity.Class.entry.ptr(),
         phpz.globals.class.entry("Stringable"),
-    ));
+    });
 }
 
 /// PHP: MyPHPExt\User::__construct(int $id, string $name, ?int $age = null, MyPHPExt\Role $role = MyPHPExt\Role::User, MyPHPExt\Status $status = MyPHPExt\Status::Active): void
-pub fn construct(ctx: phpz.Ctx) !void {
+pub fn __construct(ctx: phpz.Ctx) !void {
     const id, const name, const age, const role_arg, const status_arg = try ctx.call.expectArgs(
         &.{
             .{ .int = .{} },
@@ -18,7 +18,7 @@ pub fn construct(ctx: phpz.Ctx) !void {
         .{ {}, {}, {}, .{ .type = role.Class.entry }, .{ .type = status.Class.entry } },
     );
 
-    const user = ctx.call.thisObject().?;
+    const user = ctx.call.this().?;
     try user.setProperty(.int, "id", id);
     try user.setProperty(.string, "name", name);
     if (age) |provided| {
@@ -40,8 +40,8 @@ pub fn construct(ctx: phpz.Ctx) !void {
 
 /// PHP: MyPHPExt\User::label(): string
 /// PHP: MyPHPExt\User::__toString(): string
-pub fn toString(ctx: phpz.Ctx) !void {
-    const user = ctx.call.thisObject().?;
+pub fn label(ctx: phpz.Ctx) !void {
+    const user = ctx.call.this().?;
     var scratch = phpz.Zval.raw.undef;
     defer phpz.Zval.raw.tryRelease(&scratch);
 
@@ -49,13 +49,7 @@ pub fn toString(ctx: phpz.Ctx) !void {
     ctx.ret.set(.string, phpz.Zval.raw.asUnchecked(name.ptr(), .string));
 }
 
-pub const Class = phpz.SimpleClass("MyPHPExt\\User", @This());
-
-comptime {
-    Class.method("__construct", construct);
-    Class.method("label", toString);
-    Class.method("__toString", toString);
-}
+pub const Class = phpz.Class("MyPHPExt\\User", @This(), .{ .register = register });
 
 const phpz = @import("phpz");
 

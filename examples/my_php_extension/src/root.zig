@@ -17,9 +17,15 @@ fn info(m: *phpz.ModuleEntry) void {
 comptime {
     const extension = @import("extension_info");
 
-    _ = functions;
-    _ = bailout;
-    _ = superglobals;
+    phpz.namedFunctions(.{
+        .hello = functions.hello,
+        .greet = functions.greet,
+        .@"MyPHPExt\\increment" = functions.increment,
+        .@"MyPHPExt\\mapValues" = functions.mapValues,
+        .@"MyPHPExt\\Test\\allocatorBailout" = bailout.allocatorBailout,
+        .@"MyPHPExt\\Test\\superglobalsSnapshot" = superglobals.superglobalsSnapshot,
+        .@"MyPHPExt\\Test\\mutateSuperglobals" = superglobals.mutateSuperglobals,
+    });
 
     phpz.module(.{
         .name = extension.name,

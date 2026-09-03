@@ -1,3 +1,3 @@
 const phpz = @import("phpz");
 
-pub const Class = phpz.SimpleClass("MyPHPExt\\Status", void);
+pub const Class = phpz.ClassDecl("MyPHPExt\\Status", .{});

@@ -17,10 +17,11 @@ const Zval = @import("zval.zig").Zval;
 /// Example:
 /// ```zig
 /// fn add(ctx: Ctx) !void {
-///     var a: i64 = undefined;
-///     var b: i64 = undefined;
-///     try ctx.call.parseArgs("ll", .{ &a, &b });
-///     ctx.ret.set(.int, a + b);
+///     const args = try ctx.call.expectArgs(&.{
+///         .{ .int = .{} },
+///         .{ .int = .{} },
+///     }, {});
+///     ctx.ret.set(.int, args[0] + args[1]);
 /// }
 /// ```
 const Ctx = @This();
@@ -703,34 +704,41 @@ pub const Call = opaque {
         if (result == c.FAILURE) return ParseArgsError.ParseFailure;
     }
 
-    /// Get the $this object as a zval (for class methods).
+    /// Get the current frame's $this object value.
     ///
     /// Returns the current object context when called from a method.
     /// Returns null when called from a static method or function.
     ///
     /// Returns:
-    ///   The $this Zval, or null if not in an object context
-    pub fn this(self: *Call) ?*Zval {
-        const zv = Zval.from(&self.ptr().This);
-        return if (zv.is(.object)) zv else null;
+    ///   The $this object value, or null if not in an object context
+    pub fn thisValue(self: *Call) ?*Zval.Object {
+        return Zval.Object.from(&self.ptr().This) catch null;
     }
 
-    /// Get the $this object as a zend.Object (for class methods).
+    /// Get the current frame's $this object.
     ///
-    /// This is the preferred way to access the object instance in methods,
-    /// as it gives you direct access to the object structure.
+    /// Returns null when called from a static method or function.
     ///
     /// Returns:
     ///   The Object pointer, or null if not in an object context
-    pub fn thisObject(self: *Call) ?*zend.Object {
+    pub fn this(self: *Call) ?*zend.Object {
+        const value = self.thisValue() orelse return null;
+        return value.zendObject();
+    }
+
+    /// Resolve the $this object using Zend's call-frame lookup rules.
+    ///
+    /// Unlike `this`, this may walk through unscoped internal-function frames
+    /// and return an object from an eligible caller frame.
+    pub fn getThisObject(self: *Call) ?*zend.Object {
         const obj = c.zend_get_this_object(self.ptr());
         return if (obj) |o| .from(o) else null;
     }
 
-    /// Get the scope (class) where the current function was defined.
+    /// Get the class where the current function was defined.
     ///
-    /// Returns the class entry of the class that defines the current method.
-    /// Returns null for non-method contexts.
+    /// This reads the current function's declaration scope directly and does
+    /// not search previous call frames. Returns null for a global function.
     ///
     /// Returns:
     ///   The class entry, or null if not in a class context
@@ -739,11 +747,16 @@ pub const Call = opaque {
         return if (raw) |ce| ClassEntry.from(ce) else null;
     }
 
-    /// Get the called scope (class) for the current method call.
+    /// Resolve the called scope using Zend's call-frame lookup rules.
     ///
-    /// In the context of inheritance, this returns the class that was used
-    /// to invoke the method (may be a child class), while scope() returns
-    /// the class where the method is defined.
+    /// For an instance method, this is the runtime class of `$this`. For a
+    /// static method, this is the class stored as the call's late-static-binding
+    /// scope. Unlike `scope`, this may walk through unscoped internal-function
+    /// frames and return the called scope from an eligible caller frame.
+    ///
+    /// In an inheritance context, this returns the class used to invoke the
+    /// method, which may be a child class, while `scope` returns the class where
+    /// the method was defined.
     ///
     /// Example:
     ///   class Parent { function foo() { ... } }
@@ -752,7 +765,7 @@ pub const Call = opaque {
     ///   $obj->foo(); // scope() = Parent, calledScope() = Child
     ///
     /// Returns:
-    ///   The class entry of the called class
+    ///   The called class entry, or null when no called scope can be resolved
     pub fn calledScope(self: *Call) ?*ClassEntry {
         const raw = c.zend_get_called_scope(self.ptr());
         return if (raw) |ce| .from(ce) else null;

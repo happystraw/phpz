@@ -1,11 +1,11 @@
 /// PHP: MyPHPExt\Tag::__construct(string $name, ?string $description = null): void
-pub fn construct(ctx: phpz.Ctx) !void {
+pub fn __construct(ctx: phpz.Ctx) !void {
     const name, const description = try ctx.call.expectArgs(&.{
         .{ .string = .{} },
         .{ .string = .{ .optional = true, .nullable = true } },
     }, {});
 
-    const tag = ctx.call.thisObject().?;
+    const tag = ctx.call.this().?;
     try tag.setProperty(.string, "name", name);
     if (description) |provided| {
         switch (provided) {
@@ -17,10 +17,6 @@ pub fn construct(ctx: phpz.Ctx) !void {
     }
 }
 
-pub const Class = phpz.SimpleClass("MyPHPExt\\Tag", void);
-
-comptime {
-    Class.method("__construct", construct);
-}
+pub const Class = phpz.Class("MyPHPExt\\Tag", @This(), .{});
 
 const phpz = @import("phpz");
