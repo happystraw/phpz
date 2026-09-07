@@ -5,6 +5,7 @@ pub const tag = @import("api/tag.zig");
 pub const entity = @import("api/entity.zig");
 pub const user = @import("api/user.zig");
 pub const counter = @import("api/counter.zig");
+pub const big_integer = @import("api/big_integer.zig");
 pub const dumper = @import("api/dumper.zig");
 pub const collection = @import("api/collection.zig");
 pub const config = @import("api/config.zig");
@@ -18,6 +19,7 @@ pub const classes = &.{
     entity.Class,
     user.Class,
     counter.Class,
+    big_integer.Class,
     dumper.Class,
     collection.Class,
     config.Class,

@@ -55,10 +55,19 @@ pub const Level = enum(c_int) {
     }
 };
 
+pub const TypeError = error{PhpTypeError};
+
+/// Throw a PHP TypeError and return its Zig error marker.
+pub fn typeError(comptime format: [:0]const u8, args: anytype) TypeError {
+    @branchHint(.cold);
+    @call(.auto, c.zend_type_error, .{format.ptr} ++ args);
+    return error.PhpTypeError;
+}
+
 pub const ArgumentTypeError = error{PhpArgumentTypeError};
 
 /// Return an argument type error
-pub inline fn argumentTypeError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentTypeError {
+pub fn argumentTypeError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentTypeError {
     @branchHint(.cold);
     @call(.auto, c.zend_argument_type_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentTypeError;
@@ -67,7 +76,7 @@ pub inline fn argumentTypeError(arg_num: u32, comptime format: [:0]const u8, arg
 pub const ArgumentValueError = error{PhpArgumentValueError};
 
 /// Return an argument value error
-pub inline fn argumentValueError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentValueError {
+pub fn argumentValueError(arg_num: u32, comptime format: [:0]const u8, args: anytype) ArgumentValueError {
     @branchHint(.cold);
     @call(.auto, c.zend_argument_value_error, .{ arg_num, format.ptr } ++ args);
     return error.PhpArgumentValueError;
@@ -76,7 +85,7 @@ pub inline fn argumentValueError(arg_num: u32, comptime format: [:0]const u8, ar
 pub const ArgumentCountError = error{PhpArgumentCountError};
 
 /// Return an argument count error
-pub inline fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError {
+pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError {
     @branchHint(.cold);
     @call(.auto, c.zend_argument_count_error, .{format.ptr} ++ args);
     return error.PhpArgumentCountError;
@@ -86,34 +95,56 @@ pub const WrongParameterCountError = error{PhpWrongParameterCountError};
 
 /// Report wrong number of parameters — PHP generates the message automatically.
 /// min: minimum expected parameters, max: maximum expected parameters (0 = unlimited).
-pub inline fn wrongParameterCount(min: u32, max: u32) WrongParameterCountError {
+pub fn wrongParameterCount(min: u32, max: u32) WrongParameterCountError {
     @branchHint(.cold);
     c.zend_wrong_parameters_count_error(min, max);
     return error.PhpWrongParameterCountError;
 }
 
 /// Report that the function expects no parameters.
-pub inline fn wrongParametersNone() WrongParameterCountError {
+pub fn wrongParametersNone() WrongParameterCountError {
     @branchHint(.cold);
     c.zend_wrong_parameters_none_error();
     return error.PhpWrongParameterCountError;
 }
 
-/// Throw a PHP Error
-pub inline fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: anytype) void {
+pub const Error = error{PhpError};
+
+/// Throw a PHP Error and return its Zig error marker.
+pub fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: anytype) Error {
+    @branchHint(.cold);
     @call(.auto, c.zend_throw_error, .{ if (ce) |e| e.ptr() else null, format.ptr } ++ args);
+    return error.PhpError;
 }
 
-/// Throw a PHP exception
-pub fn throwException(ce: *zend.ClassEntry, message: [:0]const u8, code: i64) ?*zend.Object {
+pub const Exception = error{PhpException};
+
+/// Throw a PHP exception and return its Zig error marker.
+pub fn throwException(ce: *zend.ClassEntry, message: [:0]const u8, code: i64) Exception {
+    _ = throwExceptionObject(ce, message, code);
+    return error.PhpException;
+}
+
+/// Throw a PHP exception with a formatted message and return its Zig error marker.
+pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]const u8, args: anytype) Exception {
+    _ = throwExceptionObjectEx(ce, code, format, args);
+    return error.PhpException;
+}
+
+/// Throw a PHP exception and return the object without adding a reference.
+/// The PHP exception is pending; this function does not propagate a Zig error.
+pub fn throwExceptionObject(ce: *zend.ClassEntry, message: [:0]const u8, code: i64) *zend.Object {
+    @branchHint(.cold);
     const obj = c.zend_throw_exception(ce.ptr(), message.ptr, @intCast(code));
-    return if (obj) |o| zend.Object.from(o) else null;
+    return zend.Object.from(obj.?);
 }
 
-/// Throw a PHP exception with formatted message and error code
-pub fn throwExceptionEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]const u8, args: anytype) ?*zend.Object {
+/// Throw a PHP exception with a formatted message and return the object without adding a reference.
+/// The PHP exception is pending; this function does not propagate a Zig error.
+pub fn throwExceptionObjectEx(ce: *zend.ClassEntry, code: i64, comptime format: [:0]const u8, args: anytype) *zend.Object {
+    @branchHint(.cold);
     const obj = @call(.auto, c.zend_throw_exception_ex, .{ ce.ptr(), @as(c.zend_long, @intCast(code)), format.ptr } ++ args);
-    return if (obj) |o| zend.Object.from(o) else null;
+    return zend.Object.from(obj.?);
 }
 
 /// Check whether a PHP exception is pending (EG(exception) != null).

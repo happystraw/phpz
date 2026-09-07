@@ -14,7 +14,7 @@ pub const Object = opaque {
     /// Create a standard object (stdClass).
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
-    pub fn init() InitError!*Object {
+    pub fn std() InitError!*Object {
         const std_class = globals.class.rawEntry("zend_standard_class_def");
         const obj = c.zend_objects_new(std_class);
         if (obj == null) return error.InitFailed;
@@ -25,7 +25,7 @@ pub const Object = opaque {
     /// Create an object from a class entry.
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
-    pub fn initClass(ce: *ClassEntry) InitError!*Object {
+    pub fn init(ce: *ClassEntry) InitError!*Object {
         const obj = c.zend_objects_new(ce.ptr());
         if (obj == null) return error.InitFailed;
         c.object_properties_init(obj, ce.ptr());

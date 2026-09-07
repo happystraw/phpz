@@ -10,6 +10,54 @@ const function_helper = @import("function.zig");
 const globals = @import("globals.zig");
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
+const Zval = @import("zval.zig").Zval;
+
+/// Zend operation opcodes passed to `.operate`, including unnamed codes.
+pub const Operator = enum(u8) {
+    add = c.ZEND_ADD,
+    sub = c.ZEND_SUB,
+    mul = c.ZEND_MUL,
+    div = c.ZEND_DIV,
+    mod = c.ZEND_MOD,
+    pow = c.ZEND_POW,
+    shl = c.ZEND_SL,
+    shr = c.ZEND_SR,
+    bit_and = c.ZEND_BW_AND,
+    bit_or = c.ZEND_BW_OR,
+    bit_xor = c.ZEND_BW_XOR,
+    bit_not = c.ZEND_BW_NOT,
+    // PHP's ! bypasses do_operation; boolean_not_function() may still pass this opcode.
+    bool_not = c.ZEND_BOOL_NOT,
+    // PHP's logical xor; rarely needed for custom numeric types.
+    bool_xor = c.ZEND_BOOL_XOR,
+    concat = c.ZEND_CONCAT,
+    _,
+
+    /// Display symbol for diagnostics; unnamed codes have no known symbol.
+    pub fn symbol(self: Operator) ?[:0]const u8 {
+        return switch (self) {
+            .add => "+",
+            .sub => "-",
+            .mul => "*",
+            .div => "/",
+            .mod => "%",
+            .pow => "**",
+            .shl => "<<",
+            .shr => ">>",
+            .bit_and => "&",
+            .bit_or => "|",
+            .bit_xor => "^",
+            .bit_not => "~",
+            .bool_not => "!",
+            .bool_xor => "xor",
+            .concat => ".",
+            else => null,
+        };
+    }
+};
+
+/// Successful comparison results. Return `error.Uncomparable` when operands cannot be compared.
+pub const Comparison = enum(i32) { less = -1, equal = 0, greater = 1 };
 
 const Layout = enum { std, backed };
 const MethodHandler = function_helper.Handler;
@@ -39,7 +87,8 @@ fn Resolved(comptime T: type) type {
         handlers: ObjectHandlers,
 
         fn resolve(comptime class_name: [:0]const u8, comptime options: anytype) Self {
-            const info = @typeInfo(@TypeOf(options));
+            const Options = @TypeOf(options);
+            const info = @typeInfo(Options);
             if (info != .@"struct" or (info.@"struct".is_tuple and info.@"struct".field_names.len != 0)) {
                 @compileError("Class " ++ class_name ++ " options must be a named struct literal");
             }
@@ -56,6 +105,8 @@ fn Resolved(comptime T: type) type {
                 const backing = std.mem.eql(u8, field_name, "init") or
                     std.mem.eql(u8, field_name, "deinit") or
                     std.mem.eql(u8, field_name, "clone") or
+                    std.mem.eql(u8, field_name, "operate") or
+                    std.mem.eql(u8, field_name, "compare") or
                     std.mem.eql(u8, field_name, "handlers");
                 if (!common and !backing) {
                     @compileError("Class " ++ class_name ++ " has unknown option '." ++ field_name ++ "'");
@@ -93,7 +144,7 @@ fn Resolved(comptime T: type) type {
                 break :blk MethodMap.initComptime(pairs[0..len]);
             };
 
-            const binding_strategy: BindingStrategy = if (!@hasField(@TypeOf(options), "methods"))
+            const binding_strategy: BindingStrategy = if (!@hasField(Options, "methods"))
                 .automatic
             else switch (@typeInfo(@TypeOf(options.methods))) {
                 .enum_literal => if (options.methods == .automatic)
@@ -126,7 +177,7 @@ fn Resolved(comptime T: type) type {
 
                 const c_register_fn = @field(c, fn_name);
                 const Args = std.meta.ArgsTuple(@TypeOf(c_register_fn));
-                if (@hasField(@TypeOf(options), "register")) {
+                if (@hasField(Options, "register")) {
                     break :blk struct {
                         fn typed(args: Args) *zend.ClassEntry {
                             return .from(@call(.always_inline, c_register_fn, args));
@@ -151,10 +202,10 @@ fn Resolved(comptime T: type) type {
             var initializer: ?fn () anyerror!T = null;
             var deinitializer: ?fn (*T) void = null;
             var cloner: ?fn (*const T) anyerror!T = null;
-            var handlers: ObjectHandlers = .{};
+            var handlers: ObjectHandlers = if (@hasField(Options, "handlers")) options.handlers else .{};
 
             if (layout == .backed) {
-                if (@hasField(@TypeOf(options), "init")) {
+                if (@hasField(Options, "init")) {
                     initializer = switch (@typeInfo(@TypeOf(options.init))) {
                         .enum_literal => if (options.init == .none)
                             null
@@ -176,11 +227,12 @@ fn Resolved(comptime T: type) type {
                     };
                 }
 
-                if (@hasField(@TypeOf(options), "deinit")) {
+                if (@hasField(Options, "deinit")) {
                     deinitializer = options.deinit;
                 }
 
-                if (@hasField(@TypeOf(options), "clone")) {
+                if (@hasField(Options, "clone")) {
+                    if (handlers.clone_obj != null) @compileError("Class " ++ class_name ++ " .clone conflicts with .handlers.clone_obj");
                     cloner = struct {
                         fn call(value: *const T) anyerror!T {
                             return @call(.auto, options.clone, .{value});
@@ -188,8 +240,69 @@ fn Resolved(comptime T: type) type {
                     }.call;
                 }
 
-                if (@hasField(@TypeOf(options), "handlers")) {
-                    handlers = options.handlers;
+                if (@hasField(Options, "operate") and @TypeOf(options.operate) != @TypeOf(null)) {
+                    if (@typeInfo(@TypeOf(options.operate)) != .@"fn") @compileError("Class " ++ class_name ++ " .operate must be a function");
+                    if (handlers.do_operation != null) @compileError("Class " ++ class_name ++ " .operate conflicts with .handlers.do_operation");
+                    handlers.do_operation = struct {
+                        fn call(opcode: u8, result: ?*c.zval, op1: ?*c.zval, op2: ?*c.zval) callconv(.c) c.zend_result {
+                            var left = op1.?;
+                            var op1_copy: c.zval = undefined;
+                            const aliased = result.? == op1.?;
+                            if (aliased) {
+                                Zval.raw.copyValue(&op1_copy, left);
+                                left = &op1_copy;
+                            }
+
+                            const lhs = Zval.from(left);
+                            const rhs = if (op2) |p| Zval.from(p) else null;
+                            const op: Operator = @fromBackingInt(opcode);
+                            @as(anyerror!void, options.operate(op, lhs, rhs, Zval.from(result.?))) catch |err| {
+                                if (err == error.OutOfMemory or err == error.ZendBailout) zend.bailout.raise();
+                                if (errors.hasException()) return c.FAILURE;
+                                const symbol = op.symbol();
+                                if (err == error.Unsupported) {
+                                    if (symbol) |sigil|
+                                        if (rhs) |right| {
+                                            errors.typeError("Unsupported operand types: %s %s %s", .{ lhs.getTypeName(), sigil.ptr, right.getTypeName() }) catch {};
+                                        } else {
+                                            errors.typeError("Unsupported operand type: %s%s", .{ sigil.ptr, lhs.getTypeName() }) catch {};
+                                        }
+                                    else {
+                                        errors.typeError("Unsupported operator opcode %u for " ++ class_name, .{@as(c_uint, opcode)}) catch {};
+                                    }
+                                } else if (symbol) |sigil| {
+                                    errors.throwError(null, class_name ++ " operator %s failed: %s", .{ sigil.ptr, @errorName(err).ptr }) catch {};
+                                } else {
+                                    errors.throwError(null, class_name ++ " operator unknown(%u) failed: %s", .{ @as(c_uint, opcode), @errorName(err).ptr }) catch {};
+                                }
+                                return c.FAILURE;
+                            };
+                            if (aliased) Zval.raw.release(&op1_copy);
+                            return c.SUCCESS;
+                        }
+                    }.call;
+                }
+                if (@hasField(Options, "compare") and @TypeOf(options.compare) != @TypeOf(null)) {
+                    if (@typeInfo(@TypeOf(options.compare)) != .@"fn") @compileError("Class " ++ class_name ++ " .compare must be a function");
+                    if (handlers.compare != null) @compileError("Class " ++ class_name ++ " .compare conflicts with .handlers.compare");
+                    handlers.compare = struct {
+                        fn call(op1: ?*c.zval, op2: ?*c.zval) callconv(.c) c_int {
+                            const lhs = Zval.from(op1.?);
+                            const rhs = Zval.from(op2.?);
+                            const result = @as(anyerror!Comparison, options.compare(lhs, rhs)) catch |err| {
+                                if (err == error.OutOfMemory or err == error.ZendBailout) zend.bailout.raise();
+                                if (!errors.hasException()) {
+                                    if (err == error.Uncomparable) {
+                                        errors.typeError("Cannot compare %s with %s", .{ lhs.getTypeName(), rhs.getTypeName() }) catch {};
+                                    } else {
+                                        errors.throwError(null, "%s at " ++ class_name ++ " operator compare", .{@errorName(err).ptr}) catch {};
+                                    }
+                                }
+                                return c.ZEND_UNCOMPARABLE;
+                            };
+                            return @backingInt(result);
+                        }
+                    }.call;
                 }
             }
 
@@ -220,6 +333,8 @@ fn Resolved(comptime T: type) type {
 /// });
 /// ```
 pub const ObjectHandlers = struct {
+    /// clone $obj
+    clone_obj: c.zend_object_clone_obj_t = null,
     /// offsetGet($offset): mixed  —  ArrayAccess
     read_dimension: c.zend_object_read_dimension_t = null,
     /// offsetSet($offset, $value): void  —  ArrayAccess
@@ -340,10 +455,35 @@ pub const ObjectHandlers = struct {
 /// - `.deinit`: releases an initialized backing with `fn (*T) void`.
 /// - `.clone`: copies backing with `fn (*const T) T` or `fn (*const T) !T`.
 /// - `.handlers`: overrides selected Zend handlers with `ObjectHandlers`.
+/// - `.operate`: handles operations and writes to `result`; returns `void` or `!void`.
+///   Return `error.Unsupported` to report unsupported operations or operands as TypeError.
+/// - `.compare`: returns `Comparison` or `!Comparison`.
+///   Return `error.Uncomparable` to report incompatible operands as TypeError.
 ///
-/// Backing options (`.init`, `.deinit`, `.clone`, and `.handlers`) require a
-/// non-empty `T`. Before backing is initialized, instance methods throw a PHP
+/// Omit `.operate` or `.compare`, or set them to null, to keep the existing handler.
+/// They conflict with non-null `.handlers.do_operation` and `.handlers.compare`, respectively.
+///
+/// Backing options (`.init`, `.deinit`, `.clone`, `.handlers`, `.operate`,
+/// and `.compare`) require a non-empty `T`. Before backing is initialized,
+/// instance methods throw a PHP
 /// error directing the caller to the constructor.
+///
+/// ## Operator and comparison callbacks
+///
+/// `.operate` receives `(Operator, lhs: *Zval, rhs: ?*Zval, result: *Zval)`.
+/// `rhs` is null for `.bit_not` and `.bool_not`.
+/// Write the operation result to `result` using `result.set(...)`.
+///
+/// `.compare` receives `(lhs: *Zval, rhs: *Zval)` and returns `.less`, `.equal`,
+/// or `.greater`. Return a Zig error on failure, including after throwing a PHP exception.
+///
+/// Callback errors:
+/// - `error.Unsupported` in `.operate` and `error.Uncomparable` in `.compare`
+///   produce a PHP TypeError describing the unsupported operation or operands.
+/// - Other Zig errors produce a PHP Error with the error name and callback context.
+/// - An existing PHP exception is preserved instead of creating another one.
+/// - `error.OutOfMemory` and `error.ZendBailout` always resume Zend bailout,
+///   even when a PHP exception is already pending.
 pub fn Class(comptime class_name: [:0]const u8, comptime T: type, comptime options: anytype) type {
     const resolved_options: Resolved(T) = .resolve(class_name, options);
     return switch (resolved_options.layout) {
@@ -437,23 +577,23 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             }
 
             fn destroyObject(obj: ?*c.zend_object) callconv(.c) void {
-                const self: *Self = .fromStd(obj.?);
+                const self: *Self = .fromStdUnchecked(obj.?);
                 self.clearBacking();
                 c.zend_object_std_dtor(obj);
             }
 
             fn cloneObject(obj: ?*c.zend_object) callconv(.c) ?*c.zend_object {
-                const source: *Self = .fromStd(obj.?);
+                const source: *Self = .fromStdUnchecked(obj.?);
                 const target = alloc(obj.?.ce.?);
                 const source_backing: *const T = source.backing() orelse {
-                    errors.throwError(null, "Cannot clone uninitialized " ++ class_name, .{});
+                    errors.throwError(null, "Cannot clone uninitialized " ++ class_name, .{}) catch {};
                     return &target.std;
                 };
                 const cloner = resolved.clone orelse unreachable;
                 const cloned = cloner(source_backing) catch |err| {
                     if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                     if (!errors.hasException()) {
-                        errors.throwError(null, "%s while cloning " ++ class_name, .{@errorName(err).ptr});
+                        errors.throwError(null, "%s while cloning " ++ class_name, .{@errorName(err).ptr}) catch {};
                     }
                     return &target.std;
                 };
@@ -477,7 +617,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
                 self.backingStorage().* = initializer() catch |err| {
                     if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                     if (!errors.hasException()) {
-                        errors.throwError(null, "%s while initializing " ++ class_name, .{@errorName(err).ptr});
+                        errors.throwError(null, "%s while initializing " ++ class_name, .{@errorName(err).ptr}) catch {};
                     }
                     return;
                 };
@@ -498,14 +638,13 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
 
         fn receiver(ctx: *Ctx) ?*Self {
             const obj = ctx.call.this() orelse {
-                errors.throwError(null, class_name ++ " must be called on an object", .{});
+                errors.throwError(null, class_name ++ " must be called on an object", .{}) catch {};
                 return null;
             };
-            if (obj.ptr().handlers != &handlers or !obj.instanceof(entry)) {
-                errors.throwError(null, "invalid object layout for " ++ class_name, .{});
+            return fromObject(obj) catch {
+                errors.throwError(null, "invalid object layout for " ++ class_name, .{}) catch {};
                 return null;
-            }
-            return .fromStd(obj.ptr());
+            };
         }
 
         inline fn backingStorage(self: *Self) *?T {
@@ -529,8 +668,35 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         ///
         /// This conversion is unchecked. `obj` must point to the `std` field of
         /// an object created with this exact `Self` layout.
-        pub fn fromStd(obj: *c.zend_object) *Self {
+        inline fn fromStdUnchecked(obj: *c.zend_object) *Self {
             return @fieldParentPtr("std", obj);
+        }
+
+        pub const FromError = error{ NotObject, InvalidObjectLayout };
+
+        /// Borrow this class wrapper after checking its handlers and class.
+        /// Compatible subclasses are accepted; backing may still be null.
+        /// Does not change reference counts or throw a PHP exception.
+        /// `register()` must have succeeded before calling this function.
+        pub fn fromObject(obj: *zend.Object) FromError!*Self {
+            if (obj.ptr().handlers != &handlers or !obj.instanceof(entry)) {
+                return error.InvalidObjectLayout;
+            }
+            return .fromStdUnchecked(obj.ptr());
+        }
+
+        /// Borrow this class wrapper from an object zval or a PHP reference.
+        /// References are followed without modifying them. Non-objects return
+        /// NotObject; incompatible objects return InvalidObjectLayout.
+        /// Backing initialization and reference counts are left unchanged.
+        /// `register()` must have succeeded before calling this function.
+        pub fn fromZval(value: *Zval) FromError!*Self {
+            var operand = value;
+            while (operand.is(.reference)) {
+                operand = .from(operand.asUnchecked(.reference).val());
+            }
+            if (!operand.is(.object)) return error.NotObject;
+            return fromObject(operand.asUnchecked(.object));
         }
 
         /// Creates an instance without calling its PHP constructor.
@@ -694,7 +860,7 @@ fn bindConstructor(comptime class_name: [:0]const u8, comptime T: type, comptime
             const value = @as(anyerror!T, @call(.auto, func, args)) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {
-                    errors.throwError(null, "%s at " ++ class_name ++ "::__construct()", .{@errorName(err).ptr});
+                    errors.throwError(null, "%s at " ++ class_name ++ "::__construct()", .{@errorName(err).ptr}) catch {};
                 }
                 return;
             };
@@ -720,7 +886,7 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
             var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
             const self = ClassType.receiver(&ctx) orelse return;
             const backing = self.backing() orelse {
-                errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{});
+                errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{}) catch {};
                 return;
             };
             const args: Args = if (comptime params.len == 2)
@@ -732,7 +898,7 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
             _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {
-                    errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr});
+                    errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr}) catch {};
                 }
             };
         }

@@ -8,7 +8,7 @@ pub const Object = opaque {
     /// Ownership: caller owns `zv`'s object value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
-    pub fn init(zv: *c.zval) *Object {
+    pub fn std(zv: *c.zval) *Object {
         c.object_init(zv);
         return @ptrCast(zv);
     }
@@ -20,7 +20,7 @@ pub const Object = opaque {
     /// Ownership: caller owns `zv`'s object value; call `Zval.raw.release(zv)`
     /// unless the zval is returned/transferred to PHP. The returned wrapper is
     /// borrowed from `zv`.
-    pub fn initClass(zv: *c.zval, ce: *zend.ClassEntry) InitClassError!*Object {
+    pub fn init(zv: *c.zval, ce: *zend.ClassEntry) InitClassError!*Object {
         const result = c.object_init_ex(zv, ce.ptr());
         if (result != c.SUCCESS) return error.InitFailed;
         return @ptrCast(zv);
@@ -31,12 +31,12 @@ pub const Object = opaque {
     /// Ownership: caller owns `zv`'s object value. `properties` is consumed by
     /// Zend's object initializer when non-null; addref/copy it first if it is
     /// borrowed and must remain independently owned.
-    pub fn initClassWithProperties(
+    pub fn initWithProperties(
         zv: *c.zval,
         ce: *zend.ClassEntry,
-        properties: ?*c.zend_array,
+        properties: ?*zend.Array,
     ) InitClassError!*Object {
-        const result = c.object_and_properties_init(zv, ce.ptr(), properties);
+        const result = c.object_and_properties_init(zv, ce.ptr(), if (properties) |p| p.ptr() else null);
         if (result != c.SUCCESS) return error.InitFailed;
         return @ptrCast(zv);
     }

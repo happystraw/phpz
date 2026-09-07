@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: d4726857059b1672b200e18c755b083d3328a63e */
+ * Stub hash: 1d0951ee8633b10ce0253236ad8eeaada1560ee0 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -53,6 +53,14 @@ ZEND_END_ARG_INFO()
 #define arginfo_class_MyPHPExt_User_label arginfo_class_MyPHPExt_Entity_label
 
 #define arginfo_class_MyPHPExt_User___toString arginfo_class_MyPHPExt_Entity_label
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_BigInteger___construct, 0, 0, 0)
+	ZEND_ARG_TYPE_MASK(0, value, MAY_BE_LONG|MAY_BE_STRING, "0")
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_MyPHPExt_BigInteger_value arginfo_class_MyPHPExt_Entity_label
+
+#define arginfo_class_MyPHPExt_BigInteger___toString arginfo_class_MyPHPExt_Entity_label
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Counter___construct, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, value, IS_LONG, 0, "0")
@@ -135,6 +143,8 @@ ZEND_METHOD(MyPHPExt_Entity, __construct);
 ZEND_METHOD(MyPHPExt_Entity, getId);
 ZEND_METHOD(MyPHPExt_User, __construct);
 ZEND_METHOD(MyPHPExt_User, label);
+ZEND_METHOD(MyPHPExt_BigInteger, __construct);
+ZEND_METHOD(MyPHPExt_BigInteger, value);
 ZEND_METHOD(MyPHPExt_Counter, __construct);
 ZEND_METHOD(MyPHPExt_Counter, increment);
 ZEND_METHOD(MyPHPExt_Counter, decrement);
@@ -223,6 +233,17 @@ static const zend_function_entry class_MyPHPExt_User_methods[] = {
 	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_User_label, arginfo_class_MyPHPExt_User___toString, ZEND_ACC_PUBLIC, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_User_label, arginfo_class_MyPHPExt_User___toString, ZEND_ACC_PUBLIC)
+#endif
+	ZEND_FE_END
+};
+
+static const zend_function_entry class_MyPHPExt_BigInteger_methods[] = {
+	ZEND_ME(MyPHPExt_BigInteger, __construct, arginfo_class_MyPHPExt_BigInteger___construct, ZEND_ACC_PUBLIC)
+	ZEND_ME(MyPHPExt_BigInteger, value, arginfo_class_MyPHPExt_BigInteger_value, ZEND_ACC_PUBLIC)
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_BigInteger_value, arginfo_class_MyPHPExt_BigInteger___toString, ZEND_ACC_PUBLIC, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("__toString", zim_MyPHPExt_BigInteger_value, arginfo_class_MyPHPExt_BigInteger___toString, ZEND_ACC_PUBLIC)
 #endif
 	ZEND_FE_END
 };
@@ -446,6 +467,20 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 	zend_string *attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str = zend_string_init("identifier", strlen("identifier"), 1);
 	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
 	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, &attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0);
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_MyPHPExt_BigInteger(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "BigInteger", class_MyPHPExt_BigInteger_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
+#else
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+#endif
 
 	return class_entry;
 }

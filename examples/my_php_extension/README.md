@@ -22,6 +22,8 @@ to arginfo workflow as a normal PHP extension.
 - General-purpose classes: `Counter`, `Dumper`, and `Collection` cover normal
   classes, static methods, variadic arguments, object state, `ArrayAccess`,
   `Countable`, and `Iterator`.
+- Value operators: `BigInteger` demonstrates a unified operator callback writing to a Zval result,
+  three-way comparison, arbitrary-precision backing, and owned object results.
 - Runtime configuration: `Config` exposes typed INI entries through static
   getters backed by phpz's INI helpers.
 - Request telemetry: `Metrics::snapshot()` and `Metrics::reset()` demonstrate
@@ -55,6 +57,47 @@ extension patterns that tend to break in real projects:
   `phpz.globals.php().httpGlobal(.GET)` is a read-only request source borrow,
   while `phpz.globals.executor().superglobalMut(.GET)` prepares the userland
   `$_GET` slot for mutation.
+
+## BigInteger
+
+```php
+$a = new MyPHPExt\BigInteger('340282366920938463463374607431768211456');
+$saved = $a;
+$a += 1;
+echo $a->value();           // 340282366920938463463374607431768211457
+echo $saved->value();       // 340282366920938463463374607431768211456
+var_dump($a > $saved);      // true
+$quotient = new MyPHPExt\BigInteger(-13) / 5;
+echo $quotient->value();    // -2: integer division truncates toward zero
+```
+
+BigInteger uses Zig's `std.math.big.int.Managed` with PHP-managed limb storage.
+The constructor accepts a PHP integer or a decimal string matching
+`[+-]?[0-9]+`; `value()` and `__toString()` return the exact decimal string.
+The backing owns its limbs, `.deinit` frees them, and `.clone` duplicates them.
+Its small inline backing respects `ZEND_MM_ALIGNMENT`; the growing limb buffer
+is separately allocated rather than limited to the object header's size.
+
+The class registers `.operate = BigInteger.ops.operate` and an independent
+`.compare = BigInteger.ops.compare`. The operator callback receives `phpz.Operator`
+and `result: *phpz.Zval`, switches on the operation, writes the result with
+`result.set(...)`, and returns `!void`. Unsupported inputs return `error.Unsupported`.
+The opcode enum includes `bool_not` and `bool_xor`; this BigInteger example rejects
+both and unnamed opcodes. PHP's ! bypasses the hook, while logical xor rarely needs overloading. The adapter owns values written into the result and releases
+them on failure. The `.init` hook initializes the integer backing, so arithmetic
+can create results through `Class.create()` without invoking the PHP constructor.
+The adapter uses a temporary output only when the result aliases an input; other
+calls write directly to Zend's output slot. BigInteger unwraps references in its
+own operand reader.
+
+Operators accept PHP integers and compatible BigInteger objects, including PHP
+subclasses. Arithmetic and bitwise operations return a new base BigInteger;
+concatenation returns the joined decimal strings. Numeric string operands are
+rejected: construct a BigInteger explicitly. `/` truncates toward zero and `%`
+retains the dividend's sign; `>>` performs arithmetic signed shifting. Exponents
+must fit a nonnegative `u32`, shift counts a nonnegative `usize`; actual result
+sizes are bounded by available PHP request memory, not a 64-bit integer range.
+Operator helpers are separate from the backing's PHP method bindings.
 
 ## Metrics
 

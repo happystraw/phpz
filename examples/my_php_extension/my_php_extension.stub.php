@@ -89,6 +89,16 @@ namespace MyPHPExt {
         public function __toString(): string {}
     }
 
+    class BigInteger
+    {
+        public function __construct(int|string $value = 0) {}
+
+        public function value(): string {}
+
+        /** @alias MyPHPExt\BigInteger::value */
+        public function __toString(): string {}
+    }
+
     final class Counter
     {
         public function __construct(int $value = 0) {}

@@ -239,7 +239,7 @@ fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
             _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {
-                    errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr});
+                    errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr}) catch {};
                 }
             };
         }

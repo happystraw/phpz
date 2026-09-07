@@ -20,6 +20,8 @@ pub const Class = class_helper.Class;
 pub const ClassDecl = class_helper.ClassDecl;
 pub const ObjectHandlers = class_helper.ObjectHandlers;
 pub const ClassEntry = zend.ClassEntry;
+pub const Operator = class_helper.Operator;
+pub const Comparison = class_helper.Comparison;
 
 const function_helper = @import("function.zig");
 pub const function = function_helper.function;

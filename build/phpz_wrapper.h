@@ -97,6 +97,18 @@ static zend_always_inline void phpz_zval_zval(zval *z, zval *src, bool copy, boo
     ZVAL_ZVAL(z, src, copy, dtor_src);
 }
 
+static zend_always_inline void phpz_zval_copy_value(zval *z, const zval *src) {
+    ZVAL_COPY_VALUE(z, src);
+}
+
+static zend_always_inline void phpz_zval_copy(zval *z, const zval *src) {
+    ZVAL_COPY(z, src);
+}
+
+static zend_always_inline void phpz_zval_copy_deref(zval *z, zval *src) {
+    ZVAL_COPY_DEREF(z, src);
+}
+
 static zend_always_inline void phpz_separate_array(zval *z) {
     SEPARATE_ARRAY(z);
 }

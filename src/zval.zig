@@ -169,6 +169,11 @@ pub const Zval = opaque {
         return raw.kind(self.ptr());
     }
 
+    /// Get the PHP type name as a borrowed null-terminated string.
+    pub inline fn getTypeName(self: *Zval) [*:0]const u8 {
+        return raw.getTypeName(self.ptr());
+    }
+
     /// Check if this zval is of a specific type.
     ///
     /// This is the preferred way to check zval types before conversion.
@@ -614,6 +619,22 @@ pub const Zval = opaque {
                 .ptr => @compileError("IS_PTR is an internal type, cannot be set directly"),
             }
         }
+
+        /// Copy value and type using `ZVAL_COPY_VALUE`, preserving references.
+        /// Does not addref, clear the source, or copy its extra (`u2`) metadata.
+        /// Does not release the destination's previous value. The caller manages
+        /// ownership; this operation alone does not create another owned reference.
+        pub const copyValue = c.phpz_zval_copy_value;
+
+        /// Copy using `ZVAL_COPY`, preserving references and adding a refcount
+        /// when needed. The destination owns the copied value and must release it.
+        /// Does not release the destination's previous value or clear the source.
+        pub const copy = c.phpz_zval_copy;
+
+        /// Copy using `ZVAL_COPY_DEREF`, dereferencing the source before copying
+        /// and adding a refcount when needed. The destination owns the copied value.
+        /// Does not release the destination's previous value or change the source.
+        pub const copyDeref = c.phpz_zval_copy_deref;
 
         /// Set one zval from another using PHP's `ZVAL_ZVAL`.
         ///
