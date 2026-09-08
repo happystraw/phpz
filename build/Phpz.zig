@@ -2,6 +2,12 @@
 //!
 //! This module provides utilities for building PHP extensions with Zig.
 //! It handles C header translation, PHP include paths setup, and module creation.
+
+const std = @import("std");
+const Build = std.Build;
+
+const Translator = @import("translate_c").Translator;
+
 const Phpz = @This();
 
 /// The compiled Phpz module with PHP extension support.
@@ -30,8 +36,7 @@ pub const Options = struct {
     /// Windows only: directory containing the matching php8*.lib import library.
     php_lib_dir: ?Build.LazyPath = null,
 
-    /// Build as a shared library for PHP to load dynamically.
-    /// Set to false for static linking (less common for PHP extensions).
+    /// Build a shared PHP extension when true, or a built-in PHP extension when false.
     shared: bool = true,
 
     /// Maximum stack frames captured for memory leak traceback when
@@ -73,11 +78,18 @@ pub fn initInner(b: *Build, options: Options) Phpz {
     }
     switch (options.translator.target.result.os.tag) {
         .windows => {
-            if (options.php_lib_dir) |dir| mod.addLibraryPath(dir);
-            const php_lib_name = if (options.windows_debug)
-                if (options.windows_zts) "php8ts_debug" else "php8_debug"
-            else if (options.windows_zts) "php8ts" else "php8";
-            mod.linkSystemLibrary(php_lib_name, .{});
+            if (options.shared) {
+                if (options.php_lib_dir) |dir| mod.addLibraryPath(dir);
+                const php_lib_name = if (options.windows_debug)
+                    if (options.windows_zts) "php8ts_debug" else "php8_debug"
+                else if (options.windows_zts) "php8ts" else "php8";
+                mod.linkSystemLibrary(php_lib_name, .{});
+            } else {
+                mod.addCMacro("PHP_EXPORTS", "1");
+                mod.addCMacro("LIBZEND_EXPORTS", "1");
+                mod.addCMacro("TSRM_EXPORTS", "1");
+                mod.addCMacro("SAPI_EXPORTS", "1");
+            }
 
             if (options.windows_zts) mod.addCMacro("ZTS", "1");
             mod.addCMacro("ZEND_DEBUG", if (options.windows_debug) "1" else "0");
@@ -87,6 +99,10 @@ pub fn initInner(b: *Build, options: Options) Phpz {
             mod.addCMacro("WIN32", "1");
         },
         else => {},
+    }
+    if (!options.shared) {
+        mod.addCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
+        mod.addCMacro("ZEND_ENABLE_STATIC_TSRMLS_CACHE", "1");
     }
     mod.addCSourceFile(.{ .file = b.path("build/phpz_wrapper.c") });
 
@@ -111,6 +127,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     // phpz.h
     c.addIncludePath(b.path("build"));
     c.defineCMacro("PHPZ_TRANSLATE_C", "1");
+    if (!options.shared) c.defineCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_dir) |root| {
@@ -122,6 +139,12 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 
         switch (translator_options.target.result.os.tag) {
             .windows => {
+                if (!options.shared) {
+                    c.defineCMacro("PHP_EXPORTS", "1");
+                    c.defineCMacro("LIBZEND_EXPORTS", "1");
+                    c.defineCMacro("TSRM_EXPORTS", "1");
+                    c.defineCMacro("SAPI_EXPORTS", "1");
+                }
                 if (options.windows_zts) c.defineCMacro("ZTS", "1");
                 c.defineCMacro("ZEND_DEBUG", if (options.windows_debug) "1" else "0");
                 c.defineCMacro("ZEND_WIN32", "1");
@@ -138,11 +161,11 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 
     if (translator_options.target.result.os.tag == .windows) {
         if (translator_options.target.result.abi == .msvc) {
-            patchWindowsBindings(b, &c, translator_options);
+            if (options.shared) patchWindowsBindings(b, &c, translator_options);
         } else {
             c.run.step.dependOn(&b.addFail("Windows PHP extensions require the MSVC ABI; use -Dtarget=native-windows-msvc").step);
         }
-        if (options.php_lib_dir == null) {
+        if (options.shared and options.php_lib_dir == null) {
             c.run.step.dependOn(&b.addFail("Windows PHP extensions require the PHP SDK library directory; pass -Dphp-lib-dir=<path-to-php-sdk-lib>").step);
         }
     }
@@ -154,8 +177,12 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 ///
 /// This also applies platform-specific linker settings required for PHP to
 /// load the resulting shared library.
+/// Options.shared overrides the library linkage.
 pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build.Step.Compile {
-    const lib = b.addLibrary(options);
+    var library_options = options;
+    library_options.linkage = if (self.options.shared) .dynamic else .static;
+
+    const lib = b.addLibrary(library_options);
     lib.root_module.addImport("phpz", self.mod);
 
     if (self.options.libc_file) |libc_file| lib.setLibCFile(libc_file);
@@ -208,8 +235,3 @@ fn patchWindowsBindings(b: *Build, translate_c: *Translator, options: Translator
     translate_c.mod.root_source_file = output_file;
     translate_c.output_file = output_file;
 }
-
-const std = @import("std");
-const Build = std.Build;
-
-const Translator = @import("translate_c").Translator;

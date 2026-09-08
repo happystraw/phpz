@@ -10,4 +10,4 @@ pub const fn_cc: std.builtin.CallingConvention = if (builtin.os.tag == .windows 
 else
     .c;
 
-pub const use_dll_import = builtin.os.tag == .windows and builtin.abi == .msvc;
+pub const use_dll_import = builtin.os.tag == .windows and builtin.abi == .msvc and @import("phpz_options").shared;

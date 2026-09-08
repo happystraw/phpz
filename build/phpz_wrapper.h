@@ -5,10 +5,14 @@ static zend_always_inline const char *phpz_module_build_id(void) {
     return ZEND_MODULE_BUILD_ID;
 }
 
+#if defined(ZTS) && defined(PHPZ_STATIC_TSRMLS_CACHE)
+void *phpz_tsrm_ls_cache(void);
+#endif
+
 static zend_always_inline zend_executor_globals *phpz_executor_globals(void) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return (zend_executor_globals *) (((char *) TSRMLS_CACHE) + executor_globals_offset);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (zend_executor_globals *) (((char *) phpz_tsrm_ls_cache()) + executor_globals_offset);
 #else
     return (zend_executor_globals *) (((char *) tsrm_get_ls_cache()) + executor_globals_offset);
 #endif
@@ -19,8 +23,8 @@ static zend_always_inline zend_executor_globals *phpz_executor_globals(void) {
 
 static zend_always_inline zend_compiler_globals *phpz_compiler_globals(void) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return (zend_compiler_globals *) (((char *) TSRMLS_CACHE) + compiler_globals_offset);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (zend_compiler_globals *) (((char *) phpz_tsrm_ls_cache()) + compiler_globals_offset);
 #else
     return (zend_compiler_globals *) (((char *) tsrm_get_ls_cache()) + compiler_globals_offset);
 #endif
@@ -31,8 +35,8 @@ static zend_always_inline zend_compiler_globals *phpz_compiler_globals(void) {
 
 static zend_always_inline php_core_globals *phpz_core_globals(void) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return (php_core_globals *) (((char *) TSRMLS_CACHE) + core_globals_offset);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (php_core_globals *) (((char *) phpz_tsrm_ls_cache()) + core_globals_offset);
 #else
     return (php_core_globals *) (((char *) tsrm_get_ls_cache()) + core_globals_offset);
 #endif
@@ -43,8 +47,8 @@ static zend_always_inline php_core_globals *phpz_core_globals(void) {
 
 static zend_always_inline sapi_globals_struct *phpz_sapi_globals(void) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return (sapi_globals_struct *) (((char *) TSRMLS_CACHE) + sapi_globals_offset);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (sapi_globals_struct *) (((char *) phpz_tsrm_ls_cache()) + sapi_globals_offset);
 #else
     return (sapi_globals_struct *) (((char *) tsrm_get_ls_cache()) + sapi_globals_offset);
 #endif
@@ -55,8 +59,8 @@ static zend_always_inline sapi_globals_struct *phpz_sapi_globals(void) {
 
 static zend_always_inline php_file_globals *phpz_file_globals(void) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return TSRMG_BULK_STATIC(file_globals_id, php_file_globals *);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (php_file_globals *) (*((void ***) phpz_tsrm_ls_cache()))[TSRM_UNSHUFFLE_RSRC_ID(file_globals_id)];
 #else
     return TSRMG_BULK(file_globals_id, php_file_globals *);
 #endif
@@ -73,8 +77,8 @@ typedef int phpz_rsrc_id;
 
 static zend_always_inline void *phpz_tsrmg_bulk(phpz_rsrc_id id) {
 #ifdef ZTS
-#ifdef ZEND_ENABLE_STATIC_TSRMLS_CACHE
-    return TSRMG_BULK_STATIC(id, void *);
+#ifdef PHPZ_STATIC_TSRMLS_CACHE
+    return (*((void ***) phpz_tsrm_ls_cache()))[TSRM_UNSHUFFLE_RSRC_ID(id)];
 #else
     return TSRMG_BULK(id, void *);
 #endif
