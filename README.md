@@ -12,7 +12,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 ## Features
 
 - **Modules** — extension metadata, lifecycle hooks, phpinfo, INI, globals, observers, and exports.
-- **Stub integration** — arginfo, function entries, constants, attributes, class metadata, and arginfo checks.
+- **[Stub integration](https://php.github.io/php-src/miscellaneous/stubs.html)** — arginfo, function entries, constants, attributes, class metadata, and arginfo checks.
 - **Functions and methods** — typed `Ctx` arguments, returns, nullable values, raw zvals, and PHP argument errors.
 - **Classes and OOP** — bind Zig `struct` lifecycles to PHP objects, with class entries, methods, inheritance, interfaces, enums, exceptions, handlers, and optional operator overloading and comparison.
 - **Runtime state** — typed module globals, PHP/Zend globals, and superglobal access for NTS/ZTS builds.
@@ -21,6 +21,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Observers** — function-call, error, and exception hooks for profiling and monitoring.
 - **Memory** — PHP-backed Zig allocator with optional debug leak traces.
 - **Build integration** — PHP C translation, extension linking, and platform-specific setup.
+- **Cross-compilation** — build Windows x86_64 (MSVC) extensions from Linux; see [`scripts/build-windows.sh`](./scripts/build-windows.sh).
 
 ## Quick Start
 

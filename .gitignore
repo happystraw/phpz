@@ -11,3 +11,4 @@ zig-pkg
 
 # For msvc cross-compilation test
 /tmp
+**/build/windows/

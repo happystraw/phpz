@@ -5,7 +5,11 @@ on:
     branches: ["dev"]
     paths:
       - "src/**"
+      - "build/**"
       - "examples/**"
+      - "tools/**"
+      - "scripts/build-windows.sh"
+      - "scripts/test-windows.sh"
       - "build.zig"
       - "build.zig.zon"
       - ".github/workflows/test-linux.yml"
@@ -13,7 +17,11 @@ on:
     branches: ["dev"]
     paths:
       - "src/**"
+      - "build/**"
       - "examples/**"
+      - "tools/**"
+      - "scripts/build-windows.sh"
+      - "scripts/test-windows.sh"
       - "build.zig"
       - "build.zig.zon"
       - ".github/workflows/test-linux.yml"
@@ -23,6 +31,9 @@ jobs:
   test:
     name: test (${{ matrix.php }}, ${{ matrix.arch }}, ${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
     runs-on: ${{ matrix.os }}
+    env:
+      XWIN_VERSION: "0.10.0"
+      VS_VERSION: ${{ (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
     strategy:
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
@@ -75,3 +86,16 @@ jobs:
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSmall
+      - name: Cache xwin downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/xwin/${{ env.XWIN_VERSION }}/${{ env.VS_VERSION }}/x86_64
+          key: xwin-${{ env.XWIN_VERSION }}-${{ env.VS_VERSION }}-windows-x86_64
+      - name: Cross-compile for Windows
+        run: |
+          php_version=$(php -r 'echo PHP_VERSION;')
+          php_thread_safety=$(php -r 'echo PHP_ZTS ? "--zts" : "--nts";')
+          scripts/test-windows.sh \
+            --php-version "$php_version" \
+            "$php_thread_safety" \
+            --xwin-cache-dir "$HOME/.cache/xwin"
