@@ -8,15 +8,5 @@
             .path = "../..",
         },
     },
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "README.md",
-        "run-tests.php",
-        "src",
-        "tests",
-        "skeleton.h",
-        "skeleton.stub.php",
-        "skeleton_arginfo.h",
-    },
+    .paths = .{""},
 }

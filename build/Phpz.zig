@@ -177,14 +177,16 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
 ///
 /// This also applies platform-specific linker settings required for PHP to
 /// load the resulting shared library.
-/// Options.shared overrides the library linkage.
+/// **Options.shared overrides the library linkage.**
 pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build.Step.Compile {
-    var library_options = options;
-    library_options.linkage = if (self.options.shared) .dynamic else .static;
-
-    const lib = b.addLibrary(library_options);
+    const lib = b.addLibrary(options);
+    if (self.options.shared) {
+        lib.linkage = .dynamic;
+    } else {
+        lib.linkage = .static;
+        lib.bundle_compiler_rt = true;
+    }
     lib.root_module.addImport("phpz", self.mod);
-
     if (self.options.libc_file) |libc_file| lib.setLibCFile(libc_file);
     if (lib.root_module.resolved_target) |target| {
         switch (target.result.os.tag) {

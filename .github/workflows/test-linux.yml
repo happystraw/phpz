@@ -86,6 +86,16 @@ jobs:
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSmall
+      - name: Run skeleton tests (phpize)
+        working-directory: examples/skeleton
+        env:
+          NO_INTERACTION: "1"
+          REPORT_EXIT_STATUS: "1"
+        run: |
+          phpize
+          ./configure --enable-skeleton --with-php-config="$(command -v php-config)"
+          make
+          make test TESTS=tests
       - name: Cache xwin downloads
         uses: actions/cache@v4
         with:

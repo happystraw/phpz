@@ -28,6 +28,7 @@ readonly class Args
         public ToolOption $runTests,
         public bool $unix,
         public bool $windows,
+        public bool $phpBuildSystem,
         public bool $force,
         public bool $verbose,
     ) {
@@ -48,11 +49,16 @@ readonly class Args
         $runTests = ToolOption::auto();
         $unix = true;
         $windows = true;
+        $phpBuildSystem = false;
         $force = false;
         $verbose = false;
 
         for ($i = 1; $i < count($argv); $i++) {
             $arg = $argv[$i];
+            if ($arg === '--with-php-build-system') {
+                $phpBuildSystem = true;
+                continue;
+            }
             if ($arg === '--force') {
                 $force = true;
                 continue;
@@ -155,6 +161,7 @@ readonly class Args
             $runTests,
             $unix,
             $windows,
+            $phpBuildSystem,
             $force,
             $verbose,
         );
@@ -897,18 +904,18 @@ final class ProjectInstaller
 // Template definitions.
 const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
 
-    // Add PHPT test step.
-    const run_tests_step = b.step("run-tests", "Run PHPT tests");
-    const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
-        "php",
-        "run-tests.php",
-        "-q",
-        "--show-diff",
-        "-d",
-        b.fmt("extension=modules/{s}", .{extension_filename}),
-    });
-    test_phpt_cmd.step.dependOn(b.getInstallStep());
-    run_tests_step.dependOn(&test_phpt_cmd.step);
+        // Add PHPT test step.
+        const run_tests_step = b.step("run-tests", "Run PHPT tests");
+        const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
+            "php",
+            "run-tests.php",
+            "-q",
+            "--show-diff",
+            "-d",
+            b.fmt("extension=modules/{s}", .{extension_filename}),
+        });
+        test_phpt_cmd.step.dependOn(b.getInstallStep());
+        run_tests_step.dependOn(&test_phpt_cmd.step);
 ZIG;
 
 const PHPZ_WINDOWS_BUILD_OPTIONS_TEMPLATE = <<<'ZIG'
@@ -924,18 +931,20 @@ const PHPZ_WINDOWS_INIT_OPTIONS_TEMPLATE = <<<'ZIG'
 ZIG;
 
 const PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE = <<<'ZIG'
-    const extension_filename = if (target.result.os.tag == .windows)
-        "php_" ++ extension_name ++ ".dll"
-    else
-        extension_name ++ ".so";
+        var extension_filename: []const u8 = extension_name ++ ".so";
+        if (target.result.os.tag == .windows) {
+            extension_filename = "php_" ++ extension_name ++ ".dll";
+            extension_file.addCopyFileToSource(extension.getEmittedImplib(), "modules/php_" ++ extension_name ++ ".lib");
+        }
 ZIG;
 
 const PHPZ_UNIX_FILENAME_TEMPLATE = <<<'ZIG'
-    const extension_filename = extension_name ++ ".so";
+        const extension_filename = extension_name ++ ".so";
 ZIG;
 
 const PHPZ_WINDOWS_FILENAME_TEMPLATE = <<<'ZIG'
-    const extension_filename = "php_" ++ extension_name ++ ".dll";
+        const extension_filename = "php_" ++ extension_name ++ ".dll";
+        extension_file.addCopyFileToSource(extension.getEmittedImplib(), "modules/php_" ++ extension_name ++ ".lib");
 ZIG;
 
 const PHPZ_UNIX_TARGET_CHECK_TEMPLATE = <<<'ZIG'
@@ -1064,6 +1073,209 @@ php build/gen_stub.php {{EXT_NAME}}.stub.php
 ```
 MD;
 
+const PHPZ_PHP_BUILD_TEMPLATE_FILES = [
+    'config.m4' => <<<'M4'
+dnl stub only for php build system
+PHP_ARG_ENABLE([{{EXT_NAME}}],
+  [whether to enable {{EXT_NAME}} support],
+  [AS_HELP_STRING([--enable-{{EXT_NAME}}],
+    [Enable {{EXT_NAME}} support])],
+  [no])
+
+AS_VAR_IF([PHP_{{EXT_NAME_UPPER}}], [no],, [
+  AC_PATH_PROG([ZIG], [zig], [no])
+  AS_VAR_IF([ZIG], [no], [
+    AC_MSG_ERROR([zig is required to build {{EXT_NAME}}])
+  ])
+
+  AC_ARG_VAR([{{EXT_NAME_UPPER}}_ZIG_FLAGS], [Extra zig build arguments (default: -Doptimize=ReleaseSafe)])
+
+  ext_srcdir=PHP_EXT_SRCDIR({{EXT_NAME}})
+  ext_builddir=PHP_EXT_BUILDDIR({{EXT_NAME}})
+  {{EXT_NAME_UPPER}}_SOURCE_DIR="$ext_srcdir"
+  {{EXT_NAME_UPPER}}_BUILD_DIR="$abs_builddir/$ext_builddir"
+  AS_VAR_IF([ext_builddir], [.], [
+    {{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR="$phpincludedir"
+  ], [
+    {{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR="$abs_srcdir"
+  ])
+  : ${{{EXT_NAME_UPPER}}_ZIG_FLAGS=-Doptimize=ReleaseSafe}
+
+  AC_DEFINE([HAVE_{{EXT_NAME_UPPER}}], [1],
+    [Define to 1 if the PHP extension '{{EXT_NAME}}' is available.])
+
+  AS_VAR_IF([ext_shared], [yes], [
+    {{EXT_NAME_UPPER}}_SHARED=true
+    {{EXT_NAME_UPPER}}_TARGET="$abs_builddir/modules/{{EXT_NAME}}.so"
+    {{EXT_NAME_UPPER}}_ZIG_OUTPUT="${{EXT_NAME_UPPER}}_SOURCE_DIR/modules/{{EXT_NAME}}.so"
+    {{EXT_NAME_UPPER}}_TEST_FLAGS="-d extension=${{EXT_NAME_UPPER}}_TARGET"
+    install_modules=install-modules
+  ], [
+    {{EXT_NAME_UPPER}}_SHARED=false
+    {{EXT_NAME_UPPER}}_TARGET="${{EXT_NAME_UPPER}}_BUILD_DIR/lib{{EXT_NAME}}.a"
+    {{EXT_NAME_UPPER}}_ZIG_OUTPUT="${{EXT_NAME_UPPER}}_SOURCE_DIR/zig-out/lib/lib{{EXT_NAME}}.a"
+    PHP_NEW_EXTENSION([{{EXT_NAME}}], [], [no])
+    PHP_GLOBAL_OBJS="$PHP_GLOBAL_OBJS ${{EXT_NAME_UPPER}}_TARGET"
+  ])
+
+  PHP_SUBST([ZIG])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_SOURCE_DIR])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_ZIG_FLAGS])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_BUILD_DIR])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_SHARED])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_TARGET])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_ZIG_OUTPUT])
+  PHP_SUBST([{{EXT_NAME_UPPER}}_TEST_FLAGS])
+  PHP_ADD_MAKEFILE_FRAGMENT
+])
+M4,
+    'config.w32' => <<<'W32'
+// stub only for php build system
+ARG_ENABLE('{{EXT_NAME}}', '{{EXT_NAME}} support', 'no');
+
+if (PHP_{{EXT_NAME_UPPER}} != 'no') {
+	if (!PATH_PROG('zig')) {
+		ERROR('zig is required to build {{EXT_NAME}}');
+	}
+
+	AC_DEFINE('HAVE_{{EXT_NAME_UPPER}}', 1, "Define to 1 if the PHP extension '{{EXT_NAME}}' is available.");
+
+	PHP_{{EXT_NAME_UPPER}}_SHARED = MODE_PHPIZE || force_all_shared() || PHP_{{EXT_NAME_UPPER}}_SHARED;
+	var {{EXT_NAME}}_source_dir = FSO.GetAbsolutePathName(configure_module_dirname);
+	var {{EXT_NAME}}_build_dir = FSO.GetAbsolutePathName(get_define('BUILD_DIR'));
+	var {{EXT_NAME}}_arch = {x64: 'x86_64', x86: 'x86', arm64: 'aarch64'}[TARGET_ARCH];
+	var {{EXT_NAME}}_flags = WshShell.Environment('Process').Item('{{EXT_NAME_UPPER}}_ZIG_FLAGS');
+	DEFINE('{{EXT_NAME_UPPER}}_SOURCE_DIR', {{EXT_NAME}}_source_dir);
+	DEFINE('{{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR', MODE_PHPIZE ? PHP_DIR + '\\include' : PHP_SRC_DIR);
+	DEFINE('{{EXT_NAME_UPPER}}_PHP_LIB_DIR', MODE_PHPIZE ? PHP_DIR + '\\lib' : {{EXT_NAME}}_build_dir);
+	DEFINE('{{EXT_NAME_UPPER}}_ZIG_FLAGS', {{EXT_NAME}}_flags || '-Doptimize=ReleaseSafe');
+
+	var {{EXT_NAME}}_target;
+	var {{EXT_NAME}}_output;
+	var {{EXT_NAME}}_deps = '{{EXT_NAME}}-force';
+	if (PHP_{{EXT_NAME_UPPER}}_SHARED) {
+		{{EXT_NAME}}_target = '$(BUILD_DIR)\\php_{{EXT_NAME}}.dll';
+		{{EXT_NAME}}_output = '$({{EXT_NAME_UPPER}}_SOURCE_DIR)\\modules\\php_{{EXT_NAME}}.dll';
+		{{EXT_NAME}}_deps += MODE_PHPIZE ? ' $(PHPLIB)' : ' $(BUILD_DIR)\\$(PHPLIB)';
+		ADD_FLAG('EXT_TARGETS', 'php_{{EXT_NAME}}.dll');
+		ADD_FLAG('CFLAGS_PHP', '/D COMPILE_DL_{{EXT_NAME_UPPER}}');
+		MFO.WriteLine('php_{{EXT_NAME}}.dll: ' + {{EXT_NAME}}_target);
+		MFO.WriteLine('$(BUILD_DIR)\\php_{{EXT_NAME}}.lib: ' + {{EXT_NAME}}_target);
+	} else {
+		{{EXT_NAME}}_target = '$(BUILD_DIR)\\{{EXT_NAME}}.lib';
+		{{EXT_NAME}}_output = '$({{EXT_NAME_UPPER}}_SOURCE_DIR)\\zig-out\\lib\\{{EXT_NAME}}.lib';
+		ADD_FLAG('STATIC_EXT_OBJS', {{EXT_NAME}}_target);
+		ADD_FLAG('STATIC_EXT_OBJS_RESP', '"' + {{EXT_NAME}}_target + '"');
+		extension_include_code += '#include "' + configure_module_dirname + '/php_{{EXT_NAME}}.h"\r\n';
+		extension_module_ptrs += '\tphpext_{{EXT_NAME}}_ptr,\r\n';
+	}
+	extensions_enabled[extensions_enabled.length] = ['{{EXT_NAME}}', PHP_{{EXT_NAME_UPPER}}_SHARED ? 'shared' : 'static', false];
+
+	MFO.WriteLine('{{EXT_NAME}}-force:');
+	MFO.WriteLine({{EXT_NAME}}_target + ': ' + {{EXT_NAME}}_deps);
+	MFO.WriteLine('\tcd /d "$({{EXT_NAME_UPPER}}_SOURCE_DIR)" && "$(ZIG)" build' +
+		' -Dtarget=' + {{EXT_NAME}}_arch + '-windows-msvc' +
+		' -Dshared=' + (PHP_{{EXT_NAME_UPPER}}_SHARED ? 'true' : 'false') +
+		' -Dphp-include-dir="$({{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR)"' +
+		' -Dphp-lib-dir="$({{EXT_NAME_UPPER}}_PHP_LIB_DIR)"' +
+		' -Dwindows-zts=' + (PHP_ZTS == 'yes' ? 'true' : 'false') +
+		' -Dwindows-debug=' + (PHP_DEBUG == 'yes' ? 'true' : 'false') +
+		' $({{EXT_NAME_UPPER}}_ZIG_FLAGS)');
+	MFO.WriteLine('\tcopy /y "' + {{EXT_NAME}}_output + '" "' + {{EXT_NAME}}_target + '" >nul');
+	if (PHP_{{EXT_NAME_UPPER}}_SHARED) {
+		MFO.WriteLine('\tcopy /y "$({{EXT_NAME_UPPER}}_SOURCE_DIR)\\modules\\php_{{EXT_NAME}}.lib" "$(BUILD_DIR)\\php_{{EXT_NAME}}.lib" >nul');
+	}
+	MFO.WriteBlankLines(1);
+}
+W32,
+    'Makefile.frag' => <<<'MAKE'
+# stub only for php build system
+.PHONY: {{EXT_NAME}}-force clean-{{EXT_NAME}}
+
+all: $({{EXT_NAME_UPPER}}_TARGET)
+build-modules: $({{EXT_NAME_UPPER}}_TARGET)
+PHP_TEST_SHARED_EXTENSIONS += $({{EXT_NAME_UPPER}}_TEST_FLAGS)
+
+$({{EXT_NAME_UPPER}}_TARGET): {{EXT_NAME}}-force
+	cd "$({{EXT_NAME_UPPER}}_SOURCE_DIR)" && "$(ZIG)" build \
+		-Dshared=$({{EXT_NAME_UPPER}}_SHARED) \
+		-Dphp-include-dir="$({{EXT_NAME_UPPER}}_PHP_INCLUDE_DIR)" \
+		$({{EXT_NAME_UPPER}}_ZIG_FLAGS)
+	$(mkinstalldirs) "$(@D)"
+	if test "$({{EXT_NAME_UPPER}}_ZIG_OUTPUT)" != "$@"; then cp "$({{EXT_NAME_UPPER}}_ZIG_OUTPUT)" "$@"; fi
+
+clean: clean-{{EXT_NAME}}
+clean-{{EXT_NAME}}:
+	rm -f "$({{EXT_NAME_UPPER}}_TARGET)"
+MAKE,
+    'php_{{EXT_NAME}}.h' => <<<'C'
+// stub only for php build system
+#ifndef PHP_{{EXT_NAME_UPPER}}_H
+#define PHP_{{EXT_NAME_UPPER}}_H
+
+extern zend_module_entry {{EXT_NAME}}_module_entry;
+#define phpext_{{EXT_NAME}}_ptr &{{EXT_NAME}}_module_entry
+
+#endif
+C,
+];
+
+const PHPZ_PHP_BUILD_SECTION_TEMPLATE = <<<'MD'
+## PHP build system
+
+This optional integration primarily supports built-in extensions, while also supporting shared extensions through the standard `phpize` workflow.
+
+The generated {{PHPZ_PHP_BUILD_CONFIGS}} files invoke `zig build` using PHP's build configuration. Zig must be in `PATH`. The default is `-Doptimize=ReleaseSafe`; set `{{EXT_NAME_UPPER}}_ZIG_FLAGS` before configure to customize build arguments.
+
+For a built-in extension, place this project under PHP's `ext/` directory and configure with `--enable-{{EXT_NAME}}`.
+MD;
+
+const PHPZ_PHP_BUILD_GITIGNORE_TEMPLATE = <<<'TXT'
+# php build system
+*.lo
+*.la
+.libs
+acinclude.m4
+aclocal.m4
+autom4te.cache
+build
+config.guess
+config.h
+config.h.in
+config.log
+config.nice
+config.status
+config.sub
+configure
+configure.ac
+configure.in
+include
+install-sh
+libtool
+ltmain.sh
+Makefile
+Makefile.fragments
+Makefile.global
+Makefile.objects
+missing
+mkinstalldirs
+modules
+php_test_results_*.txt
+phpt.*
+run-test-info.php
+# run-tests.php
+tests/**/*.diff
+tests/**/*.out
+tests/**/*.php
+tests/**/*.exp
+tests/**/*.log
+tests/**/*.sh
+tests/**/*.db
+tests/**/*.mem
+tmp-php.ini
+TXT;
+
 const PHPZ_TEMPLATE_FILES = [
     '.gitignore' => <<<'TXT'
 /.vscode
@@ -1076,6 +1288,7 @@ const PHPZ_TEMPLATE_FILES = [
 /zig-out/
 /.zig-cache/
 /zig-pkg/
+{{PHPZ_PHP_BUILD_GITIGNORE}}
 TXT,
     'build.zig' => <<<'ZIG'
 const std = @import("std");
@@ -1091,6 +1304,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 {{PHPZ_PLATFORM_TARGET_CHECK}}
     // PHP build options.
+    const shared = b.option(bool, "shared", "Build a shared PHP extension instead of a built-in extension") orelse true;
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "{{PHP_INCLUDE_DIR}}";
 {{PHPZ_WINDOWS_BUILD_OPTIONS}}
     const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
@@ -1106,6 +1320,7 @@ pub fn build(b: *std.Build) void {
         .libc_file = if (libc_file) |file| .{ .cwd_relative = file } else null,
         .php_include_dir = .{ .cwd_relative = php_include_dir },
 {{PHPZ_WINDOWS_INIT_OPTIONS}}
+        .shared = shared,
     });
 
     // Build the PHP extension library.
@@ -1116,7 +1331,6 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
-        .linkage = .dynamic,
     });
 
     // Pass extension metadata to Zig source.
@@ -1125,13 +1339,16 @@ pub fn build(b: *std.Build) void {
     extension_info.addOption([:0]const u8, "version", extension_version);
     extension.root_module.addOptions("extension_info", extension_info);
 
-    // Copy the extension to modules/.
+    if (shared) {
+        // Copy the extension to modules/.
+        const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
 {{PHPZ_EXT_FILENAME}}
-
-    const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
-    extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
-    b.getInstallStep().dependOn(&extension_file.step);
+        extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
+        b.getInstallStep().dependOn(&extension_file.step);
 {{PHPZ_TEST_STEP}}
+    } else {
+        b.installArtifact(extension);
+    }
 }
 
 ZIG,
@@ -1149,6 +1366,7 @@ A minimal PHP extension built with phpz.
 
 ```
 .
+{{PHPZ_PHP_BUILD_FILES_STRUCTURE}}
 ├── build.zig              # Build config
 ├── build.zig.zon          # Dependencies
 ├── {{EXT_NAME}}.h             # C header: phpz.h + generated arginfo
@@ -1164,6 +1382,7 @@ A minimal PHP extension built with phpz.
 ## Build and run
 
 {{PHPZ_BUILD_RUN_SECTIONS}}
+{{PHPZ_PHP_BUILD_SECTION}}
 MD,
     '{{EXT_NAME}}.h' => <<<'C'
 #ifndef {{EXT_NAME_UPPER}}_H
@@ -1171,9 +1390,6 @@ MD,
 
 #include "phpz.h"
 #include "{{EXT_NAME}}_arginfo.h"
-
-extern zend_module_entry {{EXT_NAME}}_module_entry;
-#define phpext_{{EXT_NAME}}_ptr &{{EXT_NAME}}_module_entry
 
 #endif
 C,
@@ -1405,6 +1621,7 @@ final class TemplateWriter
         bool $hasGenStub,
         bool $unix,
         bool $windows,
+        bool $phpBuildSystem,
     ): string {
         $targetCheck = '';
         $extFilename = PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE;
@@ -1440,6 +1657,22 @@ final class TemplateWriter
             $runSections[] = PHPZ_WINDOWS_RUN_SECTION_TEMPLATE;
         }
         $contents = str_replace('{{PHPZ_BUILD_RUN_SECTIONS}}', implode("\n\n", $runSections), $contents);
+        $buildTemplates = self::phpBuildTemplates($phpBuildSystem, $unix, $windows);
+        $buildStructure = [];
+        foreach (array_keys($buildTemplates) as $file) {
+            $buildStructure[] = '├── ' . $file . '  # (Optional) PHP Build System Support';
+        }
+        $contents = str_replace("{{PHPZ_PHP_BUILD_FILES_STRUCTURE}}\n", $buildStructure === [] ? '' : implode("\n", $buildStructure) . "\n", $contents);
+        $contents = str_replace("\n{{PHPZ_PHP_BUILD_SECTION}}", $phpBuildSystem ? "\n\n" . PHPZ_PHP_BUILD_SECTION_TEMPLATE : '', $contents);
+        $configs = [];
+        if ($unix) {
+            $configs[] = '[config.m4](config.m4) (Unix)';
+        }
+        if ($windows) {
+            $configs[] = '[config.w32](config.w32) (Windows)';
+        }
+        $contents = str_replace('{{PHPZ_PHP_BUILD_CONFIGS}}', implode(' and ', $configs), $contents);
+        $contents = str_replace("\n{{PHPZ_PHP_BUILD_GITIGNORE}}", $phpBuildSystem ? "\n\n" . PHPZ_PHP_BUILD_GITIGNORE_TEMPLATE : '', $contents);
         $contents = str_replace('{{PHPZ_UNIX_MANUAL_COMMANDS}}', PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE, $contents);
         $contents = str_replace('{{PHPZ_WINDOWS_MANUAL_COMMANDS}}', PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE, $contents);
         $contents = str_replace('{{PHPZ_BUILD_ACTION}}', $hasRunTests ? 'Build and run PHPT tests' : 'Build', $contents);
@@ -1447,8 +1680,8 @@ final class TemplateWriter
         $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_DIR_STRUCTURE_TEMPLATE : '', $contents);
         $contents = str_replace('{{PHPZ_SRC_TREE_ENTRY}}', $hasRunTests ? '├── src/' : '└── src/', $contents);
         $contents = str_replace(
-            "{{PHPZ_TEST_STEP}}",
-            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE : '',
+            "{{PHPZ_TEST_STEP}}\n",
+            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE . "\n" : '',
             $contents,
         );
         $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build run-tests' : 'zig build', $contents);
@@ -1477,6 +1710,22 @@ final class TemplateWriter
         return str_ends_with($contents, "\n") ? $contents : $contents . "\n";
     }
 
+    /** @return array<string, string> */
+    private static function phpBuildTemplates(bool $enabled, bool $unix, bool $windows): array
+    {
+        if (!$enabled) {
+            return [];
+        }
+        $templates = PHPZ_PHP_BUILD_TEMPLATE_FILES;
+        if (!$unix) {
+            unset($templates['config.m4'], $templates['Makefile.frag']);
+        }
+        if (!$windows) {
+            unset($templates['config.w32']);
+        }
+        return $templates;
+    }
+
     /**
      * @return array{int, int}
      */
@@ -1489,11 +1738,13 @@ final class TemplateWriter
         bool $hasGenStub,
         bool $unix,
         bool $windows,
+        bool $phpBuildSystem,
     ): array {
         $written = 0;
         $skippedTests = 0;
 
-        foreach (PHPZ_TEMPLATE_FILES as $relative => $contents) {
+        $templates = PHPZ_TEMPLATE_FILES + self::phpBuildTemplates($phpBuildSystem, $unix, $windows);
+        foreach ($templates as $relative => $contents) {
             if (!$hasRunTests && str_starts_with($relative, 'tests/')) {
                 $skippedTests++;
                 continue;
@@ -1508,7 +1759,7 @@ final class TemplateWriter
             }
 
             $rendered = self::withFinalNewline(
-                self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows),
+                self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows, $phpBuildSystem),
             );
             if (file_put_contents($destPath, $rendered) === false) {
                 Console::fail("Unable to write $destPath");
@@ -1570,6 +1821,7 @@ final class Command
             $genStubPath !== null,
             $args->unix,
             $args->windows,
+            $args->phpBuildSystem,
         );
         $templateResult = $templateCount . ' files';
         if ($skippedTestTemplateCount > 0) {
@@ -1643,6 +1895,7 @@ Options:
   --with-run-tests [path]  Use run-tests.php; without path, auto-detect via php-config
                            or zig-pkg/phpz-*/examples/skeleton/run-tests.php.
   --without-run-tests      Disable run-tests.php; omit tests/ and the build test step.
+  --with-php-build-system  Generate PHP build system files (default: disabled).
   --onlyunix               Only include Unix support in build.zig.
   --onlywindows            Only include Windows support in build.zig.
   --force                  Overwrite generated template files in an existing target.

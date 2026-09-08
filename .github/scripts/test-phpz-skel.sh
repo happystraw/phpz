@@ -172,6 +172,7 @@ note "lint and help"
 "$PHP_BIN" "$SKEL" --help >"$TMP_ROOT/help"
 assert_contains "$TMP_ROOT/help" "--with-php-config <path>"
 assert_contains "$TMP_ROOT/help" "--without-run-tests"
+assert_contains "$TMP_ROOT/help" "--with-php-build-system"
 
 note "default + zig build run-tests"
 new_case default_build
@@ -190,10 +191,78 @@ assert_platform_template
 assert_contains "$(target_dir)/build.zig" "const extension_name = @tagName(package.name);"
 assert_contains "$(target_dir)/build.zig" 'extension_info.addOption([:0]const u8, "version", extension_version);'
 assert_contains "$(target_dir)/src/root.zig" ".name = extension.name,"
-assert_contains "$(target_dir)/demo_ext.h" "extern zend_module_entry demo_ext_module_entry;"
+assert_not_contains "$(target_dir)/demo_ext.h" "extern zend_module_entry"
+assert_no_path "$(target_dir)/config.m4"
+assert_no_path "$(target_dir)/config.w32"
+assert_no_path "$(target_dir)/Makefile.frag"
+assert_no_path "$(target_dir)/php_demo_ext.h"
+assert_not_contains "$(target_dir)/README.md" "## PHP build system"
 assert_contains "$CASE_DIR/stdout" "extension:    demo_ext"
 run_zig default-build-run-tests build run-tests
 run_php_ri default-ri
+
+note "PHP build system integration"
+new_case php_build_system
+run_skel \
+    --ext DemoExt \
+    --dir "$(php_path "$CASE_DIR/out")" \
+    --phpz "$PHPZ_REF" \
+    --with-php-build-system
+assert_file "$(target_dir)/php_demo_ext.h"
+assert_contains "$(target_dir)/php_demo_ext.h" "extern zend_module_entry demo_ext_module_entry;"
+assert_contains "$(target_dir)/php_demo_ext.h" "#define phpext_demo_ext_ptr &demo_ext_module_entry"
+assert_not_contains "$(target_dir)/demo_ext.h" "phpext_"
+assert_contains "$(target_dir)/README.md" "## PHP build system"
+if has_skel_arg "--onlywindows"; then
+    assert_no_path "$(target_dir)/config.m4"
+    assert_no_path "$(target_dir)/Makefile.frag"
+    assert_not_contains "$(target_dir)/README.md" "[config.m4]"
+else
+    assert_file "$(target_dir)/config.m4"
+    assert_file "$(target_dir)/Makefile.frag"
+    assert_contains "$(target_dir)/config.m4" 'PHP_NEW_EXTENSION([demo_ext], [], [no])'
+    assert_contains "$(target_dir)/Makefile.frag" '-Dshared=$(DEMO_EXT_SHARED)'
+fi
+if has_skel_arg "--onlyunix"; then
+    assert_no_path "$(target_dir)/config.w32"
+    assert_not_contains "$(target_dir)/README.md" "[config.w32]"
+else
+    assert_file "$(target_dir)/config.w32"
+    assert_contains "$(target_dir)/config.w32" "PHP_DEMO_EXT_SHARED"
+fi
+assert_platform_template
+run_zig php-build-system-shared build run-tests
+run_php_ri php-build-system-ri
+run_zig php-build-system-static build -Dshared=false -Doptimize=ReleaseSafe
+if [ "$IS_WINDOWS" -eq 1 ]; then
+    assert_file "$(target_dir)/zig-out/lib/demo_ext.lib"
+else
+    assert_file "$(target_dir)/zig-out/lib/libdemo_ext.a"
+fi
+
+if [ "$IS_WINDOWS" -eq 0 ]; then
+    note "traditional phpize build"
+    [ -n "$PHP_CONFIG_BIN" ] || fail "php-config is required for the phpize test"
+    command -v "${PHPIZE:-phpize}" >/dev/null 2>&1 || fail "phpize is required"
+    new_case phpize_build
+    run_skel \
+        --ext DemoExt \
+        --dir "$(php_path "$CASE_DIR/out")" \
+        --phpz "$PHPZ_REF" \
+        --with-php-build-system
+    assert_no_path "$(target_dir)/modules/demo_ext.so"
+    if ! (
+        cd "$(target_dir)" &&
+            "${PHPIZE:-phpize}" &&
+            ZIG="$(command -v "$ZIG_BIN")" ./configure --enable-demo_ext --with-php-config="$PHP_CONFIG_BIN" &&
+            make &&
+            NO_INTERACTION=1 REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$PHP_BIN" make test TESTS=tests
+    ); then
+        fail "traditional phpize build or PHPT tests failed"
+    fi
+    assert_file "$(target_dir)/modules/demo_ext.so"
+    run_php_ri phpize-ri
+fi
 
 if [ -n "$PHP_CONFIG_BIN" ]; then
     note "explicit php-config + zig build run-tests"

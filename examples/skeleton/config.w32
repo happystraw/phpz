@@ -1,0 +1,57 @@
+// stub only for php build system
+ARG_ENABLE('skeleton', 'skeleton support', 'no');
+
+if (PHP_SKELETON != 'no') {
+	if (!PATH_PROG('zig')) {
+		ERROR('zig is required to build skeleton');
+	}
+
+	AC_DEFINE('HAVE_SKELETON', 1, "Define to 1 if the PHP extension 'skeleton' is available.");
+
+	PHP_SKELETON_SHARED = MODE_PHPIZE || force_all_shared() || PHP_SKELETON_SHARED;
+	var skeleton_source_dir = FSO.GetAbsolutePathName(configure_module_dirname);
+	var skeleton_build_dir = FSO.GetAbsolutePathName(get_define('BUILD_DIR'));
+	var skeleton_arch = {x64: 'x86_64', x86: 'x86', arm64: 'aarch64'}[TARGET_ARCH];
+	var skeleton_flags = WshShell.Environment('Process').Item('SKELETON_ZIG_FLAGS');
+	DEFINE('SKELETON_SOURCE_DIR', skeleton_source_dir);
+	DEFINE('SKELETON_PHP_INCLUDE_DIR', MODE_PHPIZE ? PHP_DIR + '\\include' : PHP_SRC_DIR);
+	DEFINE('SKELETON_PHP_LIB_DIR', MODE_PHPIZE ? PHP_DIR + '\\lib' : skeleton_build_dir);
+	DEFINE('SKELETON_ZIG_FLAGS', skeleton_flags || '-Doptimize=ReleaseSafe');
+
+	var skeleton_target;
+	var skeleton_output;
+	var skeleton_deps = 'skeleton-force';
+	if (PHP_SKELETON_SHARED) {
+		skeleton_target = '$(BUILD_DIR)\\php_skeleton.dll';
+		skeleton_output = '$(SKELETON_SOURCE_DIR)\\modules\\php_skeleton.dll';
+		skeleton_deps += MODE_PHPIZE ? ' $(PHPLIB)' : ' $(BUILD_DIR)\\$(PHPLIB)';
+		ADD_FLAG('EXT_TARGETS', 'php_skeleton.dll');
+		ADD_FLAG('CFLAGS_PHP', '/D COMPILE_DL_SKELETON');
+		MFO.WriteLine('php_skeleton.dll: ' + skeleton_target);
+		MFO.WriteLine('$(BUILD_DIR)\\php_skeleton.lib: ' + skeleton_target);
+	} else {
+		skeleton_target = '$(BUILD_DIR)\\skeleton.lib';
+		skeleton_output = '$(SKELETON_SOURCE_DIR)\\zig-out\\lib\\skeleton.lib';
+		ADD_FLAG('STATIC_EXT_OBJS', skeleton_target);
+		ADD_FLAG('STATIC_EXT_OBJS_RESP', '"' + skeleton_target + '"');
+		extension_include_code += '#include "' + configure_module_dirname + '/php_skeleton.h"\r\n';
+		extension_module_ptrs += '\tphpext_skeleton_ptr,\r\n';
+	}
+	extensions_enabled[extensions_enabled.length] = ['skeleton', PHP_SKELETON_SHARED ? 'shared' : 'static', false];
+
+	MFO.WriteLine('skeleton-force:');
+	MFO.WriteLine(skeleton_target + ': ' + skeleton_deps);
+	MFO.WriteLine('\tcd /d "$(SKELETON_SOURCE_DIR)" && "$(ZIG)" build' +
+		' -Dtarget=' + skeleton_arch + '-windows-msvc' +
+		' -Dshared=' + (PHP_SKELETON_SHARED ? 'true' : 'false') +
+		' -Dphp-include-dir="$(SKELETON_PHP_INCLUDE_DIR)"' +
+		' -Dphp-lib-dir="$(SKELETON_PHP_LIB_DIR)"' +
+		' -Dwindows-zts=' + (PHP_ZTS == 'yes' ? 'true' : 'false') +
+		' -Dwindows-debug=' + (PHP_DEBUG == 'yes' ? 'true' : 'false') +
+		' $(SKELETON_ZIG_FLAGS)');
+	MFO.WriteLine('\tcopy /y "' + skeleton_output + '" "' + skeleton_target + '" >nul');
+	if (PHP_SKELETON_SHARED) {
+		MFO.WriteLine('\tcopy /y "$(SKELETON_SOURCE_DIR)\\modules\\php_skeleton.lib" "$(BUILD_DIR)\\php_skeleton.lib" >nul');
+	}
+	MFO.WriteBlankLines(1);
+}

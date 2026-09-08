@@ -10,7 +10,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Read PHP build options.
+    // PHP build options.
+    const shared = b.option(bool, "shared", "Build a shared PHP extension instead of a built-in extension") orelse true;
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php";
     const php_lib_dir = b.option([]const u8, "php-lib-dir", "Windows only: required PHP SDK library directory containing php8*.lib");
     const windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false;
@@ -25,11 +26,12 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         },
-        .libc_file = if (libc_file) |path| .{ .cwd_relative = path } else null,
+        .libc_file = if (libc_file) |file| .{ .cwd_relative = file } else null,
         .php_include_dir = .{ .cwd_relative = php_include_dir },
-        .php_lib_dir = if (php_lib_dir) |d| .{ .cwd_relative = d } else null,
+        .php_lib_dir = if (php_lib_dir) |lib_dir| .{ .cwd_relative = lib_dir } else null,
         .windows_zts = windows_zts,
         .windows_debug = windows_debug,
+        .shared = shared,
     });
 
     // Build the PHP extension library.
@@ -40,7 +42,6 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
-        .linkage = .dynamic,
     });
 
     // Pass extension metadata to Zig source.
@@ -49,26 +50,30 @@ pub fn build(b: *std.Build) void {
     extension_info.addOption([:0]const u8, "version", extension_version);
     extension.root_module.addOptions("extension_info", extension_info);
 
-    // Copy the extension to modules/.
-    const extension_filename = if (target.result.os.tag == .windows)
-        "php_" ++ extension_name ++ ".dll"
-    else
-        extension_name ++ ".so";
+    if (shared) {
+        // Copy the extension to modules/.
+        const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
+        var extension_filename: []const u8 = extension_name ++ ".so";
+        if (target.result.os.tag == .windows) {
+            extension_filename = "php_" ++ extension_name ++ ".dll";
+            extension_file.addCopyFileToSource(extension.getEmittedImplib(), "modules/php_" ++ extension_name ++ ".lib");
+        }
+        extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
+        b.getInstallStep().dependOn(&extension_file.step);
 
-    const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
-    extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
-    b.getInstallStep().dependOn(&extension_file.step);
-
-    // Add PHPT test step.
-    const run_tests_step = b.step("run-tests", "Run PHPT tests");
-    const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
-        "php",
-        "run-tests.php",
-        "-q",
-        "--show-diff",
-        "-d",
-        b.fmt("extension=modules/{s}", .{extension_filename}),
-    });
-    test_phpt_cmd.step.dependOn(b.getInstallStep());
-    run_tests_step.dependOn(&test_phpt_cmd.step);
+        // Add PHPT test step.
+        const run_tests_step = b.step("run-tests", "Run PHPT tests");
+        const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
+            "php",
+            "run-tests.php",
+            "-q",
+            "--show-diff",
+            "-d",
+            b.fmt("extension=modules/{s}", .{extension_filename}),
+        });
+        test_phpt_cmd.step.dependOn(b.getInstallStep());
+        run_tests_step.dependOn(&test_phpt_cmd.step);
+    } else {
+        b.installArtifact(extension);
+    }
 }
