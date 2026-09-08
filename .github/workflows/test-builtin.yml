@@ -1,0 +1,92 @@
+name: Built-in Extension Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      php:
+        description: PHP version
+        type: choice
+        default: "8.5"
+        options: ["8.2", "8.3", "8.4", "8.5"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: builtin (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }}, ${{ matrix.phpts }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, macos-latest]
+        phpts: [nts, ts]
+    env:
+      PHP_BUILD_VERSION: ${{ inputs.php || '8.5' }}
+      PHP_BUILD_TS: ${{ matrix.phpts }}
+      NO_INTERACTION: "1"
+      REPORT_EXIT_STATUS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+      - name: Checkout PHP source
+        uses: actions/checkout@v4
+        with:
+          repository: php/php-src
+          ref: PHP-${{ env.PHP_BUILD_VERSION }}
+          path: build/php-src
+      - name: Prepare skeleton
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const target = 'build/php-src/ext/skeleton';
+          fs.rmSync(target, { recursive: true, force: true });
+          fs.cpSync('examples/skeleton', target, { recursive: true });
+          const zon = `${target}/build.zig.zon`;
+          fs.writeFileSync(zon, fs.readFileSync(zon, 'utf8').replace('.path = "../.."', '.path = "../../../.."'));
+          NODE
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf bison re2c pkg-config
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install autoconf bison re2c pkgconf
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+      - name: Build PHP with skeleton (Unix)
+        if: runner.os != 'Windows'
+        working-directory: build/php-src
+        run: |
+          ./buildconf --force
+          zts=--disable-zts
+          if [ "$PHP_BUILD_TS" = ts ]; then zts=--enable-zts; fi
+          ./configure --disable-all --disable-cgi --disable-phpdbg --enable-cli --enable-skeleton "$zts"
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+      - name: Test built-in skeleton (Unix)
+        if: runner.os != 'Windows'
+        working-directory: build/php-src
+        run: |
+          export TEST_PHP_EXECUTABLE="$PWD/sapi/cli/php"
+          "$TEST_PHP_EXECUTABLE" -n -r 'if (!extension_loaded("skeleton") || (bool) PHP_ZTS !== (getenv("PHP_BUILD_TS") === "ts")) { exit(1); }'
+          "$TEST_PHP_EXECUTABLE" -n --ri skeleton
+          "$TEST_PHP_EXECUTABLE" -n run-tests.php -n -q ext/skeleton/tests
+      - name: Checkout PHP Windows builder
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v4
+        with:
+          repository: php/php-windows-builder
+          ref: v1
+          path: build/php-windows-builder
+      - name: Build and test built-in skeleton (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Import-Module "$env:GITHUB_WORKSPACE\build\php-windows-builder\php\BuildPhp" -Force
+          $vs = Get-VsVersion -PhpVersion $env:PHP_BUILD_VERSION
+          Set-Location "$env:GITHUB_WORKSPACE\build"
+          Get-PhpSdk
+          Set-Location php-src
+          Invoke-PhpSdkStarter -BuildDirectory "$env:GITHUB_WORKSPACE\build" -VsConfig $vs -Arch x64 `
+            -Task "$env:GITHUB_WORKSPACE\.github\scripts\test-builtin-windows.bat"
