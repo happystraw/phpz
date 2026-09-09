@@ -26,12 +26,16 @@ jobs:
     strategy:
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
-        arch: [x86_64, aarch64]
+        # setup-php no longer supports Intel macOS after Homebrew dropped support.
+        # https://github.com/shivammathur/setup-php/issues/1112
+        arch:
+          # - x86_64
+          - aarch64
         phpts: [nts, ts]
         debug: [true, false]
         include:
-          - arch: x86_64
-            os: macos-15-intel
+          # - arch: x86_64
+          #   os: macos-15-intel
           - arch: aarch64
             os: macos-latest
     steps:
@@ -58,17 +62,14 @@ jobs:
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR"
       - name: Run example tests (ReleaseSafe)
-        if: ${{ matrix.debug == false }}
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
       - name: Run example tests (ReleaseFast)
-        if: ${{ matrix.debug == false }}
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseFast
       - name: Run example tests (ReleaseSmall)
-        if: ${{ matrix.debug == false }}
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSmall
