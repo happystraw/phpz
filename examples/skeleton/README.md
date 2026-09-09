@@ -29,7 +29,7 @@ A minimal PHP extension built with phpz.
     └── counter.phpt
 ```
 
-`config.m4`, `config.w32`, `Makefile.frag`, and `php_skeleton.h` are only needed for PHP build system integration; direct `zig build` does not require them.
+`config.m4`, `config.w32`, `Makefile.frag`, and `php_skeleton.h` are only needed for PHP build system integration; direct `zig build` does not require them. You can delete these files if you do not need this integration.
 
 ## Regenerate arginfo
 

@@ -16,6 +16,7 @@
         "build.zig.zon",
         "examples",
         "src",
+        "scripts/build-windows.sh",
         "tools",
         "LICENSE",
         "README.md",

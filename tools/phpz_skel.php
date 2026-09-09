@@ -1376,6 +1376,7 @@ A minimal PHP extension built with phpz.
 │   └── root.zig           # Module setup, functions, and Counter class
 {{PHPZ_TEST_DIR_STRUCTURE}}
 ```
+{{PHPZ_PHP_BUILD_FILES_NOTE}}
 
 {{PHPZ_GEN_STUB_REGEN_SECTION}}
 
@@ -1659,10 +1660,19 @@ final class TemplateWriter
         $contents = str_replace('{{PHPZ_BUILD_RUN_SECTIONS}}', implode("\n\n", $runSections), $contents);
         $buildTemplates = self::phpBuildTemplates($phpBuildSystem, $unix, $windows);
         $buildStructure = [];
+        $buildFiles = [];
         foreach (array_keys($buildTemplates) as $file) {
             $buildStructure[] = '├── ' . $file . '  # (Optional) PHP Build System Support';
+            $buildFiles[] = '`' . $file . '`';
         }
         $contents = str_replace("{{PHPZ_PHP_BUILD_FILES_STRUCTURE}}\n", $buildStructure === [] ? '' : implode("\n", $buildStructure) . "\n", $contents);
+        $buildNote = '';
+        if ($buildFiles !== []) {
+            $lastFile = array_pop($buildFiles);
+            $buildNote = "\n" . implode(', ', $buildFiles) . (count($buildFiles) > 1 ? ', and ' : ' and ') . $lastFile
+                . ' are only needed for PHP build system integration; direct `zig build` does not require them. You can delete these files if you do not need this integration.' . "\n";
+        }
+        $contents = str_replace("{{PHPZ_PHP_BUILD_FILES_NOTE}}\n", $buildNote, $contents);
         $contents = str_replace("\n{{PHPZ_PHP_BUILD_SECTION}}", $phpBuildSystem ? "\n\n" . PHPZ_PHP_BUILD_SECTION_TEMPLATE : '', $contents);
         $configs = [];
         if ($unix) {
