@@ -462,14 +462,14 @@ pub const Call = opaque {
                 if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return .null;
                 if (comptime s.resolve) {
                     var err: ?[*:0]u8 = null;
-                    runtime.target.parse(zv, false, &err) catch {
+                    runtime.target.parse(zv, &err) catch {
                         if (err) |e| {
                             defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
                             return errors.argumentTypeError(n, "must be a valid callback" ++ or_null ++ ", %s", .{e});
                         }
                         return errors.argumentTypeError(n, "must be a valid callback" ++ or_null, .{});
                     };
-                } else if (!zend.Callable.isCallable(zv, false)) {
+                } else if (!zend.Callable.isCallable(zv)) {
                     return errors.argumentTypeError(n, "must be a valid callback" ++ or_null, .{});
                 }
                 return if (comptime s.nullable) .{ .value = zv } else zv;
@@ -482,7 +482,7 @@ pub const Call = opaque {
                 if (comptime s.type) |kind| {
                     const value = ref.val();
                     const matches = if (comptime kind == .callable)
-                        zend.Callable.isCallable(value, false)
+                        zend.Callable.isCallable(value)
                     else
                         Zval.raw.is(value, comptime kind.toZvalKind());
                     if (!matches) {

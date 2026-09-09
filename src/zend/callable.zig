@@ -37,30 +37,21 @@ pub const Callable = struct {
 
     /// Parse a zval into this Callable (fills fci and fcc).
     ///
-    /// Equivalent to PHP's `zend_parse_arg_func()` — resolves a zval containing
+    /// Resolves a zval containing
     /// a function name, closure, `['class','method']` array, or invocable object
     /// into a `zend_fcall_info`/`zend_fcall_info_cache` pair ready for `call()`.
     ///
     /// Call trampolines are released after parsing for leak safety
     /// (`zend_call_function` re-fetches them automatically).
     ///
-    /// When `nullable` is true and the zval is null, the callable is zeroed:
-    /// `fci.size` is set to 0 and `fcc.function_handler` to null.
-    /// `isCallable()` returns false for such a callable.
-    ///
     /// Returns `error.NotCallable` if the zval is not callable
     /// (a PHP error may be pending in `err`).
     /// On success the `fci` and `fcc` fields are populated and ready for `call()`.
     ///
-    /// `error_str` optionally receives the error message from `zend_fcall_info_init`
+    /// `err` optionally receives the error message from `zend_fcall_info_init`
     /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
-    pub fn parse(self: *Callable, zv: *c.zval, comptime nullable: bool, err: ?*?[*:0]u8) ParseError!void {
+    pub fn parse(self: *Callable, zv: *c.zval, err: ?*?[*:0]u8) ParseError!void {
         if (err) |e| e.* = null;
-        if (nullable and Zval.raw.is(zv, .null)) {
-            self.fci.size = 0;
-            self.fcc.function_handler = null;
-            return;
-        }
         if (c.zend_fcall_info_init(zv, 0, &self.fci, &self.fcc, null, @ptrCast(err)) != c.SUCCESS) {
             return error.NotCallable;
         }
@@ -71,9 +62,7 @@ pub const Callable = struct {
     }
 
     /// Check whether a zval contains a callable.
-    /// When `nullable` is true, a null zval is also accepted.
-    pub fn isCallable(zv: *c.zval, comptime nullable: bool) bool {
-        if (comptime nullable) if (Zval.raw.is(zv, .null)) return true;
+    pub fn isCallable(zv: *c.zval) bool {
         return c.zend_is_callable(zv, 0, null);
     }
 
