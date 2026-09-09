@@ -8,6 +8,7 @@ const Ctx = @import("Ctx.zig");
 const errors = @import("errors.zig");
 const function_helper = @import("function.zig");
 const globals = @import("globals.zig");
+const Gc = @import("gc.zig").Gc;
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
@@ -77,12 +78,14 @@ fn Resolved(comptime T: type) type {
         binding_strategy: BindingStrategy,
         /// Fallible adapter around the stub-generated class registration.
         register: fn () anyerror!*zend.ClassEntry,
-        /// Optional initializer for the Zig backing value.
+        /// Initializer for the Zig backing value.
         init: ?fn () anyerror!T,
-        /// Optional destructor for the Zig backing value.
+        /// Destructor for the Zig backing value.
         deinit: ?fn (*T) void,
-        /// Optional cloner for the Zig backing value.
+        /// Cloner for the Zig backing value.
         clone: ?fn (*const T) anyerror!T,
+        /// Reports PHP values owned by the Zig backing.
+        gc: ?fn (*T, *Gc) void,
         /// Zend object handler overrides.
         handlers: ObjectHandlers,
 
@@ -105,6 +108,7 @@ fn Resolved(comptime T: type) type {
                 const backing = std.mem.eql(u8, field_name, "init") or
                     std.mem.eql(u8, field_name, "deinit") or
                     std.mem.eql(u8, field_name, "clone") or
+                    std.mem.eql(u8, field_name, "gc") or
                     std.mem.eql(u8, field_name, "operate") or
                     std.mem.eql(u8, field_name, "compare") or
                     std.mem.eql(u8, field_name, "handlers");
@@ -202,6 +206,7 @@ fn Resolved(comptime T: type) type {
             var initializer: ?fn () anyerror!T = null;
             var deinitializer: ?fn (*T) void = null;
             var cloner: ?fn (*const T) anyerror!T = null;
+            var gc_callback: ?fn (*T, *Gc) void = null;
             var handlers: ObjectHandlers = if (@hasField(Options, "handlers")) options.handlers else .{};
 
             if (layout == .backed) {
@@ -238,6 +243,12 @@ fn Resolved(comptime T: type) type {
                             return @call(.auto, options.clone, .{value});
                         }
                     }.call;
+                }
+
+                if (@hasField(Options, "gc") and @TypeOf(options.gc) != @TypeOf(null)) {
+                    if (@TypeOf(options.gc) != fn (*T, *Gc) void) @compileError("Class " ++ class_name ++ " .gc must be fn (*" ++ @typeName(T) ++ ", *Gc) void");
+                    if (handlers.get_gc != null) @compileError("Class " ++ class_name ++ " .gc conflicts with .handlers.get_gc");
+                    gc_callback = options.gc;
                 }
 
                 if (@hasField(Options, "operate") and @TypeOf(options.operate) != @TypeOf(null)) {
@@ -314,6 +325,7 @@ fn Resolved(comptime T: type) type {
                 .init = initializer,
                 .deinit = deinitializer,
                 .clone = cloner,
+                .gc = gc_callback,
                 .handlers = handlers,
             };
         }
@@ -454,19 +466,25 @@ pub const ObjectHandlers = struct {
 ///   it with `.{}`, or provide a function returning `T` or `!T`.
 /// - `.deinit`: releases an initialized backing with `fn (*T) void`.
 /// - `.clone`: copies backing with `fn (*const T) T` or `fn (*const T) !T`.
+/// - `.gc`: reports owned PHP values with `fn (*T, *Gc) void`.
+///   Use `collector.add(value)` for each owned value; standard PHP properties are included automatically.
 /// - `.handlers`: overrides selected Zend handlers with `ObjectHandlers`.
 /// - `.operate`: handles operations and writes to `result`; returns `void` or `!void`.
 ///   Return `error.Unsupported` to report unsupported operations or operands as TypeError.
 /// - `.compare`: returns `Comparison` or `!Comparison`.
 ///   Return `error.Uncomparable` to report incompatible operands as TypeError.
 ///
-/// Omit `.operate` or `.compare`, or set them to null, to keep the existing handler.
-/// They conflict with non-null `.handlers.do_operation` and `.handlers.compare`, respectively.
+/// Omit `.gc`, `.operate`, or `.compare`, or set them to null, to keep the existing handler.
+/// They conflict with non-null `.handlers.get_gc`, `.handlers.do_operation`, and `.handlers.compare`, respectively.
 ///
-/// Backing options (`.init`, `.deinit`, `.clone`, `.handlers`, `.operate`,
+/// Backing options (`.init`, `.deinit`, `.clone`, `.gc`, `.handlers`, `.operate`,
 /// and `.compare`) require a non-empty `T`. Before backing is initialized,
 /// instance methods throw a PHP
 /// error directing the caller to the constructor.
+///
+/// The `.gc` callback runs only for initialized backing. It must only report
+/// existing references, without modifying the object or invoking PHP user code.
+/// The collector is borrowed for the callback and must not be retained.
 ///
 /// ## Operator and comparison callbacks
 ///
@@ -558,6 +576,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             handlers.free_obj = lifecycle.destroyObject;
             handlers.offset = @offsetOf(Self, "std");
             handlers.clone_obj = if (resolved.clone != null) lifecycle.cloneObject else null;
+            if (resolved.gc != null) handlers.get_gc = lifecycle.getGc;
 
             // Apply object handlers
             inline for (@typeInfo(ObjectHandlers).@"struct".field_names) |field_name| {
@@ -570,6 +589,15 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         }
 
         const lifecycle = struct {
+            fn getGc(obj: ?*c.zend_object, table: ?*?[*]c.zval, n: ?*c_int) callconv(.c) ?*c.HashTable {
+                const self: *Self = .fromStdUnchecked(obj.?);
+                const value = self.backing() orelse return c.zend_std_get_gc(obj, table, n);
+                const buffer = c.zend_get_gc_buffer_create();
+                resolved.gc.?(value, Gc.from(buffer));
+                c.zend_get_gc_buffer_use(buffer, table, n);
+                return c.zend_std_get_properties(obj);
+            }
+
             fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
                 const intern = alloc(ce.?);
                 intern.initBacking();
@@ -625,15 +653,20 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         }
 
         fn clearBacking(self: *Self) void {
-            if (self.backingStorage().*) |*value| {
+            var old = self.backingStorage().*;
+            self.backingStorage().* = null;
+            if (old) |*value| {
                 if (resolved.deinit) |deinitializer| deinitializer(value);
-                self.backingStorage().* = null;
             }
         }
 
         fn commitBacking(self: *Self, value: T) void {
-            self.clearBacking();
+            var old = self.backingStorage().*;
+            // Destructors may reenter PHP and replace the backing again.
             self.backingStorage().* = value;
+            if (old) |*previous| {
+                if (resolved.deinit) |deinitializer| deinitializer(previous);
+            }
         }
 
         fn receiver(ctx: *Ctx) ?*Self {
@@ -921,6 +954,7 @@ test "concrete Zig class public declarations compile" {
         .init = null,
         .deinit = null,
         .clone = null,
+        .gc = null,
         .handlers = .{},
     });
 

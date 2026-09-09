@@ -7,6 +7,7 @@ const metrics = @import("metrics.zig");
 const bailout = @import("testing/bailout.zig");
 const superglobals = @import("testing/superglobals.zig");
 const reference_arguments = @import("testing/reference_arguments.zig");
+const gc = @import("testing/gc.zig");
 
 fn info(m: *phpz.ModuleEntry) void {
     phpz.info.table.start();
@@ -32,7 +33,7 @@ comptime {
     phpz.module(.{
         .name = extension.name,
         .version = extension.version,
-        .classes = api.classes,
+        .classes = &(api.classes.* ++ .{gc.Class}),
         .ini = ini.definitions,
         .globals = metrics.Globals,
         .observer = metrics.observer,

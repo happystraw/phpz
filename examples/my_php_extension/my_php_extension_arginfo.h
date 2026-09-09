@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: c4f405dd291890a6c468b23dce29f98c074edfb5 */
+ * Stub hash: 338855396f49c80c881378dd5aef967e10ae5a7a */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -139,6 +139,12 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Metrics_reset arginfo_hello
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Test_GcNode___construct, 0, 0, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, first, IS_MIXED, 0, "null")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, second, IS_MIXED, 0, "null")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, callback, IS_CALLABLE, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
 ZEND_FUNCTION(MyPHPExt_increment);
@@ -178,6 +184,7 @@ ZEND_METHOD(MyPHPExt_Config, debugEnabled);
 ZEND_METHOD(MyPHPExt_Config, mode);
 ZEND_METHOD(MyPHPExt_Metrics, snapshot);
 ZEND_METHOD(MyPHPExt_Metrics, reset);
+ZEND_METHOD(MyPHPExt_Test_GcNode, __construct);
 
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hello, arginfo_hello)
@@ -303,6 +310,11 @@ static const zend_function_entry class_MyPHPExt_Config_methods[] = {
 static const zend_function_entry class_MyPHPExt_Metrics_methods[] = {
 	ZEND_ME(MyPHPExt_Metrics, snapshot, arginfo_class_MyPHPExt_Metrics_snapshot, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(MyPHPExt_Metrics, reset, arginfo_class_MyPHPExt_Metrics_reset, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_FE_END
+};
+
+static const zend_function_entry class_MyPHPExt_Test_GcNode_methods[] = {
+	ZEND_ME(MyPHPExt_Test_GcNode, __construct, arginfo_class_MyPHPExt_Test_GcNode___construct, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
 };
 
@@ -563,6 +575,20 @@ static zend_class_entry *register_class_MyPHPExt_Metrics(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "Metrics", class_MyPHPExt_Metrics_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
+#else
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+#endif
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_MyPHPExt_Test_GcNode(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt\\Test", "GcNode", class_MyPHPExt_Test_GcNode_methods);
 #if (PHP_VERSION_ID >= 80400)
 	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
 #else

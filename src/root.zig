@@ -22,6 +22,7 @@ pub const ObjectHandlers = class_helper.ObjectHandlers;
 pub const ClassEntry = zend.ClassEntry;
 pub const Operator = class_helper.Operator;
 pub const Comparison = class_helper.Comparison;
+pub const Gc = @import("gc.zig").Gc;
 
 const function_helper = @import("function.zig");
 pub const function = function_helper.function;
@@ -42,6 +43,7 @@ test {
     _ = @import("errors.zig");
     _ = @import("function.zig");
     _ = @import("globals.zig");
+    _ = @import("gc.zig");
     _ = @import("heap.zig");
     _ = @import("ini.zig");
     _ = @import("info.zig");

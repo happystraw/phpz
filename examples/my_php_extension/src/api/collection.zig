@@ -27,6 +27,10 @@ const Collection = struct {
         return .{ .data = data, .iterator = data.iterator() };
     }
 
+    fn gc(self: *Collection, collector: *phpz.Gc) void {
+        collector.addArray(self.data);
+    }
+
     /// PHP: MyPHPExt\Collection::__construct(array $values = [])
     pub fn __construct(ctx: phpz.Ctx) !Collection {
         const args = try ctx.call.expectArgs(&.{
@@ -182,4 +186,5 @@ pub const Class = phpz.Class("MyPHPExt\\Collection", Collection, .{
     .deinit = Collection.deinit,
     .clone = Collection.clone,
     .register = Collection.register,
+    .gc = Collection.gc,
 });

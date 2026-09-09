@@ -164,6 +164,11 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    class GcNode
+    {
+        public function __construct(mixed $first = null, mixed $second = null, ?callable $callback = null) {}
+    }
+
     function allocatorBailout(): array {}
 
     function superglobalsSnapshot(): array {}
