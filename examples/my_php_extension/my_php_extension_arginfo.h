@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 1d0951ee8633b10ce0253236ad8eeaada1560ee0 */
+ * Stub hash: c4f405dd291890a6c468b23dce29f98c074edfb5 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -24,6 +24,14 @@ ZEND_END_ARG_INFO()
 #define arginfo_MyPHPExt_Test_superglobalsSnapshot arginfo_MyPHPExt_Test_allocatorBailout
 
 #define arginfo_MyPHPExt_Test_mutateSuperglobals arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_referenceArgument, 0, 4, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, mode, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, optional, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO(0, single, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(1, value, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
@@ -138,6 +146,7 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_Test_allocatorBailout);
 ZEND_FUNCTION(MyPHPExt_Test_superglobalsSnapshot);
 ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
+ZEND_FUNCTION(MyPHPExt_Test_referenceArgument);
 ZEND_METHOD(MyPHPExt_Tag, __construct);
 ZEND_METHOD(MyPHPExt_Entity, __construct);
 ZEND_METHOD(MyPHPExt_Entity, getId);
@@ -197,6 +206,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "mutateSuperglobals"), zif_MyPHPExt_Test_mutateSuperglobals, arginfo_MyPHPExt_Test_mutateSuperglobals, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "mutateSuperglobals"), zif_MyPHPExt_Test_mutateSuperglobals, arginfo_MyPHPExt_Test_mutateSuperglobals, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "referenceArgument"), zif_MyPHPExt_Test_referenceArgument, arginfo_MyPHPExt_Test_referenceArgument, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "referenceArgument"), zif_MyPHPExt_Test_referenceArgument, arginfo_MyPHPExt_Test_referenceArgument, 0)
 #endif
 	ZEND_FE_END
 };

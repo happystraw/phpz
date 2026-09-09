@@ -169,4 +169,6 @@ namespace MyPHPExt\Test {
     function superglobalsSnapshot(): array {}
 
     function mutateSuperglobals(): void {}
+
+    function referenceArgument(string $mode, string $type, bool $optional, bool $single, mixed &$value = null): string {}
 }

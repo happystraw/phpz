@@ -6,6 +6,7 @@ const ini = @import("ini.zig");
 const metrics = @import("metrics.zig");
 const bailout = @import("testing/bailout.zig");
 const superglobals = @import("testing/superglobals.zig");
+const reference_arguments = @import("testing/reference_arguments.zig");
 
 fn info(m: *phpz.ModuleEntry) void {
     phpz.info.table.start();
@@ -25,6 +26,7 @@ comptime {
         .@"MyPHPExt\\Test\\allocatorBailout" = bailout.allocatorBailout,
         .@"MyPHPExt\\Test\\superglobalsSnapshot" = superglobals.superglobalsSnapshot,
         .@"MyPHPExt\\Test\\mutateSuperglobals" = superglobals.mutateSuperglobals,
+        .@"MyPHPExt\\Test\\referenceArgument" = reference_arguments.referenceArgument,
     });
 
     phpz.module(.{

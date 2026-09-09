@@ -22,14 +22,14 @@ pub fn greet(ctx: phpz.Ctx) !void {
 /// PHP: MyPHPExt\increment(int &$value, int $by = 1): void
 pub fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .reference = .{} },
+        .{ .reference = .{ .type = .int, .result = .value } },
         .{ .int = .{ .optional = true } },
     }, {});
 
-    const value = args[0].val();
+    const value = args[0];
     const by = args[1] orelse 1;
-    const current = Zval.raw.asUnchecked(value, .int);
-    Zval.raw.set(value, .int, current + by);
+    const current = value.asUnchecked(.int);
+    value.set(.int, current + by);
 }
 
 /// PHP: MyPHPExt\mapValues(array $values, callable $mapper): array
