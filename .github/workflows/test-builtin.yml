@@ -56,10 +56,10 @@ jobs:
       REPORT_EXIT_STATUS: "1"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: mlugg/setup-zig@v2
       - name: Checkout PHP source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: php/php-src
           ref: PHP-${{ env.PHP_BUILD_VERSION }}
@@ -108,7 +108,7 @@ jobs:
           "$TEST_PHP_EXECUTABLE" -n run-tests.php -n -q "ext/$PHP_BUILD_EXTENSION/tests"
       - name: Checkout PHP Windows builder
         if: runner.os == 'Windows'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: php/php-windows-builder
           ref: v1
