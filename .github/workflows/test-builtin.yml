@@ -1,6 +1,28 @@
-name: Built-in Extension Test
+name: PHP Built-in Extension Test
 
 on:
+  push:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/skeleton/**"
+      - "tools/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/test-builtin-windows.bat"
+      - ".github/workflows/test-builtin.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/skeleton/**"
+      - "tools/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/test-builtin-windows.bat"
+      - ".github/workflows/test-builtin.yml"
   workflow_dispatch:
     inputs:
       php:
@@ -14,16 +36,18 @@ permissions:
 
 jobs:
   test:
-    name: builtin (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }}, ${{ matrix.phpts }})
+    name: builtin (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }}, ${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-2022, macos-latest]
+        os: [ubuntu-latest, windows-2022, macos-latest, macos-15-intel]
         phpts: [nts, ts]
+        debug: [true, false]
     env:
       PHP_BUILD_VERSION: ${{ inputs.php || '8.5' }}
       PHP_BUILD_TS: ${{ matrix.phpts }}
+      PHP_BUILD_DEBUG: ${{ matrix.debug && '1' || '0' }}
       NO_INTERACTION: "1"
       REPORT_EXIT_STATUS: "1"
     steps:
@@ -62,14 +86,16 @@ jobs:
           ./buildconf --force
           zts=--disable-zts
           if [ "$PHP_BUILD_TS" = ts ]; then zts=--enable-zts; fi
-          ./configure --disable-all --disable-cgi --disable-phpdbg --enable-cli --enable-skeleton "$zts"
+          debug=--disable-debug
+          if [ "$PHP_BUILD_DEBUG" = 1 ]; then debug=--enable-debug; fi
+          ./configure --disable-all --disable-cgi --disable-phpdbg --enable-cli --enable-skeleton "$zts" "$debug"
           make -j"$(getconf _NPROCESSORS_ONLN)"
       - name: Test built-in skeleton (Unix)
         if: runner.os != 'Windows'
         working-directory: build/php-src
         run: |
           export TEST_PHP_EXECUTABLE="$PWD/sapi/cli/php"
-          "$TEST_PHP_EXECUTABLE" -n -r 'if (!extension_loaded("skeleton") || (bool) PHP_ZTS !== (getenv("PHP_BUILD_TS") === "ts")) { exit(1); }'
+          "$TEST_PHP_EXECUTABLE" -n -r 'if (!extension_loaded("skeleton") || (bool) PHP_ZTS !== (getenv("PHP_BUILD_TS") === "ts") || (int) PHP_DEBUG !== (int) getenv("PHP_BUILD_DEBUG")) { exit(1); }'
           "$TEST_PHP_EXECUTABLE" -n --ri skeleton
           "$TEST_PHP_EXECUTABLE" -n run-tests.php -n -q ext/skeleton/tests
       - name: Checkout PHP Windows builder
