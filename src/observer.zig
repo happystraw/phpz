@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const abi = @import("abi.zig");
 const c = @import("root.zig").c;
 const Ctx = @import("Ctx.zig");
 const errors = @import("errors.zig");
@@ -121,12 +120,12 @@ fn ErrorAdapter(comptime config: Error) type {
 
 fn ExceptionAdapter(comptime config: Exception) type {
     return struct {
-        const Hook = *const fn (?*c.zend_object) callconv(abi.fn_cc) void;
+        const Hook = *const fn (?*c.zend_object) callconv(.c) void;
 
         var previous: ?Hook = null;
         var installed = false;
 
-        fn callback(exception: ?*c.zend_object) callconv(abi.fn_cc) void {
+        fn callback(exception: ?*c.zend_object) callconv(.c) void {
             config.observe(zend.Object.from(exception.?));
             if (previous) |previous_hook| {
                 previous_hook(exception);
