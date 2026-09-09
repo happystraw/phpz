@@ -1624,6 +1624,8 @@ final class TemplateWriter
         bool $windows,
         bool $phpBuildSystem,
     ): string {
+        // Nowdoc templates retain the checkout's line endings.
+        $contents = str_replace("\r\n", "\n", $contents);
         $targetCheck = '';
         $extFilename = PHPZ_ALL_PLATFORM_FILENAME_TEMPLATE;
         if (!$windows) {
@@ -1712,7 +1714,7 @@ final class TemplateWriter
             sha1(str_replace("\r\n", "\n", $stub)),
             $contents,
         );
-        return TemplateVars::replace($contents, $ext);
+        return str_replace("\r\n", "\n", TemplateVars::replace($contents, $ext));
     }
 
     private static function withFinalNewline(string $contents): string
