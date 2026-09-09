@@ -1167,6 +1167,7 @@ if (PHP_{{EXT_NAME_UPPER}} != 'no') {
 		{{EXT_NAME}}_output = '$({{EXT_NAME_UPPER}}_SOURCE_DIR)\\zig-out\\lib\\{{EXT_NAME}}.lib';
 		ADD_FLAG('STATIC_EXT_OBJS', {{EXT_NAME}}_target);
 		ADD_FLAG('STATIC_EXT_OBJS_RESP', '"' + {{EXT_NAME}}_target + '"');
+		ADD_FLAG('STATIC_EXT_LIBS', 'ntdll.lib');
 		extension_include_code += '#include "' + configure_module_dirname + '/php_{{EXT_NAME}}.h"\r\n';
 		extension_module_ptrs += '\tphpext_{{EXT_NAME}}_ptr,\r\n';
 	}

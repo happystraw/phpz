@@ -34,6 +34,7 @@ if (PHP_SKELETON != 'no') {
 		skeleton_output = '$(SKELETON_SOURCE_DIR)\\zig-out\\lib\\skeleton.lib';
 		ADD_FLAG('STATIC_EXT_OBJS', skeleton_target);
 		ADD_FLAG('STATIC_EXT_OBJS_RESP', '"' + skeleton_target + '"');
+		ADD_FLAG('STATIC_EXT_LIBS', 'ntdll.lib');
 		extension_include_code += '#include "' + configure_module_dirname + '/php_skeleton.h"\r\n';
 		extension_module_ptrs += '\tphpext_skeleton_ptr,\r\n';
 	}
