@@ -164,6 +164,17 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    class SerializableValue
+    {
+        public function __construct(int $value) {}
+
+        public function value(): int {}
+
+        public function __serialize(): array {}
+
+        public function __unserialize(array $data): void {}
+    }
+
     class GcNode
     {
         public function __construct(mixed $first = null, mixed $second = null, ?callable $callback = null) {}

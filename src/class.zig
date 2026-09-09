@@ -86,6 +86,8 @@ fn Resolved(comptime T: type) type {
         clone: ?fn (*const T) anyerror!T,
         /// Reports PHP values owned by the Zig backing.
         gc: ?fn (*T, *Gc) void,
+        /// Permits serialization unless the registered class already forbids it.
+        serializable: bool,
         /// Zend object handler overrides.
         handlers: ObjectHandlers,
 
@@ -109,6 +111,7 @@ fn Resolved(comptime T: type) type {
                     std.mem.eql(u8, field_name, "deinit") or
                     std.mem.eql(u8, field_name, "clone") or
                     std.mem.eql(u8, field_name, "gc") or
+                    std.mem.eql(u8, field_name, "serializable") or
                     std.mem.eql(u8, field_name, "operate") or
                     std.mem.eql(u8, field_name, "compare") or
                     std.mem.eql(u8, field_name, "handlers");
@@ -119,6 +122,11 @@ fn Resolved(comptime T: type) type {
                     @compileError("Class " ++ class_name ++ " option '." ++ field_name ++ "' requires Zig backing data");
                 }
             }
+
+            const serializable = if (@hasField(Options, "serializable")) blk: {
+                if (@TypeOf(options.serializable) != bool) @compileError("Class " ++ class_name ++ " .serializable must be bool");
+                break :blk options.serializable;
+            } else false;
 
             const required_methods = blk: {
                 const table_name = stub.classMethodsSymbolName(class_name);
@@ -326,6 +334,7 @@ fn Resolved(comptime T: type) type {
                 .deinit = deinitializer,
                 .clone = cloner,
                 .gc = gc_callback,
+                .serializable = serializable,
                 .handlers = handlers,
             };
         }
@@ -462,6 +471,9 @@ pub const ObjectHandlers = struct {
 /// - `.register`: receives the typed stub-generated registration function,
 ///   supplies its parent class or interfaces, and returns `*ClassEntry` or an
 ///   error union containing it.
+/// - `.serializable`: defaults to false for Zig backing.
+///   False forbids serialization and unserialization, including in PHP subclasses.
+///   True preserves existing class restrictions; it does not serialize backing automatically.
 /// - `.init`: omit or use `.none` to leave backing empty, `.default` to create
 ///   it with `.{}`, or provide a function returning `T` or `!T`.
 /// - `.deinit`: releases an initialized backing with `fn (*T) void`.
@@ -477,7 +489,7 @@ pub const ObjectHandlers = struct {
 /// Omit `.gc`, `.operate`, or `.compare`, or set them to null, to keep the existing handler.
 /// They conflict with non-null `.handlers.get_gc`, `.handlers.do_operation`, and `.handlers.compare`, respectively.
 ///
-/// Backing options (`.init`, `.deinit`, `.clone`, `.gc`, `.handlers`, `.operate`,
+/// Backing options (`.init`, `.deinit`, `.clone`, `.gc`, `.serializable`, `.handlers`, `.operate`,
 /// and `.compare`) require a non-empty `T`. Before backing is initialized,
 /// instance methods throw a PHP
 /// error directing the caller to the constructor.
@@ -485,6 +497,10 @@ pub const ObjectHandlers = struct {
 /// The `.gc` callback runs only for initialized backing. It must only report
 /// existing references, without modifying the object or invoking PHP user code.
 /// The collector is borrowed for the callback and must not be retained.
+///
+/// Serializable backing needs a custom save/restore protocol, typically
+/// `__serialize` and `__unserialize`. PHP does not call the constructor when
+/// restoring an object; use `.init` if `__unserialize` needs an initialized receiver.
 ///
 /// ## Operator and comparison callbacks
 ///
@@ -585,6 +601,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             }
 
             entry = try resolved.register();
+            if (!resolved.serializable) entry.ptr().ce_flags |= c.ZEND_ACC_NOT_SERIALIZABLE;
             c.phpz_class_entry_set_create_object(entry.ptr(), lifecycle.createObject);
         }
 
@@ -955,6 +972,7 @@ test "concrete Zig class public declarations compile" {
         .deinit = null,
         .clone = null,
         .gc = null,
+        .serializable = false,
         .handlers = .{},
     });
 
