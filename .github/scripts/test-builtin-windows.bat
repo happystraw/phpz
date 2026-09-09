@@ -17,15 +17,19 @@ if "%PHP_BUILD_TS%"=="ts" (
 
 call buildconf.bat
 if errorlevel 1 exit /b 1
-call configure.bat --disable-all --enable-cli --enable-skeleton %ZTS_FLAG% %DEBUG_FLAG%
+call configure.bat --disable-all --enable-cli --enable-cgi --enable-%PHP_BUILD_EXTENSION% %ZTS_FLAG% %DEBUG_FLAG%
 if errorlevel 1 exit /b 1
 nmake
 if errorlevel 1 exit /b 1
 
 set "TEST_PHP_EXECUTABLE=%CD%\%PHP_BUILD_DIR%\php.exe"
-"%TEST_PHP_EXECUTABLE%" -n -r "if (!extension_loaded('skeleton') || (bool) PHP_ZTS !== (getenv('PHP_BUILD_TS') === 'ts') || (int) PHP_DEBUG !== (int) getenv('PHP_BUILD_DEBUG')) { exit(1); }"
+set "TEST_PHP_CGI_EXECUTABLE=%CD%\%PHP_BUILD_DIR%\php-cgi.exe"
+if not exist "%TEST_PHP_CGI_EXECUTABLE%" exit /b 1
+"%TEST_PHP_EXECUTABLE%" -n -r "if (!extension_loaded(getenv('PHP_BUILD_EXTENSION')) || (bool) PHP_ZTS !== (getenv('PHP_BUILD_TS') === 'ts') || (int) PHP_DEBUG !== (int) getenv('PHP_BUILD_DEBUG')) { exit(1); }"
 if errorlevel 1 exit /b 1
-"%TEST_PHP_EXECUTABLE%" -n --ri skeleton
+"%TEST_PHP_EXECUTABLE%" -n -i
 if errorlevel 1 exit /b 1
-"%TEST_PHP_EXECUTABLE%" -n run-tests.php -n -q ext/skeleton/tests
+"%TEST_PHP_EXECUTABLE%" -n --ri "%PHP_BUILD_EXTENSION%"
+if errorlevel 1 exit /b 1
+"%TEST_PHP_EXECUTABLE%" -n run-tests.php -n -q "ext/%PHP_BUILD_EXTENSION%/tests"
 exit /b %ERRORLEVEL%

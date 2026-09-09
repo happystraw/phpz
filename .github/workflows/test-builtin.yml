@@ -7,6 +7,7 @@ on:
       - "src/**"
       - "build/**"
       - "examples/skeleton/**"
+      - "examples/my_php_extension/**"
       - "tools/**"
       - "build.zig"
       - "build.zig.zon"
@@ -18,6 +19,7 @@ on:
       - "src/**"
       - "build/**"
       - "examples/skeleton/**"
+      - "examples/my_php_extension/**"
       - "tools/**"
       - "build.zig"
       - "build.zig.zon"
@@ -36,7 +38,7 @@ permissions:
 
 jobs:
   test:
-    name: builtin (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }}, ${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
+    name: builtin (${{ matrix.extension }}, PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }}, ${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -44,10 +46,12 @@ jobs:
         os: [ubuntu-latest, windows-2022, macos-latest, macos-15-intel]
         phpts: [nts, ts]
         debug: [true, false]
+        extension: [skeleton, my_php_extension]
     env:
       PHP_BUILD_VERSION: ${{ inputs.php || '8.5' }}
       PHP_BUILD_TS: ${{ matrix.phpts }}
       PHP_BUILD_DEBUG: ${{ matrix.debug && '1' || '0' }}
+      PHP_BUILD_EXTENSION: ${{ matrix.extension }}
       NO_INTERACTION: "1"
       REPORT_EXIT_STATUS: "1"
     steps:
@@ -60,14 +64,15 @@ jobs:
           repository: php/php-src
           ref: PHP-${{ env.PHP_BUILD_VERSION }}
           path: build/php-src
-      - name: Prepare skeleton
+      - name: Prepare extension
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const target = 'build/php-src/ext/skeleton';
+          const extension = process.env.PHP_BUILD_EXTENSION;
+          const target = `build/php-src/ext/${extension}`;
           fs.rmSync(target, { recursive: true, force: true });
-          fs.cpSync('examples/skeleton', target, { recursive: true });
+          fs.cpSync(`examples/${extension}`, target, { recursive: true });
           const zon = `${target}/build.zig.zon`;
           fs.writeFileSync(zon, fs.readFileSync(zon, 'utf8').replace('.path = "../.."', '.path = "../../../.."'));
           NODE
@@ -79,7 +84,7 @@ jobs:
         run: |
           brew install autoconf bison re2c pkgconf
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
-      - name: Build PHP with skeleton (Unix)
+      - name: Build PHP with extension (Unix)
         if: runner.os != 'Windows'
         working-directory: build/php-src
         run: |
@@ -88,16 +93,19 @@ jobs:
           if [ "$PHP_BUILD_TS" = ts ]; then zts=--enable-zts; fi
           debug=--disable-debug
           if [ "$PHP_BUILD_DEBUG" = 1 ]; then debug=--enable-debug; fi
-          ./configure --disable-all --disable-cgi --disable-phpdbg --enable-cli --enable-skeleton "$zts" "$debug"
+          ./configure --disable-all --disable-phpdbg --enable-cli --enable-cgi "--enable-$PHP_BUILD_EXTENSION" "$zts" "$debug"
           make -j"$(getconf _NPROCESSORS_ONLN)"
-      - name: Test built-in skeleton (Unix)
+      - name: Test built-in extension (Unix)
         if: runner.os != 'Windows'
         working-directory: build/php-src
         run: |
           export TEST_PHP_EXECUTABLE="$PWD/sapi/cli/php"
-          "$TEST_PHP_EXECUTABLE" -n -r 'if (!extension_loaded("skeleton") || (bool) PHP_ZTS !== (getenv("PHP_BUILD_TS") === "ts") || (int) PHP_DEBUG !== (int) getenv("PHP_BUILD_DEBUG")) { exit(1); }'
-          "$TEST_PHP_EXECUTABLE" -n --ri skeleton
-          "$TEST_PHP_EXECUTABLE" -n run-tests.php -n -q ext/skeleton/tests
+          export TEST_PHP_CGI_EXECUTABLE="$PWD/sapi/cgi/php-cgi"
+          test -x "$TEST_PHP_CGI_EXECUTABLE"
+          "$TEST_PHP_EXECUTABLE" -n -r 'if (!extension_loaded(getenv("PHP_BUILD_EXTENSION")) || (bool) PHP_ZTS !== (getenv("PHP_BUILD_TS") === "ts") || (int) PHP_DEBUG !== (int) getenv("PHP_BUILD_DEBUG")) { exit(1); }'
+          "$TEST_PHP_EXECUTABLE" -n -i
+          "$TEST_PHP_EXECUTABLE" -n --ri "$PHP_BUILD_EXTENSION"
+          "$TEST_PHP_EXECUTABLE" -n run-tests.php -n -q "ext/$PHP_BUILD_EXTENSION/tests"
       - name: Checkout PHP Windows builder
         if: runner.os == 'Windows'
         uses: actions/checkout@v4
@@ -105,7 +113,7 @@ jobs:
           repository: php/php-windows-builder
           ref: v1
           path: build/php-windows-builder
-      - name: Build and test built-in skeleton (Windows)
+      - name: Build and test built-in extension (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |

@@ -1,0 +1,58 @@
+// stub only for php build system
+ARG_ENABLE('my_php_extension', 'my_php_extension support', 'no');
+
+if (PHP_MY_PHP_EXTENSION != 'no') {
+	if (!PATH_PROG('zig')) {
+		ERROR('zig is required to build my_php_extension');
+	}
+
+	AC_DEFINE('HAVE_MY_PHP_EXTENSION', 1, "Define to 1 if the PHP extension 'my_php_extension' is available.");
+
+	PHP_MY_PHP_EXTENSION_SHARED = MODE_PHPIZE || force_all_shared() || PHP_MY_PHP_EXTENSION_SHARED;
+	var my_php_extension_source_dir = FSO.GetAbsolutePathName(configure_module_dirname);
+	var my_php_extension_build_dir = FSO.GetAbsolutePathName(get_define('BUILD_DIR'));
+	var my_php_extension_arch = {x64: 'x86_64', x86: 'x86', arm64: 'aarch64'}[TARGET_ARCH];
+	var my_php_extension_flags = WshShell.Environment('Process').Item('MY_PHP_EXTENSION_ZIG_FLAGS');
+	DEFINE('MY_PHP_EXTENSION_SOURCE_DIR', my_php_extension_source_dir);
+	DEFINE('MY_PHP_EXTENSION_PHP_INCLUDE_DIR', MODE_PHPIZE ? PHP_DIR + '\\include' : PHP_SRC_DIR);
+	DEFINE('MY_PHP_EXTENSION_PHP_LIB_DIR', MODE_PHPIZE ? PHP_DIR + '\\lib' : my_php_extension_build_dir);
+	DEFINE('MY_PHP_EXTENSION_ZIG_FLAGS', my_php_extension_flags || '-Doptimize=ReleaseSafe');
+
+	var my_php_extension_target;
+	var my_php_extension_output;
+	var my_php_extension_deps = 'my_php_extension-force';
+	if (PHP_MY_PHP_EXTENSION_SHARED) {
+		my_php_extension_target = '$(BUILD_DIR)\\php_my_php_extension.dll';
+		my_php_extension_output = '$(MY_PHP_EXTENSION_SOURCE_DIR)\\modules\\php_my_php_extension.dll';
+		my_php_extension_deps += MODE_PHPIZE ? ' $(PHPLIB)' : ' $(BUILD_DIR)\\$(PHPLIB)';
+		ADD_FLAG('EXT_TARGETS', 'php_my_php_extension.dll');
+		ADD_FLAG('CFLAGS_PHP', '/D COMPILE_DL_MY_PHP_EXTENSION');
+		MFO.WriteLine('php_my_php_extension.dll: ' + my_php_extension_target);
+		MFO.WriteLine('$(BUILD_DIR)\\php_my_php_extension.lib: ' + my_php_extension_target);
+	} else {
+		my_php_extension_target = '$(BUILD_DIR)\\my_php_extension.lib';
+		my_php_extension_output = '$(MY_PHP_EXTENSION_SOURCE_DIR)\\zig-out\\lib\\my_php_extension.lib';
+		ADD_FLAG('STATIC_EXT_OBJS', my_php_extension_target);
+		ADD_FLAG('STATIC_EXT_OBJS_RESP', '"' + my_php_extension_target + '"');
+		ADD_FLAG('STATIC_EXT_LIBS', 'ntdll.lib');
+		extension_include_code += '#include "' + configure_module_dirname + '/php_my_php_extension.h"\r\n';
+		extension_module_ptrs += '\tphpext_my_php_extension_ptr,\r\n';
+	}
+	extensions_enabled[extensions_enabled.length] = ['my_php_extension', PHP_MY_PHP_EXTENSION_SHARED ? 'shared' : 'static', false];
+
+	MFO.WriteLine('my_php_extension-force:');
+	MFO.WriteLine(my_php_extension_target + ': ' + my_php_extension_deps);
+	MFO.WriteLine('\tcd /d "$(MY_PHP_EXTENSION_SOURCE_DIR)" && "$(ZIG)" build' +
+		' -Dtarget=' + my_php_extension_arch + '-windows-msvc' +
+		' -Dshared=' + (PHP_MY_PHP_EXTENSION_SHARED ? 'true' : 'false') +
+		' -Dphp-include-dir="$(MY_PHP_EXTENSION_PHP_INCLUDE_DIR)"' +
+		' -Dphp-lib-dir="$(MY_PHP_EXTENSION_PHP_LIB_DIR)"' +
+		' -Dwindows-zts=' + (PHP_ZTS == 'yes' ? 'true' : 'false') +
+		' -Dwindows-debug=' + (PHP_DEBUG == 'yes' ? 'true' : 'false') +
+		' $(MY_PHP_EXTENSION_ZIG_FLAGS)');
+	MFO.WriteLine('\tcopy /y "' + my_php_extension_output + '" "' + my_php_extension_target + '" >nul');
+	if (PHP_MY_PHP_EXTENSION_SHARED) {
+		MFO.WriteLine('\tcopy /y "$(MY_PHP_EXTENSION_SOURCE_DIR)\\modules\\php_my_php_extension.lib" "$(BUILD_DIR)\\php_my_php_extension.lib" >nul');
+	}
+	MFO.WriteBlankLines(1);
+}

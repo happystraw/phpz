@@ -134,3 +134,14 @@ On Windows, use the MSVC target and pass the matching PHP SDK library directory:
 ```sh
 zig build run-tests -Dtarget=native-windows-msvc -Dphp-include-dir=C:\path\to\php\include -Dphp-lib-dir=C:\path\to\php\lib
 ```
+
+## PHP build system
+
+The optional `config.m4`, `config.w32`, `Makefile.frag`, and `php_my_php_extension.h`
+files support built-in and shared extensions through PHP's build system. They can
+be deleted when using only `zig build`.
+
+To build into PHP, place this project under PHP's `ext/` directory and configure
+with `--enable-my_php_extension`. Zig must be in `PATH`. The default is
+`-Doptimize=ReleaseSafe`; set `MY_PHP_EXTENSION_ZIG_FLAGS` before configure to
+customize build arguments.
