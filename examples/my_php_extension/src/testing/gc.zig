@@ -14,8 +14,8 @@ const GcNode = struct {
             .{ .callable = .{ .optional = true, .nullable = true, .resolve = true } },
         }, .{ {}, {}, .{ .target = &callback } });
         var self: GcNode = .{ .first = Zval.raw.undef, .second = Zval.raw.undef, .callback = callback };
-        if (args[0]) |value| Zval.raw.copy(&self.first, value);
-        if (args[1]) |value| Zval.raw.copy(&self.second, value);
+        if (args[0]) |value| Zval.raw.copy(&self.first, value.ptr());
+        if (args[1]) |value| Zval.raw.copy(&self.second, value.ptr());
         if (self.callback.fci.size != 0) self.callback.addref();
         return self;
     }

@@ -54,7 +54,7 @@ const Collection = struct {
         const args = try ctx.call.expectArgs(&.{
             .{ .mixed = .{} },
         }, {});
-        const offset = Zval.from(args[0]);
+        const offset = args[0];
 
         ctx.ret.set(.bool, switch (offset.kind()) {
             .int => self.data.hasIndex(@intCast(offset.asUnchecked(.int))),
@@ -68,7 +68,7 @@ const Collection = struct {
         const args = try ctx.call.expectArgs(&.{
             .{ .mixed = .{} },
         }, {});
-        const offset = Zval.from(args[0]);
+        const offset = args[0];
 
         const value = switch (offset.kind()) {
             .int => self.data.findIndex(@intCast(offset.asUnchecked(.int))),
@@ -90,8 +90,8 @@ const Collection = struct {
             .{ .mixed = .{} },
             .{ .mixed = .{} },
         }, {});
-        const offset = Zval.from(args[0]);
-        const value = Zval.from(args[1]);
+        const offset = args[0];
+        const value = args[1];
 
         switch (offset.kind()) {
             .int => {
@@ -123,7 +123,7 @@ const Collection = struct {
         const args = try ctx.call.expectArgs(&.{
             .{ .mixed = .{} },
         }, {});
-        const offset = Zval.from(args[0]);
+        const offset = args[0];
 
         switch (offset.kind()) {
             .int => self.data.deleteIndex(

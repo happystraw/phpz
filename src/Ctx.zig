@@ -349,11 +349,11 @@ pub const Call = opaque {
                     );
                     return if (s.optional) ?PhpUnionType else PhpUnionType;
                 } else {
-                    return if (s.optional) ?*c.zval else *c.zval;
+                    return if (s.optional) ?*Zval else *Zval;
                 }
             },
             .callable => |s| {
-                const T = if (s.nullable) Nullable(*c.zval) else *c.zval;
+                const T = if (s.nullable) Nullable(*Zval) else *Zval;
                 return if (s.optional) ?T else T;
             },
             .reference => |s| {
@@ -408,6 +408,8 @@ pub const Call = opaque {
     ///
     /// `.zval = true` returns a borrowed `*Zval`; use `.ptr()` for the C pointer.
     /// With `nullable`, PHP null is a Zval; with `optional`, an omitted argument is Zig null.
+    /// `.mixed` without unions and `.callable` also return borrowed `*Zval` values.
+    /// Nullable callables return `Nullable(*Zval)`; optional arguments wrap the result in `?`.
     /// For `.reference`, `result` selects a borrowed view:
     /// `.reference` (default) returns `*zend.Reference`, `.zval` returns the outer
     /// container as `*Zval`, and `.value` returns the referenced value as `*Zval`.
@@ -454,7 +456,7 @@ pub const Call = opaque {
                     }
                     return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
                 } else {
-                    return zv;
+                    return Zval.from(zv);
                 }
             },
             .callable => |s| {
@@ -472,7 +474,7 @@ pub const Call = opaque {
                 } else if (!zend.Callable.isCallable(zv)) {
                     return errors.argumentTypeError(n, "must be a valid callback" ++ or_null, .{});
                 }
-                return if (comptime s.nullable) .{ .value = zv } else zv;
+                return if (comptime s.nullable) .{ .value = Zval.from(zv) } else Zval.from(zv);
             },
             .reference => |s| {
                 if (!Zval.raw.is(zv, .reference)) {
