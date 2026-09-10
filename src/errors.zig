@@ -84,6 +84,13 @@ pub fn argumentValueError(arg_num: u32, comptime format: [:0]const u8, args: any
 
 pub const ArgumentCountError = error{PhpArgumentCountError};
 
+/// Report extra named arguments unsupported by the current parameter parser.
+pub fn unexpectedExtraNamedArgs() ArgumentCountError {
+    @branchHint(.cold);
+    c.zend_unexpected_extra_named_error();
+    return error.PhpArgumentCountError;
+}
+
 /// Return an argument count error
 pub fn argumentCountError(comptime format: [:0]const u8, args: anytype) ArgumentCountError {
     @branchHint(.cold);

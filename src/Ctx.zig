@@ -62,10 +62,8 @@ pub const Call = opaque {
         return .from(fn_ptr);
     }
 
-    /// Get the number of arguments passed to the current function/method.
-    ///
-    /// Returns:
-    ///   The argument count
+    /// Get the number of argument slots, including resolved named parameters and
+    /// defaults filled by Zend. Extra named variadic arguments are not included.
     pub inline fn argCount(self: *Call) u32 {
         return self.ptr().This.u2.num_args;
     }
@@ -82,14 +80,34 @@ pub const Call = opaque {
         return &base[@as(usize, @intCast(c.ZEND_CALL_FRAME_SLOT)) + @as(usize, n) - 1];
     }
 
-    /// Get all arguments as a slice of zvals.
+    /// Borrow the argument slots, including resolved named parameters.
+    /// Extra named variadic arguments are separate: use extraNamedArgs() to read
+    /// them, or expectNoExtraNamedArgs() to reject them before processing slots.
     pub fn args(self: *Call) []c.zval {
         const count = self.argCount();
         const base: [*]c.zval = @ptrCast(self.ptr());
         return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
     }
 
-    /// Validate the total number of arguments against expected min/max.
+    /// Borrow the extra named variadic arguments of this call, or null if absent.
+    /// Check the call flag before reading the potentially uninitialized field.
+    /// The call frame owns the table: do not release or structurally modify it.
+    /// Copy/addref values explicitly if they must outlive the call.
+    pub fn extraNamedArgs(self: *Call) ?*zend.Array {
+        if (c.ZEND_CALL_INFO(self.ptr()) & c.ZEND_CALL_HAS_EXTRA_NAMED_PARAMS == 0) return null;
+        return .from(self.ptr().extra_named_params);
+    }
+
+    /// Reject extra named variadic arguments in the currently executing call.
+    /// Names matched to declared parameters are unaffected.
+    pub fn expectNoExtraNamedArgs(self: *Call) errors.ArgumentCountError!void {
+        if (c.ZEND_CALL_INFO(self.ptr()) & c.ZEND_CALL_HAS_EXTRA_NAMED_PARAMS != 0) {
+            return errors.unexpectedExtraNamedArgs();
+        }
+    }
+
+    /// Validate the number of argument slots against expected min/max.
+    /// Does not check extra named variadic arguments.
     /// Call once at the top of each function, before accessing individual args.
     pub fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
         const count = self.argCount();
@@ -98,15 +116,17 @@ pub const Call = opaque {
         }
     }
 
-    /// Expect zero arguments. Calls zend_wrong_parameters_none_error on failure.
-    pub fn expectNoArgs(self: *Call) errors.WrongParameterCountError!void {
+    /// Expect zero arguments in the currently executing call, including named extras.
+    pub fn expectNoArgs(self: *Call) (errors.WrongParameterCountError || errors.ArgumentCountError)!void {
+        try self.expectNoExtraNamedArgs();
         if (self.argCount() != 0) {
             return errors.wrongParametersNone();
         }
     }
 
-    /// Error set for `expectArgs`: argument count mismatch, missing required argument, or type mismatch.
-    pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError;
+    /// Error set for `expectArgs`: extra named arguments, argument count mismatch,
+    /// missing required argument, or type mismatch.
+    pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError || errors.ArgumentCountError;
 
     fn ExpectArgResults(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
@@ -130,7 +150,9 @@ pub const Call = opaque {
         }
     }
 
-    /// Extract all arguments with compile-time validation.
+    /// Extract all arguments of the currently executing call with compile-time validation.
+    /// Rejects extra named variadic arguments; use expectArgsAllowExtraNamed() and
+    /// extraNamedArgs() when explicitly accepting them.
     /// Optionals must come after required args. min/max derived automatically.
     ///
     /// Each entry is an `ExpectArgKind.Spec` tagged union literal. The `runtime`
@@ -178,6 +200,20 @@ pub const Call = opaque {
     /// const value: *Zval = args4[0];
     /// ```
     pub fn expectArgs(
+        self: *Call,
+        comptime specs: []const ExpectArgKind.Spec,
+        runtime: ExpectArgsRuntime(specs),
+    ) ExpectArgsError!ExpectArgResults(specs) {
+        try self.expectNoExtraNamedArgs();
+        return self.expectArgsAllowExtraNamed(specs, runtime);
+    }
+
+    /// Validate argument slots while allowing extra named variadic arguments.
+    /// Returns the same tuple as expectArgs(); retrieve named extras separately
+    /// with extraNamedArgs(). Their values are not validated by these specs.
+    /// Required, optional and type checks still apply, and positional arguments
+    /// beyond specs.len are rejected. Operates on the currently executing call.
+    pub fn expectArgsAllowExtraNamed(
         self: *Call,
         comptime specs: []const ExpectArgKind.Spec,
         runtime: ExpectArgsRuntime(specs),
@@ -736,10 +772,13 @@ pub const Call = opaque {
     /// var rst_count: u32 = undefined;
     /// try ctx.call.parseArgs("+", .{ &fst, &rst_count });
     /// ```
+    /// Parses the currently executing call. Extra named variadic arguments are
+    /// rejected because this interface cannot return their names and values.
     pub fn parseArgs(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) ParseArgsError!void {
         if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
             @compileError("parseArgs: args must be a tuple (use .{} syntax)");
         }
+        self.expectNoExtraNamedArgs() catch return ParseArgsError.ParseFailure;
         const result = @call(
             .auto,
             c.zend_parse_parameters,
