@@ -22,6 +22,26 @@ namespace MyPHPExt {
 
     function mapValues(array $values, callable $mapper): array {}
 
+    function makeSumClosure(): \Closure {}
+
+    function makeCounter(int $start = 0, mixed $held = null): \Closure {}
+
+    function makeReference(mixed &$value): \Closure {}
+
+    final class ClosureCounter
+    {
+        private function __construct() {}
+
+        public function __invoke(int $step = 1): int {}
+    }
+
+    final class ClosureRef
+    {
+        private function __construct() {}
+
+        public function &__invoke(): mixed {}
+    }
+
     interface Identifiable
     {
         public function getId(): int;
@@ -164,6 +184,18 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function checkedNamedArguments(int $name, int $age = 2, mixed ...$args): array {}
+
+    function collectArguments(int $name = 1, int $age = 2, mixed ...$args): array {}
+
+    function collectReferenceArguments(mixed &...$args): array {}
+
+    function makeHandlerClosure(): \Closure {}
+
+    function makeFnClosure(string $kind = "sum"): \Closure {}
+
+    function wrapClosure(string $name, ?object $object = null, ?string $class = null): \Closure {}
+
     class SerializableValue
     {
         public function __construct(int $value) {}

@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 819343c3f5716a126ea55f86bea01aa098fc12ee */
+ * Stub hash: 74055605eb4908b356ce21fe76add2efe5f65977 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -18,6 +18,46 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_mapValues, 0, 2, IS_ARR
 	ZEND_ARG_TYPE_INFO(0, mapper, IS_CALLABLE, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeSumClosure, 0, 0, Closure, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeCounter, 0, 0, Closure, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, start, IS_LONG, 0, "0")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, held, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
+	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkedNamedArguments, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 0, "2")
+	ZEND_ARG_VARIADIC_TYPE_INFO(0, args, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_collectArguments, 0, 0, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, name, IS_LONG, 0, "1")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, age, IS_LONG, 0, "2")
+	ZEND_ARG_VARIADIC_TYPE_INFO(0, args, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_collectReferenceArguments, 0, 0, IS_ARRAY, 0)
+	ZEND_ARG_VARIADIC_TYPE_INFO(1, args, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_makeHandlerClosure arginfo_MyPHPExt_makeSumClosure
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_Test_makeFnClosure, 0, 0, Closure, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, kind, IS_STRING, 0, "\"sum\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_Test_wrapClosure, 0, 1, Closure, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, object, IS_OBJECT, 1, "null")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_allocatorBailout, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
@@ -31,6 +71,18 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_referenceArgument,
 	ZEND_ARG_TYPE_INFO(0, optional, _IS_BOOL, 0)
 	ZEND_ARG_TYPE_INFO(0, single, _IS_BOOL, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(1, value, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ClosureCounter___construct, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ClosureCounter___invoke, 0, 0, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, step, IS_LONG, 0, "1")
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_MyPHPExt_ClosureRef___construct arginfo_class_MyPHPExt_ClosureCounter___construct
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ClosureRef___invoke, 1, 0, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
@@ -161,10 +213,23 @@ ZEND_FUNCTION(hello);
 ZEND_FUNCTION(greet);
 ZEND_FUNCTION(MyPHPExt_increment);
 ZEND_FUNCTION(MyPHPExt_mapValues);
+ZEND_FUNCTION(MyPHPExt_makeSumClosure);
+ZEND_FUNCTION(MyPHPExt_makeCounter);
+ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_checkedNamedArguments);
+ZEND_FUNCTION(MyPHPExt_Test_collectArguments);
+ZEND_FUNCTION(MyPHPExt_Test_collectReferenceArguments);
+ZEND_FUNCTION(MyPHPExt_Test_makeHandlerClosure);
+ZEND_FUNCTION(MyPHPExt_Test_makeFnClosure);
+ZEND_FUNCTION(MyPHPExt_Test_wrapClosure);
 ZEND_FUNCTION(MyPHPExt_Test_allocatorBailout);
 ZEND_FUNCTION(MyPHPExt_Test_superglobalsSnapshot);
 ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
 ZEND_FUNCTION(MyPHPExt_Test_referenceArgument);
+ZEND_METHOD(MyPHPExt_ClosureCounter, __construct);
+ZEND_METHOD(MyPHPExt_ClosureCounter, __invoke);
+ZEND_METHOD(MyPHPExt_ClosureRef, __construct);
+ZEND_METHOD(MyPHPExt_ClosureRef, __invoke);
 ZEND_METHOD(MyPHPExt_Tag, __construct);
 ZEND_METHOD(MyPHPExt_Entity, __construct);
 ZEND_METHOD(MyPHPExt_Entity, getId);
@@ -216,6 +281,51 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "mapValues"), zif_MyPHPExt_mapValues, arginfo_MyPHPExt_mapValues, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeSumClosure"), zif_MyPHPExt_makeSumClosure, arginfo_MyPHPExt_makeSumClosure, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeSumClosure"), zif_MyPHPExt_makeSumClosure, arginfo_MyPHPExt_makeSumClosure, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeCounter"), zif_MyPHPExt_makeCounter, arginfo_MyPHPExt_makeCounter, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeCounter"), zif_MyPHPExt_makeCounter, arginfo_MyPHPExt_makeCounter, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkedNamedArguments"), zif_MyPHPExt_Test_checkedNamedArguments, arginfo_MyPHPExt_Test_checkedNamedArguments, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkedNamedArguments"), zif_MyPHPExt_Test_checkedNamedArguments, arginfo_MyPHPExt_Test_checkedNamedArguments, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectArguments"), zif_MyPHPExt_Test_collectArguments, arginfo_MyPHPExt_Test_collectArguments, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectArguments"), zif_MyPHPExt_Test_collectArguments, arginfo_MyPHPExt_Test_collectArguments, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectReferenceArguments"), zif_MyPHPExt_Test_collectReferenceArguments, arginfo_MyPHPExt_Test_collectReferenceArguments, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectReferenceArguments"), zif_MyPHPExt_Test_collectReferenceArguments, arginfo_MyPHPExt_Test_collectReferenceArguments, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeHandlerClosure"), zif_MyPHPExt_Test_makeHandlerClosure, arginfo_MyPHPExt_Test_makeHandlerClosure, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeHandlerClosure"), zif_MyPHPExt_Test_makeHandlerClosure, arginfo_MyPHPExt_Test_makeHandlerClosure, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeFnClosure"), zif_MyPHPExt_Test_makeFnClosure, arginfo_MyPHPExt_Test_makeFnClosure, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeFnClosure"), zif_MyPHPExt_Test_makeFnClosure, arginfo_MyPHPExt_Test_makeFnClosure, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "wrapClosure"), zif_MyPHPExt_Test_wrapClosure, arginfo_MyPHPExt_Test_wrapClosure, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "wrapClosure"), zif_MyPHPExt_Test_wrapClosure, arginfo_MyPHPExt_Test_wrapClosure, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "allocatorBailout"), zif_MyPHPExt_Test_allocatorBailout, arginfo_MyPHPExt_Test_allocatorBailout, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "allocatorBailout"), zif_MyPHPExt_Test_allocatorBailout, arginfo_MyPHPExt_Test_allocatorBailout, 0)
@@ -235,6 +345,18 @@ static const zend_function_entry ext_functions[] = {
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "referenceArgument"), zif_MyPHPExt_Test_referenceArgument, arginfo_MyPHPExt_Test_referenceArgument, 0)
 #endif
+	ZEND_FE_END
+};
+
+static const zend_function_entry class_MyPHPExt_ClosureCounter_methods[] = {
+	ZEND_ME(MyPHPExt_ClosureCounter, __construct, arginfo_class_MyPHPExt_ClosureCounter___construct, ZEND_ACC_PRIVATE)
+	ZEND_ME(MyPHPExt_ClosureCounter, __invoke, arginfo_class_MyPHPExt_ClosureCounter___invoke, ZEND_ACC_PUBLIC)
+	ZEND_FE_END
+};
+
+static const zend_function_entry class_MyPHPExt_ClosureRef_methods[] = {
+	ZEND_ME(MyPHPExt_ClosureRef, __construct, arginfo_class_MyPHPExt_ClosureRef___construct, ZEND_ACC_PRIVATE)
+	ZEND_ME(MyPHPExt_ClosureRef, __invoke, arginfo_class_MyPHPExt_ClosureRef___invoke, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
 };
 
@@ -347,6 +469,36 @@ static void register_my_php_extension_symbols(int module_number)
 	REGISTER_STRING_CONSTANT("MyPHPExt\\VERSION", "0.1.0", CONST_PERSISTENT);
 }
 
+static zend_class_entry *register_class_MyPHPExt_ClosureCounter(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "ClosureCounter", class_MyPHPExt_ClosureCounter_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+#else
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+	class_entry->ce_flags |= ZEND_ACC_FINAL;
+#endif
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_MyPHPExt_ClosureRef(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt", "ClosureRef", class_MyPHPExt_ClosureRef_methods);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+#else
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+	class_entry->ce_flags |= ZEND_ACC_FINAL;
+#endif
+
+	return class_entry;
+}
+
 static zend_class_entry *register_class_MyPHPExt_Identifiable(void)
 {
 	zend_class_entry ce, *class_entry;
@@ -403,9 +555,7 @@ static zend_class_entry *register_class_MyPHPExt_Tag(void)
 
 	zval property_name_default_value;
 	ZVAL_UNDEF(&property_name_default_value);
-	zend_string *property_name_name = zend_string_init("name", sizeof("name") - 1, 1);
-	zend_declare_typed_property(class_entry, property_name_name, &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
-	zend_string_release(property_name_name);
+	zend_declare_typed_property(class_entry, ZSTR_KNOWN(ZEND_STR_NAME), &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
 
 	zval property_description_default_value;
 	ZVAL_UNDEF(&property_description_default_value);
@@ -416,9 +566,7 @@ static zend_class_entry *register_class_MyPHPExt_Tag(void)
 	zend_string *attribute_name_Attribute_class_MyPHPExt_Tag_0 = zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
 	zend_attribute *attribute_Attribute_class_MyPHPExt_Tag_0 = zend_add_class_attribute(class_entry, attribute_name_Attribute_class_MyPHPExt_Tag_0, 1);
 	zend_string_release(attribute_name_Attribute_class_MyPHPExt_Tag_0);
-	zval attribute_Attribute_class_MyPHPExt_Tag_0_arg0;
-	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_Tag_0_arg0, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
-	ZVAL_COPY_VALUE(&attribute_Attribute_class_MyPHPExt_Tag_0->args[0].value, &attribute_Attribute_class_MyPHPExt_Tag_0_arg0);
+	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_Tag_0->args[0].value, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
 
 	return class_entry;
 }
@@ -445,10 +593,8 @@ static zend_class_entry *register_class_MyPHPExt_Entity(zend_class_entry *class_
 	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0, 1);
 	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0);
-	zval attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str = zend_string_init("entity", strlen("entity"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0, attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str);
-	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0->args[0].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str);
 
 	return class_entry;
 }
@@ -473,9 +619,7 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 
 	zval property_name_default_value;
 	ZVAL_UNDEF(&property_name_default_value);
-	zend_string *property_name_name = zend_string_init("name", sizeof("name") - 1, 1);
-	zend_declare_typed_property(class_entry, property_name_name, &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
-	zend_string_release(property_name_name);
+	zend_declare_typed_property(class_entry, ZSTR_KNOWN(ZEND_STR_NAME), &property_name_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
 
 	zval property_age_default_value;
 	ZVAL_UNDEF(&property_age_default_value);
@@ -500,23 +644,17 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0, 2);
 	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0);
-	zval attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str = zend_string_init("model", strlen("model"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str);
-	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[0].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0);
-	zval attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1;
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str);
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str = zend_string_init("Demonstrates properties, inheritance, enums, and attributes", strlen("Demonstrates properties, inheritance, enums, and attributes"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str);
-	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[1].value, &attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[1].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str);
 
 
 	zend_string *attribute_name_MyPHPExt_Tag_func___construct_arg0_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
 	zend_attribute *attribute_MyPHPExt_Tag_func___construct_arg0_0 = zend_add_parameter_attribute(zend_hash_str_find_ptr(&class_entry->function_table, "__construct", sizeof("__construct") - 1), 0, attribute_name_MyPHPExt_Tag_func___construct_arg0_0, 1);
 	zend_string_release(attribute_name_MyPHPExt_Tag_func___construct_arg0_0);
-	zval attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0;
 	zend_string *attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str = zend_string_init("identifier", strlen("identifier"), 1);
-	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
-	ZVAL_COPY_VALUE(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, &attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0);
+	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
 
 	return class_entry;
 }

@@ -1,10 +1,12 @@
+const std = @import("std");
 const errors = @import("../errors.zig");
 const phpz = @import("../root.zig");
 const c = phpz.c;
 const globals = phpz.globals;
+const Zval = @import("../zval.zig").Zval;
+const bailout = @import("bailout.zig");
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
-const bailout = @import("bailout.zig");
 
 pub const Function = opaque {
     pub const Error = error{
@@ -46,6 +48,13 @@ pub const Function = opaque {
         return globals.executor().functions().findPtr(Function, func_name);
     }
 
+    /// Look up a lowercase global function name and initialize its userland runtime cache.
+    /// Returns null if not found. Cache allocation may trigger a Zend bailout.
+    pub fn fetch(func_name: []const u8) ?*Function {
+        const function = c.zend_fetch_function_str(func_name.ptr, func_name.len);
+        return if (function != null) .from(function) else null;
+    }
+
     /// Look up a method directly from a class's function table
     pub fn findMethod(ce: *ClassEntry, method_name: []const u8) ?*Function {
         return ce.methods().findPtr(Function, method_name);
@@ -70,6 +79,45 @@ pub const Function = opaque {
         const fname = zfn.*.common.function_name;
         if (fname == null) return "";
         return fname.*.val()[0..fname.*.len :0];
+    }
+
+    pub const ClosureError = error{ InvalidClosureFunction, InvalidClosureBinding };
+
+    /// Create a native PHP Closure, preserving the function's signature and static variables.
+    /// Instance methods require an object; method visibility is not checked.
+    /// Argument metadata must outlive the closure. Zend bailouts must terminate the request.
+    pub fn toClosure(
+        self: *Function,
+        result: *Zval,
+        options: struct { object: ?*Object = null, called_scope: ?*ClassEntry = null },
+    ) ClosureError!void {
+        std.debug.assert(result.is(.undef) or result.is(.null));
+        const func = self.ptr();
+        const flags = func.common.fn_flags;
+        if ((self.kind() != .internal and self.kind() != .user) or
+            flags & (c.ZEND_ACC_ABSTRACT | c.ZEND_ACC_CLOSURE | c.ZEND_ACC_CALL_VIA_TRAMPOLINE) != 0)
+            return error.InvalidClosureFunction;
+
+        const scope = func.common.scope;
+        var called_scope = if (options.called_scope) |ce| ce.ptr() else scope;
+        switch (self.role()) {
+            .function => if (options.object != null or options.called_scope != null) return error.InvalidClosureBinding,
+            .static_method => {
+                if (options.object != null) return error.InvalidClosureBinding;
+                if (!c.instanceof_function(called_scope, scope)) return error.InvalidClosureBinding;
+            },
+            .instance_method => {
+                const object = options.object orelse return error.InvalidClosureBinding;
+                if (!object.instanceof(.from(scope.?))) return error.InvalidClosureBinding;
+                if (options.called_scope) |ce| {
+                    if (ce != object.class()) return error.InvalidClosureBinding;
+                }
+                called_scope = object.class().ptr();
+            },
+        }
+
+        var object: ?c.zval = if (options.object) |obj| Zval.raw.init(.object, obj) else null;
+        c.zend_create_fake_closure(result.ptr(), func, scope, called_scope, if (object) |*value| value else null);
     }
 
     /// Call as a global function (no object, no scope).

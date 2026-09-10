@@ -11,6 +11,7 @@
 // core
 #include "php.h"
 #include "Zend/zend_API.h"
+#include "Zend/zend_closures.h"
 #include "Zend/zend_exceptions.h"
 #include "Zend/zend_enum.h"
 #include "Zend/zend_observer.h"

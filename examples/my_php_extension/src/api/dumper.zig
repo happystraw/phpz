@@ -4,6 +4,7 @@ const phpz = @import("phpz");
 
 /// PHP: MyPHPExt\Dumper::dump(mixed ...$values): void
 pub fn dump(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoExtraNamedArgs();
     for (ctx.call.args()) |*zv| {
         dumpValue(.from(zv), 0);
     }

@@ -3,6 +3,8 @@ const std = @import("std");
 pub const c = @import("c.zig").c;
 pub const globals = @import("globals.zig");
 
+pub const closure = @import("closure.zig");
+
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
 pub const info = @import("info.zig");
@@ -40,6 +42,7 @@ pub fn printf(fmt: [:0]const u8, args: anytype) usize {
 test {
     _ = @import("Ctx.zig");
     _ = @import("class.zig");
+    _ = @import("closure.zig");
     _ = @import("errors.zig");
     _ = @import("function.zig");
     _ = @import("globals.zig");

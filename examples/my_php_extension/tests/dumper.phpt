@@ -15,7 +15,7 @@ MyPHPExt\Dumper::dump(
 );
 
 ?>
---EXPECT--
+--EXPECTF--
 int(1)
 string(5) "hello"
 bool(true)
@@ -31,9 +31,9 @@ array(2) {
     bool(false)
   }
 }
-class MyPHPExt\Counter#1 (0) {
+class MyPHPExt\Counter#%d (0) {
 }
-class MyPHPExt\User#2 (5) {
+class MyPHPExt\User#%d (5) {
   protected $id =>
   int(1)
   public $name =>

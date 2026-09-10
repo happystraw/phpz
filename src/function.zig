@@ -11,6 +11,7 @@ pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) voi
 
 const FunctionMap = std.StaticStringMap(void);
 const required_functions = blk: {
+    @setEvalBranchQuota(10_000);
     if (!@hasDecl(c, "ext_functions")) break :blk FunctionMap.initComptime(.{});
 
     const table = c.ext_functions;
@@ -218,7 +219,8 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
     }
 }
 
-fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
+/// Adapt fn(Ctx) or fn(), returning void or !void, to PHP's handler calling convention.
+pub fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
     const Func = @TypeOf(func);
     const fn_info = @typeInfo(Func).@"fn";
     const params = fn_info.param_types;

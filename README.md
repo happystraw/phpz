@@ -17,6 +17,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Classes and OOP** — bind Zig `struct` lifecycles to PHP objects, with class entries, methods, inheritance, interfaces, enums, exceptions, handlers, and optional operator overloading and comparison.
 - **Runtime state** — typed module globals, PHP/Zend globals, and superglobal access for NTS/ZTS builds.
 - **Zval and Zend APIs** — zval conversions, ownership helpers, arrays, strings, objects, callables, functions, and resources.
+- **Native closures** — create PHP `Closure` values with `Function.toClosure()`, `closure.fromHandler()`, or `closure.fromFn()`.
 - **INI, phpinfo, and errors** — typed INI values, phpinfo helpers, PHP errors, exceptions, and bailout-safe cleanup.
 - **Observers** — function-call, error, and exception hooks for profiling and monitoring.
 - **Memory** — PHP-backed Zig allocator with optional debug leak traces.

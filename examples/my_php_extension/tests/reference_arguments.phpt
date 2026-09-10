@@ -32,6 +32,7 @@ $cases = [
     ['callable', static fn () => 42, 'object'],
     ['callable', [DateTime::class, 'createFromFormat'], 'array'],
 ];
+$types = array_unique(array_column($cases, 0));
 
 foreach (['reference', 'zval', 'value'] as $mode) {
     foreach ([false, true] as $single) {
@@ -44,11 +45,10 @@ foreach (['reference', 'zval', 'value'] as $mode) {
                 check($value, $expected);
                 check($alias, $expected);
                 unset($alias);
-
-                if ($optional) {
-                    check(referenceArgument($mode, $type, true, $single), 'omitted');
-                }
             }
+        }
+        foreach ($types as $type) {
+            check(referenceArgument($mode, $type, true, $single), 'omitted');
         }
     }
     echo "$mode: passed\n";

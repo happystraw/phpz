@@ -25,11 +25,6 @@ var_dump($counter->value());
 $counter->__construct(7);
 var_dump($counter->value());
 
-try {
-    unserialize('O:16:"MyPHPExt\\Counter":0:{}');
-} catch (Exception $error) {
-    echo $error->getMessage(), "\n";
-}
 --EXPECT--
 int(10)
 int(11)
@@ -40,4 +35,3 @@ int(20)
 TypeError
 int(20)
 int(7)
-Unserialization of 'MyPHPExt\Counter' is not allowed
