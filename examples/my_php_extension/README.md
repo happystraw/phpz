@@ -69,8 +69,9 @@ already set during registration are preserved. Standard-layout classes retain
 Zend's normal behavior.
 
 The hooks must save and restore the backing explicitly. PHP does not call the
-constructor during unserialization. Set `.init = .default` or provide an initializer
-so backing is initialized before `__unserialize` runs.
+constructor during unserialization. Omit `.init` with defaults for every backing
+field, use `.init = .default`, or provide an initializer so backing is initialized
+before `__unserialize` runs.
 See [testing/serialization.zig](src/testing/serialization.zig) for a complete example.
 
 ## BigInteger

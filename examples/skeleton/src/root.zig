@@ -44,7 +44,7 @@ const functions = struct {
 
 /// class Counter
 const Counter = struct {
-    n: i64,
+    n: i64 = 0,
 
     /// public function __construct(int $n = 0): void
     pub fn __construct(ctx: phpz.Ctx) !Counter {

@@ -30,6 +30,4 @@ const SerializableValue = struct {
     }
 };
 
-pub const Class = phpz.Class("MyPHPExt\\Test\\SerializableValue", SerializableValue, .{
-    .init = .default,
-});
+pub const Class = phpz.Class("MyPHPExt\\Test\\SerializableValue", SerializableValue, .{});

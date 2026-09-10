@@ -210,27 +210,31 @@ fn Resolved(comptime T: type) type {
             var handlers: ObjectHandlers = if (@hasField(Options, "handlers")) options.handlers else .{};
 
             if (layout == .backed) {
-                if (@hasField(Options, "init")) {
-                    initializer = switch (@typeInfo(@TypeOf(options.init))) {
-                        .enum_literal => if (options.init == .none)
-                            null
-                        else if (options.init == .default) blk: {
-                            break :blk struct {
-                                fn call() anyerror!T {
-                                    return .{};
-                                }
-                            }.call;
-                        } else @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
-                        .@"fn" => blk: {
-                            break :blk struct {
-                                fn call() anyerror!T {
-                                    return @call(.auto, options.init, .{});
-                                }
-                            }.call;
-                        },
-                        else => @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
-                    };
-                }
+                const init = if (@hasField(Options, "init")) options.init else blk: {
+                    for (@typeInfo(T).@"struct".field_attrs) |attrs| {
+                        if (attrs.default_value_ptr == null) break :blk .none;
+                    }
+                    break :blk .default;
+                };
+                initializer = switch (@typeInfo(@TypeOf(init))) {
+                    .enum_literal => if (init == .none)
+                        null
+                    else if (init == .default) blk: {
+                        break :blk struct {
+                            fn call() anyerror!T {
+                                return .{};
+                            }
+                        }.call;
+                    } else @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
+                    .@"fn" => blk: {
+                        break :blk struct {
+                            fn call() anyerror!T {
+                                return @call(.auto, init, .{});
+                            }
+                        }.call;
+                    },
+                    else => @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
+                };
 
                 if (@hasField(Options, "deinit")) {
                     deinitializer = options.deinit;
@@ -453,7 +457,8 @@ pub const ObjectHandlers = struct {
 /// - Backed instance methods receive `*T` or `*const T`, optionally followed by
 ///   `Ctx`, and return `void` or `!void`.
 /// - A backed `__construct` accepts no arguments or one `Ctx` and returns `T`
-///   or `!T`. The result initializes the backing while PHP observes `void`.
+///   or `!T`. The result replaces the backing while PHP observes `void`;
+///   any previous backing is released through `.deinit` when provided.
 ///
 /// ## Options
 ///
@@ -462,8 +467,10 @@ pub const ObjectHandlers = struct {
 /// - `.register`: receives the typed stub-generated registration function,
 ///   supplies its parent class or interfaces, and returns `*ClassEntry` or an
 ///   error union containing it.
-/// - `.init`: omit or use `.none` to leave backing empty, `.default` to create
-///   it with `.{}`, or provide a function returning `T` or `!T`.
+/// - `.init`: when omitted, uses `.default` if every field of `T` has a default
+///   value, otherwise `.none`. Use `.none` to leave backing empty, `.default`
+///   to create it with `.{}`, or a function returning `T` or `!T`.
+///   Initialization runs during object creation, before the PHP constructor.
 /// - `.deinit`: releases an initialized backing with `fn (*T) void`.
 /// - `.clone`: copies backing with `fn (*const T) T` or `fn (*const T) !T`.
 /// - `.gc`: reports owned PHP values with `fn (*T, *Gc) void`.
@@ -491,8 +498,9 @@ pub const ObjectHandlers = struct {
 /// Inherited hooks do not enable serialization for a new backed class.
 /// Existing class restrictions are preserved.
 /// Without both hooks, serialization and unserialization are forbidden, including in PHP subclasses.
-/// PHP does not call the constructor during unserialization. Set `.init = .default`
-/// or provide an initializer so backing is initialized before `__unserialize` runs.
+/// PHP does not call the constructor during unserialization. Omit `.init` with
+/// defaults for every field of `T`, use `.init = .default`, or provide an
+/// initializer so backing is initialized before `__unserialize` runs.
 ///
 /// ## Operator and comparison callbacks
 ///
@@ -757,7 +765,8 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
 
         /// Creates an instance without calling its PHP constructor.
         ///
-        /// The configured `.init` initializer is still applied to its backing.
+        /// Applies `.init`; when omitted, initializes backing only if every
+        /// field of `T` has a default value.
         ///
         /// Ownership: caller owns the returned object reference; call
         /// `object().release()` unless ownership is transferred to PHP or a zval.
