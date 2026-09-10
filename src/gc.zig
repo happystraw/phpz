@@ -2,29 +2,37 @@ const c = @import("c.zig").c;
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
 
-/// Collector supplied to a class `.gc` callback.
-pub const Gc = opaque {
-    pub inline fn from(buffer: *c.zend_get_gc_buffer) *Gc {
+pub const GcBuffer = opaque {
+    pub inline fn create() *GcBuffer {
+        return .from(c.zend_get_gc_buffer_create());
+    }
+
+    pub inline fn from(buffer: *c.zend_get_gc_buffer) *GcBuffer {
         return @ptrCast(buffer);
     }
 
-    pub inline fn ptr(self: *Gc) *c.zend_get_gc_buffer {
+    pub inline fn ptr(self: *GcBuffer) *c.zend_get_gc_buffer {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Report a PHP value owned by the backing. Does not change its reference count.
-    /// Report each owned reference once; non-refcounted values are ignored.
-    pub fn add(self: *Gc, value: *Zval) void {
+    pub fn use(self: *GcBuffer, table: *?[*]c.zval, n: *c_int) void {
+        c.zend_get_gc_buffer_use(self.ptr(), table, n);
+    }
+
+    /// Reports an owned value for cycle collection. Skips non-refcounted values
+    /// (null, bool, int, float).
+    pub fn add(self: *GcBuffer, value: *Zval) void {
         c.zend_get_gc_buffer_add_zval(self.ptr(), value.ptr());
     }
 
-    /// Report an owned object reference without changing its reference count.
-    pub fn addObject(self: *Gc, value: *zend.Object) void {
+    /// Reports an owned object for cycle collection. `value` must not be null.
+    pub fn addObject(self: *GcBuffer, value: *zend.Object) void {
         c.zend_get_gc_buffer_add_obj(self.ptr(), value.ptr());
     }
 
-    /// Report an owned array reference. Immutable arrays are ignored.
-    pub fn addArray(self: *Gc, value: *zend.Array) void {
+    /// Reports an owned array for cycle collection. Skips immutable arrays; PHP 8.5+
+    /// checks that in `zend_get_gc_buffer_add_ht`, older versions check here.
+    pub fn addArray(self: *GcBuffer, value: *zend.Array) void {
         if (comptime @hasDecl(c, "zend_get_gc_buffer_add_ht")) {
             c.zend_get_gc_buffer_add_ht(self.ptr(), value.ptr());
         } else {
@@ -34,8 +42,9 @@ pub const Gc = opaque {
         }
     }
 
-    /// Report references retained by `Callable.addref()`. A nil callable is ignored.
-    pub fn addCallable(self: *Gc, value: *zend.Callable) void {
+    /// Reports an owned callable for cycle collection: the function name and the
+    /// bound object that `Callable.addref()` retains. Skips `Callable.nil`.
+    pub fn addCallable(self: *GcBuffer, value: *zend.Callable) void {
         if (value.fci.size == 0) return;
         self.add(.from(&value.fci.function_name));
         if (value.fcc.object) |object| self.addObject(.from(object));
@@ -43,5 +52,5 @@ pub const Gc = opaque {
 };
 
 test {
-    @import("std").testing.refAllDecls(Gc);
+    @import("std").testing.refAllDecls(GcBuffer);
 }

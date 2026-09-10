@@ -89,6 +89,15 @@ pub const Object = opaque {
         return if (self.properties()) |props| props.len() else 0;
     }
 
+    /// Resolve GC roots through PHP's standard handler, wrapping
+    /// `zend_std_get_gc()`.
+    ///
+    /// Ownership: borrowed properties table owned by the object.
+    pub fn gcRoots(self: *Object, table: *?[*]c.zval, n: *c_int) ?*Array {
+        const prop_ptr: ?*c.HashTable = c.zend_std_get_gc(self.ptr(), table, n);
+        return if (prop_ptr) |p| .from(p) else null;
+    }
+
     pub const ConstructorError = error{AccessDenied};
 
     /// Look up the constructor via PHP's standard handler.

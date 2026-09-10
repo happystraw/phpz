@@ -27,8 +27,8 @@ const Collection = struct {
         return .{ .data = data, .iterator = data.iterator() };
     }
 
-    fn gc(self: *Collection, collector: *phpz.Gc) void {
-        collector.addArray(self.data);
+    fn gc(self: *Collection, buffer: *phpz.GcBuffer) void {
+        buffer.addArray(self.data);
     }
 
     /// PHP: MyPHPExt\Collection::__construct(array $values = [])

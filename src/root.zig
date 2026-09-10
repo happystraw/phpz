@@ -24,7 +24,7 @@ pub const ObjectHandlers = class_helper.ObjectHandlers;
 pub const ClassEntry = zend.ClassEntry;
 pub const Operator = class_helper.Operator;
 pub const Comparison = class_helper.Comparison;
-pub const Gc = @import("gc.zig").Gc;
+pub const GcBuffer = @import("gc.zig").GcBuffer;
 
 const function_helper = @import("function.zig");
 pub const function = function_helper.function;

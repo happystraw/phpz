@@ -8,7 +8,7 @@ const Ctx = @import("Ctx.zig");
 const errors = @import("errors.zig");
 const function_helper = @import("function.zig");
 const globals = @import("globals.zig");
-const Gc = @import("gc.zig").Gc;
+const GcBuffer = @import("gc.zig").GcBuffer;
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
@@ -85,7 +85,7 @@ fn Resolved(comptime T: type) type {
         /// Cloner for the Zig backing value.
         clone: ?fn (*const T) anyerror!T,
         /// Reports PHP values owned by the Zig backing.
-        gc: ?fn (*T, *Gc) void,
+        gc: ?fn (*T, *GcBuffer) void,
         /// Zend object handler overrides.
         handlers: ObjectHandlers,
 
@@ -206,7 +206,7 @@ fn Resolved(comptime T: type) type {
             var initializer: ?fn () anyerror!T = null;
             var deinitializer: ?fn (*T) void = null;
             var cloner: ?fn (*const T) anyerror!T = null;
-            var gc_callback: ?fn (*T, *Gc) void = null;
+            var gc_callback: ?fn (*T, *GcBuffer) void = null;
             var handlers: ObjectHandlers = if (@hasField(Options, "handlers")) options.handlers else .{};
 
             if (layout == .backed) {
@@ -250,7 +250,7 @@ fn Resolved(comptime T: type) type {
                 }
 
                 if (@hasField(Options, "gc") and @TypeOf(options.gc) != @TypeOf(null)) {
-                    if (@TypeOf(options.gc) != fn (*T, *Gc) void) @compileError("Class " ++ class_name ++ " .gc must be fn (*" ++ @typeName(T) ++ ", *Gc) void");
+                    if (@TypeOf(options.gc) != fn (*T, *GcBuffer) void) @compileError("Class " ++ class_name ++ " .gc must be fn (*" ++ @typeName(T) ++ ", *GcBuffer) void");
                     if (handlers.get_gc != null) @compileError("Class " ++ class_name ++ " .gc conflicts with .handlers.get_gc");
                     gc_callback = options.gc;
                 }
@@ -473,8 +473,8 @@ pub const ObjectHandlers = struct {
 ///   Initialization runs during object creation, before the PHP constructor.
 /// - `.deinit`: releases an initialized backing with `fn (*T) void`.
 /// - `.clone`: copies backing with `fn (*const T) T` or `fn (*const T) !T`.
-/// - `.gc`: reports owned PHP values with `fn (*T, *Gc) void`.
-///   Use `collector.add(value)` for each owned value; standard PHP properties are included automatically.
+/// - `.gc`: reports owned PHP values with `fn (*T, *GcBuffer) void`.
+///   Use `buffer.add(value)` for each owned value; standard PHP properties are included automatically.
 /// - `.handlers`: overrides selected Zend handlers with `ObjectHandlers`.
 /// - `.operate`: handles operations and writes to `result`; returns `void` or `!void`.
 ///   Return `error.Unsupported` to report unsupported operations or operands as TypeError.
@@ -491,7 +491,7 @@ pub const ObjectHandlers = struct {
 ///
 /// The `.gc` callback runs only for initialized backing. It must only report
 /// existing references, without modifying the object or invoking PHP user code.
-/// The collector is borrowed for the callback and must not be retained.
+/// The GC buffer is borrowed for the callback and must not be retained.
 ///
 /// Backed classes permit serialization only when both `__serialize` and
 /// `__unserialize` have local Zig bindings; implementing only one is a compile error.
@@ -622,11 +622,14 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         const lifecycle = struct {
             fn getGc(obj: ?*c.zend_object, table: ?*?[*]c.zval, n: ?*c_int) callconv(.c) ?*c.HashTable {
                 const self: *Self = .fromStdUnchecked(obj.?);
-                const value = self.backing() orelse return c.zend_std_get_gc(obj, table, n);
-                const buffer = c.zend_get_gc_buffer_create();
-                resolved.gc.?(value, Gc.from(buffer));
-                c.zend_get_gc_buffer_use(buffer, table, n);
-                return c.zend_std_get_properties(obj);
+                const instance = zend.Object.from(obj.?);
+                const value = self.backing() orelse
+                    return if (instance.gcRoots(table.?, n.?)) |props| props.ptr() else null;
+
+                const buffer = GcBuffer.create();
+                resolved.gc.?(value, buffer);
+                buffer.use(table.?, n.?);
+                return if (instance.properties()) |props| props.ptr() else null;
             }
 
             fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {

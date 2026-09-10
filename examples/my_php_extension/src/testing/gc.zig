@@ -30,15 +30,15 @@ const GcNode = struct {
         }
     }
 
-    fn gc(self: *GcNode, collector: *phpz.Gc) void {
+    fn gc(self: *GcNode, buffer: *phpz.GcBuffer) void {
         const first = Zval.from(&self.first);
         switch (first.kind()) {
-            .object => collector.addObject(first.asUnchecked(.object)),
-            .array => collector.addArray(first.asUnchecked(.array)),
-            else => collector.add(first),
+            .object => buffer.addObject(first.asUnchecked(.object)),
+            .array => buffer.addArray(first.asUnchecked(.array)),
+            else => buffer.add(first),
         }
-        collector.add(.from(&self.second));
-        collector.addCallable(&self.callback);
+        buffer.add(.from(&self.second));
+        buffer.addCallable(&self.callback);
     }
 };
 

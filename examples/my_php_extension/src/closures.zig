@@ -35,8 +35,8 @@ const Counter = struct {
         Zval.raw.release(&self.held);
     }
 
-    fn gc(self: *Counter, collector: *phpz.Gc) void {
-        collector.add(.from(&self.held));
+    fn gc(self: *Counter, buffer: *phpz.GcBuffer) void {
+        buffer.add(.from(&self.held));
     }
 };
 
@@ -80,8 +80,8 @@ const Reference = struct {
         Zval.raw.release(&self.value);
     }
 
-    fn gc(self: *Reference, collector: *phpz.Gc) void {
-        collector.add(.from(&self.value));
+    fn gc(self: *Reference, buffer: *phpz.GcBuffer) void {
+        buffer.add(.from(&self.value));
     }
 };
 
