@@ -782,7 +782,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             const instance = create();
             const zend_object = instance.object();
             errdefer zend_object.release();
-            if (try zend_object.constructor()) |constructor| try constructor.callMethod(zend_object, null, params);
+            if (try zend_object.constructor()) |constructor| try constructor.callMethod(zend_object, null, params, null);
             return instance;
         }
         /// Creates a new instance and calls its PHP constructor when present,
@@ -795,7 +795,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             const instance = create();
             const zend_object = instance.object();
             errdefer zend_object.release();
-            if (try zend_object.constructor()) |constructor| try constructor.tryCallMethod(zend_object, null, params);
+            if (try zend_object.constructor()) |constructor| try constructor.tryCallMethod(zend_object, null, params, null);
             return instance;
         }
     };

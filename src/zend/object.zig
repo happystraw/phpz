@@ -307,6 +307,7 @@ pub const Object = opaque {
     ///
     /// Resolves the method from the class's function table,
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    /// `named_params` is borrowed for the call; semantics follow `Function.call()`.
     ///
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
@@ -318,26 +319,30 @@ pub const Object = opaque {
         method_name: []const u8,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) CallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.callMethod(self, retval, params);
+        try method.callMethod(self, retval, params, named_params);
     }
 
     /// Call a known method by name and convert a Zend bailout into `error.ZendBailout`.
+    /// Arguments and ownership follow `call()`.
     pub fn tryCall(
         self: *Object,
         method_name: []const u8,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) TryCallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.tryCallMethod(self, retval, params);
+        try method.tryCallMethod(self, retval, params, named_params);
     }
 
     /// Call a known static method by name.
     ///
     /// Resolves the method from the class's function table,
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    /// `named_params` is borrowed for the call; semantics follow `Function.call()`.
     ///
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
     ///
@@ -350,21 +355,24 @@ pub const Object = opaque {
         ce: *ClassEntry,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) CallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.callStatic(ce, retval, params);
+        try method.callStatic(ce, retval, params, named_params);
     }
 
     /// Call a known static method by name and convert a Zend bailout into `error.ZendBailout`.
+    /// Arguments and ownership follow `call()`.
     pub fn tryCallStatic(
         self: *Object,
         method_name: []const u8,
         ce: *ClassEntry,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) TryCallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.tryCallStatic(ce, retval, params);
+        try method.tryCallStatic(ce, retval, params, named_params);
     }
 
     pub const CallIfExistsError = error{MethodCallFailed} || Function.Error;

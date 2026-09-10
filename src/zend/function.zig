@@ -7,6 +7,7 @@ const Zval = @import("../zval.zig").Zval;
 const bailout = @import("bailout.zig");
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 const Object = @import("object.zig").Object;
+const Array = @import("array.zig").Array;
 
 pub const Function = opaque {
     pub const Error = error{
@@ -122,41 +123,51 @@ pub const Function = opaque {
 
     /// Call as a global function (no object, no scope).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    /// `retval` receives the result; pass null to discard it.
+    /// The caller owns the result; existing contents of `retval` are not released.
+    /// `named_params` is borrowed for the call; pass null for positional arguments only.
+    /// String keys name arguments; integer keys append positional arguments and
+    /// must precede string keys in iteration order. Matching and references follow Zend.
     ///
     /// Returns `error.PhpException` if the called function throws a PHP exception.
-    pub fn call(self: *Function, retval: ?*c.zval, params: anytype) Error!void {
-        try self.invoke(null, null, retval, params);
+    pub fn call(self: *Function, retval: ?*c.zval, params: anytype, named_params: ?*Array) Error!void {
+        try self.invoke(null, null, retval, params, named_params);
     }
 
     /// Call as a global function and convert a Zend bailout into `error.ZendBailout`.
-    pub fn tryCall(self: *Function, retval: ?*c.zval, params: anytype) TryCallError!void {
-        try self.tryInvoke(null, null, retval, params);
+    /// Arguments and ownership follow `call()`.
+    pub fn tryCall(self: *Function, retval: ?*c.zval, params: anytype, named_params: ?*Array) TryCallError!void {
+        try self.tryInvoke(null, null, retval, params, named_params);
     }
 
     /// Call as a static method (with class scope, no object).
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    /// Named arguments and ownership follow `call()`.
     ///
     /// Returns `error.PhpException` if the called method throws a PHP exception.
-    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) Error!void {
-        try self.invoke(null, ce.ptr(), retval, params);
+    pub fn callStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype, named_params: ?*Array) Error!void {
+        try self.invoke(null, ce.ptr(), retval, params, named_params);
     }
 
     /// Call as a static method and convert a Zend bailout into `error.ZendBailout`.
-    pub fn tryCallStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype) TryCallError!void {
-        try self.tryInvoke(null, ce.ptr(), retval, params);
+    /// Arguments and ownership follow `call()`.
+    pub fn tryCallStatic(self: *Function, ce: *ClassEntry, retval: ?*c.zval, params: anytype, named_params: ?*Array) TryCallError!void {
+        try self.tryInvoke(null, ce.ptr(), retval, params, named_params);
     }
 
     /// Call as an instance method on an object.
     /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
+    /// Named arguments and ownership follow `call()`.
     ///
     /// Returns `error.PhpException` if the called method throws a PHP exception.
-    pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) Error!void {
-        try self.invoke(obj.ptr(), obj.class().ptr(), retval, params);
+    pub fn callMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype, named_params: ?*Array) Error!void {
+        try self.invoke(obj.ptr(), obj.class().ptr(), retval, params, named_params);
     }
 
     /// Call as an instance method and convert a Zend bailout into `error.ZendBailout`.
-    pub fn tryCallMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype) TryCallError!void {
-        try self.tryInvoke(obj.ptr(), obj.class().ptr(), retval, params);
+    /// Arguments and ownership follow `call()`.
+    pub fn tryCallMethod(self: *Function, obj: *Object, retval: ?*c.zval, params: anytype, named_params: ?*Array) TryCallError!void {
+        try self.tryInvoke(obj.ptr(), obj.class().ptr(), retval, params, named_params);
     }
 
     inline fn invoke(
@@ -165,6 +176,7 @@ pub const Function = opaque {
         scope: ?*c.zend_class_entry,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) Error!void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
@@ -172,11 +184,11 @@ pub const Function = opaque {
 
         const n = info.@"struct".field_types.len;
         switch (n) {
-            0 => c.zend_call_known_function(self.ptr(), obj, scope, retval, 0, null, null),
+            0 => c.zend_call_known_function(self.ptr(), obj, scope, retval, 0, null, if (named_params) |args| args.ptr() else null),
             else => {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
-                c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), null);
+                c.zend_call_known_function(self.ptr(), obj, scope, retval, @intCast(n), @ptrCast(&arr), if (named_params) |args| args.ptr() else null);
             },
         }
         if (errors.hasException()) return error.PhpException;
@@ -188,6 +200,7 @@ pub const Function = opaque {
         scope: ?*c.zend_class_entry,
         retval: ?*c.zval,
         params: anytype,
+        named_params: ?*Array,
     ) TryCallError!void {
         const info = @typeInfo(@TypeOf(params));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
@@ -201,9 +214,10 @@ pub const Function = opaque {
                     obj: ?*c.zend_object,
                     scope: ?*c.zend_class_entry,
                     retval: ?*c.zval,
+                    named_params: ?*Array,
 
                     fn call(frame: *@This()) void {
-                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, 0, null, null);
+                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, 0, null, if (frame.named_params) |args| args.ptr() else null);
                     }
                 };
                 var frame: CallFrame = .{
@@ -211,6 +225,7 @@ pub const Function = opaque {
                     .obj = obj,
                     .scope = scope,
                     .retval = retval,
+                    .named_params = named_params,
                 };
                 try bailout.run(void, CallFrame, &frame, CallFrame.call);
             },
@@ -223,9 +238,10 @@ pub const Function = opaque {
                     scope: ?*c.zend_class_entry,
                     retval: ?*c.zval,
                     params: *[n]c.zval,
+                    named_params: ?*Array,
 
                     fn call(frame: *@This()) void {
-                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, @intCast(n), @ptrCast(frame.params), null);
+                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, @intCast(n), @ptrCast(frame.params), if (frame.named_params) |args| args.ptr() else null);
                     }
                 };
                 var frame: CallFrame = .{
@@ -234,6 +250,7 @@ pub const Function = opaque {
                     .scope = scope,
                     .retval = retval,
                     .params = &arr,
+                    .named_params = named_params,
                 };
                 try bailout.run(void, CallFrame, &frame, CallFrame.call);
             },

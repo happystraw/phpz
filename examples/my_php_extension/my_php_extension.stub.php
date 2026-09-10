@@ -190,6 +190,8 @@ namespace MyPHPExt\Test {
 
     function collectReferenceArguments(mixed &...$args): array {}
 
+    function invokeArguments(string $mode, callable $target, array $positional, ?array $named_params, bool $guarded): mixed {}
+
     function makeHandlerClosure(): \Closure {}
 
     function makeFnClosure(string $kind = "sum"): \Closure {}

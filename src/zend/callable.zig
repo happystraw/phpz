@@ -4,6 +4,7 @@ const errors = @import("../errors.zig");
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
 const Object = @import("object.zig").Object;
+const Array = @import("array.zig").Array;
 const bailout = @import("bailout.zig");
 
 /// Parsed callable ready for invocation.
@@ -16,7 +17,7 @@ const bailout = @import("bailout.zig");
 ///     &.{.{ .callable = .{ .resolve = true } }},
 ///     .{.{ .target = &cb }},
 /// );
-/// try cb.call(.{ arg1 });
+/// try cb.call(null, .{ arg1 }, null);
 /// ```
 pub const Callable = struct {
     /// Call info: function name, params, retval pointer.
@@ -66,35 +67,34 @@ pub const Callable = struct {
         return c.zend_is_callable(zv, 0, null);
     }
 
-    /// Set the zval to receive the return value, returns self for chaining.
-    pub inline fn withRetval(self: *Callable, zv: *c.zval) *Callable {
-        self.fci.retval = zv;
-        return self;
-    }
-
     pub const CallError = error{ CallFailed, PhpException };
     pub const TryCallError = CallError || bailout.Error;
 
-    /// Invoke the callable with positional arguments (comptime tuple of `c.zval`).
+    /// Invoke the callable with positional and optional named arguments.
+    /// Pass args as a tuple of `c.zval`: `.{}`, `.{a}`, `.{a, b}`.
+    /// `retval` receives the result; pass null to discard it.
+    /// The caller owns the result; existing contents of `retval` are not released.
+    /// `named_params` is borrowed for the call; pass null for positional arguments only.
+    /// String keys name arguments; integer keys append positional arguments and
+    /// must precede string keys in iteration order. Matching and references follow Zend.
     ///
     /// Returns `error.CallFailed` if the executor is inactive.
     /// Returns `error.PhpException` if the callable throws a PHP exception.
-    pub fn call(self: *Callable, args: anytype) CallError!void {
+    pub fn call(self: *Callable, retval: ?*c.zval, args: anytype, named_params: ?*Array) CallError!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("call: args must be a tuple, e.g. .{} or .{a, b}");
 
         var discard: c.zval = undefined;
-        const owns_retval = self.fci.retval == null;
-        if (owns_retval) self.fci.retval = &discard;
-        defer if (owns_retval) Zval.raw.release(&discard);
+        self.fci.retval = retval orelse &discard;
+        defer if (retval == null) Zval.raw.release(&discard);
 
         const n = info.@"struct".field_types.len;
         switch (n) {
             0 => {
                 self.fci.param_count = 0;
                 self.fci.params = null;
-                self.fci.named_params = null;
+                self.fci.named_params = if (named_params) |values| values.ptr() else null;
                 if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
                     return error.CallFailed;
                 }
@@ -104,7 +104,7 @@ pub const Callable = struct {
                 inline for (0..n) |i| arr[i] = args[i];
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
-                self.fci.named_params = null;
+                self.fci.named_params = if (named_params) |values| values.ptr() else null;
                 if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
                     return error.CallFailed;
                 }
@@ -114,29 +114,15 @@ pub const Callable = struct {
     }
 
     /// Invoke the callable and convert a Zend bailout into `error.ZendBailout`.
-    ///
-    /// This variant restores `fci` temporary call fields and destroys the
-    /// internally-owned discard return value before returning `error.ZendBailout`.
-    pub fn tryCall(self: *Callable, args: anytype) TryCallError!void {
+    /// Arguments and ownership follow `call()`.
+    pub fn tryCall(self: *Callable, retval: ?*c.zval, args: anytype, named_params: ?*Array) TryCallError!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("tryCall: args must be a tuple, e.g. .{} or .{a, b}");
 
-        const saved_retval = self.fci.retval;
-        const saved_param_count = self.fci.param_count;
-        const saved_params = self.fci.params;
-        const saved_named_params = self.fci.named_params;
-
         var discard: c.zval = Zval.raw.undef;
-        const owns_retval = saved_retval == null;
-        if (owns_retval) self.fci.retval = &discard;
-        defer {
-            self.fci.retval = saved_retval;
-            self.fci.param_count = saved_param_count;
-            self.fci.params = saved_params;
-            self.fci.named_params = saved_named_params;
-            if (owns_retval) Zval.raw.tryRelease(&discard);
-        }
+        self.fci.retval = retval orelse &discard;
+        defer if (retval == null) Zval.raw.tryRelease(&discard);
 
         const n = info.@"struct".field_types.len;
         const CallResult = @typeInfo(@TypeOf(c.zend_call_function)).@"fn".return_type.?;
@@ -153,7 +139,7 @@ pub const Callable = struct {
             0 => blk: {
                 self.fci.param_count = 0;
                 self.fci.params = null;
-                self.fci.named_params = null;
+                self.fci.named_params = if (named_params) |values| values.ptr() else null;
                 break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
             },
             else => blk: {
@@ -161,7 +147,7 @@ pub const Callable = struct {
                 inline for (0..n) |i| arr[i] = args[i];
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
-                self.fci.named_params = null;
+                self.fci.named_params = if (named_params) |values| values.ptr() else null;
                 break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
             },
         };
@@ -187,11 +173,6 @@ pub const Callable = struct {
     /// Call when the callable will not be invoked (prevents memory leaks).
     pub inline fn release(self: *Callable) void {
         c.zend_release_fcall_info_cache(&self.fcc);
-    }
-
-    /// Clear argument memory previously allocated by `zend_fcall_info_args`.
-    pub inline fn clearArgs(self: *Callable) void {
-        c.zend_fcall_info_args_clear(&self.fci, 0);
     }
 };
 

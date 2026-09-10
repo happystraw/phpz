@@ -52,7 +52,7 @@ pub fn mapValues(ctx: phpz.Ctx) !void {
         var mapped = Zval.raw.undef;
         defer Zval.raw.tryRelease(&mapped);
 
-        try mapper.withRetval(&mapped).call(.{entry.value.*});
+        try mapper.call(&mapped, .{entry.value.*}, null);
         switch (entry.key) {
             .string => |key| result.set(.mixed, key, &mapped),
             .int => |key| try result.setAt(.mixed, key, &mapped),

@@ -42,6 +42,7 @@ comptime {
         .@"MyPHPExt\\Test\\collectArguments" = named_arguments.collectArguments,
         .@"MyPHPExt\\Test\\checkedNamedArguments" = named_arguments.checkedNamedArguments,
         .@"MyPHPExt\\Test\\collectReferenceArguments" = named_arguments.collectAll,
+        .@"MyPHPExt\\Test\\invokeArguments" = named_arguments.invokeArguments,
     });
 
     phpz.module(.{

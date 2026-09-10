@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 74055605eb4908b356ce21fe76add2efe5f65977 */
+ * Stub hash: 9749e872b911974c17dc2d37997e02cb722b60f1 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -44,6 +44,14 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_collectReferenceArguments, 0, 0, IS_ARRAY, 0)
 	ZEND_ARG_VARIADIC_TYPE_INFO(1, args, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_invokeArguments, 0, 5, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, mode, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, target, IS_CALLABLE, 0)
+	ZEND_ARG_TYPE_INFO(0, positional, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, named_params, IS_ARRAY, 1)
+	ZEND_ARG_TYPE_INFO(0, guarded, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_makeHandlerClosure arginfo_MyPHPExt_makeSumClosure
@@ -219,6 +227,7 @@ ZEND_FUNCTION(MyPHPExt_makeReference);
 ZEND_FUNCTION(MyPHPExt_Test_checkedNamedArguments);
 ZEND_FUNCTION(MyPHPExt_Test_collectArguments);
 ZEND_FUNCTION(MyPHPExt_Test_collectReferenceArguments);
+ZEND_FUNCTION(MyPHPExt_Test_invokeArguments);
 ZEND_FUNCTION(MyPHPExt_Test_makeHandlerClosure);
 ZEND_FUNCTION(MyPHPExt_Test_makeFnClosure);
 ZEND_FUNCTION(MyPHPExt_Test_wrapClosure);
@@ -309,6 +318,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectReferenceArguments"), zif_MyPHPExt_Test_collectReferenceArguments, arginfo_MyPHPExt_Test_collectReferenceArguments, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "collectReferenceArguments"), zif_MyPHPExt_Test_collectReferenceArguments, arginfo_MyPHPExt_Test_collectReferenceArguments, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "invokeArguments"), zif_MyPHPExt_Test_invokeArguments, arginfo_MyPHPExt_Test_invokeArguments, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "invokeArguments"), zif_MyPHPExt_Test_invokeArguments, arginfo_MyPHPExt_Test_invokeArguments, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeHandlerClosure"), zif_MyPHPExt_Test_makeHandlerClosure, arginfo_MyPHPExt_Test_makeHandlerClosure, 0, NULL, NULL)
