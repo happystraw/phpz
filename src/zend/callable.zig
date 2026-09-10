@@ -79,37 +79,34 @@ pub const Callable = struct {
     /// must precede string keys in iteration order. Matching and references follow Zend.
     ///
     /// Returns `error.CallFailed` if the executor is inactive.
-    /// Returns `error.PhpException` if the callable throws a PHP exception.
+    /// Returns `error.PhpException` if a PHP exception is pending after the call.
     pub fn call(self: *Callable, retval: ?*c.zval, args: anytype, named_params: ?*Array) CallError!void {
         const info = @typeInfo(@TypeOf(args));
         if (!(info == .@"struct" and info.@"struct".is_tuple))
             @compileError("call: args must be a tuple, e.g. .{} or .{a, b}");
 
-        var discard: c.zval = undefined;
+        var discard: c.zval = Zval.raw.undef;
         self.fci.retval = retval orelse &discard;
-        defer if (retval == null) Zval.raw.release(&discard);
 
         const n = info.@"struct".field_types.len;
-        switch (n) {
-            0 => {
+        const result = switch (n) {
+            0 => blk: {
                 self.fci.param_count = 0;
                 self.fci.params = null;
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
-                    return error.CallFailed;
-                }
+                break :blk c.zend_call_function(&self.fci, &self.fcc);
             },
-            else => {
+            else => blk: {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = args[i];
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                if (c.zend_call_function(&self.fci, &self.fcc) == c.FAILURE) {
-                    return error.CallFailed;
-                }
+                break :blk c.zend_call_function(&self.fci, &self.fcc);
             },
-        }
+        };
+        if (retval == null) Zval.raw.tryRelease(&discard);
+        if (result == c.FAILURE) return error.CallFailed;
         if (errors.hasException()) return error.PhpException;
     }
 
@@ -122,19 +119,23 @@ pub const Callable = struct {
 
         var discard: c.zval = Zval.raw.undef;
         self.fci.retval = retval orelse &discard;
-        defer if (retval == null) Zval.raw.tryRelease(&discard);
 
         const n = info.@"struct".field_types.len;
         const CallResult = @typeInfo(@TypeOf(c.zend_call_function)).@"fn".return_type.?;
         const CallFrame = struct {
             callable: *Callable,
+            discard: ?*c.zval,
 
             fn call(frame: *@This()) CallResult {
+                defer if (frame.discard) |value| Zval.raw.tryRelease(value);
                 return c.zend_call_function(&frame.callable.fci, &frame.callable.fcc);
             }
         };
 
-        var frame: CallFrame = .{ .callable = self };
+        var frame: CallFrame = .{
+            .callable = self,
+            .discard = if (retval == null) &discard else null,
+        };
         const result = switch (n) {
             0 => blk: {
                 self.fci.param_count = 0;

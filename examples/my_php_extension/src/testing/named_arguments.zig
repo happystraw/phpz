@@ -82,6 +82,17 @@ pub fn invokeArguments(ctx: phpz.Ctx) !void {
 }
 
 fn invoke(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Callable, params: anytype, named_params: ?*phpz.zend.Array, guarded: bool) !void {
+    if (std.mem.eql(u8, mode, "callable-cleanup")) {
+        // Native output also works after bailout has cleared the PHP execute frame.
+        defer std.debug.print("Zig cleanup\n", .{});
+        const result = if (guarded) callback.tryCall(null, params, named_params) else callback.call(null, params, named_params);
+        result catch |err| {
+            std.debug.print("Zig error: {s}\n", .{@errorName(err)});
+            return err;
+        };
+        std.debug.print("Zig returned\n", .{});
+        return;
+    }
     if (std.mem.eql(u8, mode, "callable-discard")) {
         if (guarded) {
             try callback.tryCall(null, params, named_params);
