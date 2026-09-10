@@ -1,5 +1,5 @@
 --TEST--
-MyPHPExt explicit serialization restores initialized native backing and validates saved data
+MyPHPExt paired serialization hooks enable backing round trips and validate saved data
 --EXTENSIONS--
 my_php_extension
 --FILE--
@@ -12,6 +12,11 @@ foreach ([42, 0, -7] as $number) {
     $restored = unserialize(serialize($original));
     var_dump($restored !== $original, $restored->value());
 }
+
+echo "inherited PHP protocol\n";
+class InheritedSerializableValue extends SerializableValue {}
+$restored = unserialize(serialize(new InheritedSerializableValue(23)));
+var_dump($restored instanceof InheritedSerializableValue, $restored->value());
 
 class SerializableChild extends SerializableValue {
     public string $label = 'default';
@@ -48,6 +53,9 @@ bool(true)
 int(0)
 bool(true)
 int(-7)
+inherited PHP protocol
+bool(true)
+int(23)
 subclass protocol
 bool(true)
 int(99)

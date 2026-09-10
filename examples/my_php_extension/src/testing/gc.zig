@@ -6,6 +6,7 @@ const GcNode = struct {
     second: phpz.c.zval,
     callback: phpz.zend.Callable,
 
+    /// PHP: MyPHPExt\Test\GcNode::__construct(mixed $first = null, mixed $second = null, ?callable $callback = null): void
     pub fn __construct(ctx: phpz.Ctx) !GcNode {
         var callback: phpz.zend.Callable = .nil;
         const args = try ctx.call.expectArgs(&.{

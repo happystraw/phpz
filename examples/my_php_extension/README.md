@@ -58,6 +58,21 @@ extension patterns that tend to break in real projects:
   while `phpz.globals.executor().superglobalMut(.GET)` prepares the userland
   `$_GET` slot for mutation.
 
+## Serialization
+
+Classes with Zig backing enable serialization by binding both `__serialize`
+and `__unserialize` in the current class, using automatic or explicit method
+bindings. Implementing only one is a compile error. With neither hook,
+serialization and unserialization are forbidden, including in PHP subclasses.
+Inherited hooks do not enable serialization for a new backed class; restrictions
+already set during registration are preserved. Standard-layout classes retain
+Zend's normal behavior.
+
+The hooks must save and restore the backing explicitly. PHP does not call the
+constructor during unserialization. Set `.init = .default` or provide an initializer
+so backing is initialized before `__unserialize` runs.
+See [testing/serialization.zig](src/testing/serialization.zig) for a complete example.
+
 ## BigInteger
 
 ```php
