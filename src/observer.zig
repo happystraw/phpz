@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
-const Ctx = @import("Ctx.zig");
+const CallFrame = @import("ctx.zig").CallFrame;
 const errors = @import("errors.zig");
 const globals = @import("globals.zig");
 const zend = @import("zend.zig");
@@ -13,8 +13,8 @@ const Zval = @import("zval.zig").Zval;
 /// the result, so it must not depend on per-call or mutable request state.
 pub const Fcall = struct {
     filter: ?fn (*zend.Function) bool = null,
-    begin: ?fn (*Ctx.Call) void = null,
-    end: ?fn (*Ctx.Call, ?*Zval) void = null,
+    begin: ?fn (*CallFrame) void = null,
+    end: ?fn (*CallFrame, ?*Zval) void = null,
 };
 
 /// Error observer callbacks.
@@ -55,7 +55,7 @@ fn FcallAdapter(comptime config: Fcall) type {
 
     return struct {
         fn init(execute_data: ?*c.zend_execute_data) callconv(.c) c.zend_observer_fcall_handlers {
-            const call = Ctx.Call.from(execute_data.?);
+            const call = CallFrame.from(execute_data.?);
             const function = call.function() orelse return .{ .begin = null, .end = null };
             if (config.filter) |filter| {
                 if (!filter(function)) return .{ .begin = null, .end = null };

@@ -122,17 +122,17 @@ pub const Callable = struct {
 
         const n = info.@"struct".field_types.len;
         const CallResult = @typeInfo(@TypeOf(c.zend_call_function)).@"fn".return_type.?;
-        const CallFrame = struct {
+        const Context = struct {
             callable: *Callable,
             discard: ?*c.zval,
 
-            fn call(frame: *@This()) CallResult {
-                defer if (frame.discard) |value| Zval.raw.tryRelease(value);
-                return c.zend_call_function(&frame.callable.fci, &frame.callable.fcc);
+            fn call(context: *@This()) CallResult {
+                defer if (context.discard) |value| Zval.raw.tryRelease(value);
+                return c.zend_call_function(&context.callable.fci, &context.callable.fcc);
             }
         };
 
-        var frame: CallFrame = .{
+        var context: Context = .{
             .callable = self,
             .discard = if (retval == null) &discard else null,
         };
@@ -141,7 +141,7 @@ pub const Callable = struct {
                 self.fci.param_count = 0;
                 self.fci.params = null;
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
+                break :blk try bailout.run(Context.call, &context);
             },
             else => blk: {
                 var arr: [n]c.zval = undefined;
@@ -149,7 +149,7 @@ pub const Callable = struct {
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
+                break :blk try bailout.run(Context.call, &context);
             },
         };
 

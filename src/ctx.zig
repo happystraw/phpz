@@ -3,6 +3,9 @@ const std = @import("std");
 
 const c = @import("root.zig").c;
 const errors = @import("errors.zig");
+const resource_guard = @import("guard.zig");
+const GuardScope = resource_guard.Scope;
+const Guard = resource_guard.Guard;
 const zend = @import("zend.zig");
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const Zval = @import("zval.zig").Zval;
@@ -24,18 +27,42 @@ const Zval = @import("zval.zig").Zval;
 ///     ctx.ret.set(.int, args[0] + args[1]);
 /// }
 /// ```
-const Ctx = @This();
+pub const Ctx = struct {
+    call: *CallFrame,
+    ret: *Zval,
+};
 
-call: *Call,
-ret: *Zval,
+/// Use instead of Ctx in a function, method, constructor, or Closure callback
+/// to enable a handler-local guard scope. Arbitrary Zig defer is not covered.
+/// Do not retain this context beyond the handler or across threads or Fiber suspension.
+pub const GuardCtx = struct {
+    call: *CallFrame,
+    ret: *Zval,
+    guard_scope: *GuardScope,
+
+    /// Borrow the call frame and return value without guard access.
+    pub fn asCtx(self: GuardCtx) Ctx {
+        return .{ .call = self.call, .ret = self.ret };
+    }
+
+    /// Transfer a native resource to this handler on success. Remaining resources
+    /// are released on return or bailout; release() cleans early and take() transfers ownership.
+    /// On failure the caller still owns value. Cleanup must not call PHP or bailout.
+    /// Pointers in value must survive a longjmp; do not point into skipped locals.
+    pub fn guard(self: GuardCtx, value: anytype, comptime cleanup: fn (@TypeOf(value)) void) std.mem.Allocator.Error!Guard(@TypeOf(value)) {
+        return self.guard_scope.register(value, cleanup);
+    }
+};
 
 /// Parameter parsing and call frame access.
 ///
-/// Wraps `zend_execute_data` to provide type-safe argument extraction
-/// via `expectArgs` / `expectArg` / `expectArgCount`, or the lower-level
-/// `parseArgs()` for complex type specs (callable, object, variadic, etc.).
-pub const Call = opaque {
-    /// Initialize a Call from PHP execution data.
+/// This is Zend's call frame: it wraps `zend_execute_data`, the structure
+/// php-src itself calls a call frame (`ZEND_CALL_FRAME_SLOT`). It provides
+/// type-safe argument extraction via `expectArgs` / `expectArg` /
+/// `expectArgCount`, or the lower-level `parseArgs()` for complex type specs
+/// (callable, object, variadic, etc.).
+pub const CallFrame = opaque {
+    /// Initialize a CallFrame from PHP execution data.
     ///
     /// This is typically called automatically by the function/method wrapper.
     /// You don't need to call this manually in user code.
@@ -44,27 +71,27 @@ pub const Call = opaque {
     ///   - execute_data: The PHP execution data pointer
     ///
     /// Returns:
-    ///   An initialized Call
-    pub inline fn from(execute_data: *c.zend_execute_data) *Call {
+    ///   An initialized CallFrame
+    pub inline fn from(execute_data: *c.zend_execute_data) *CallFrame {
         return @ptrCast(execute_data);
     }
 
     /// Get the underlying zend_execute_data pointer
-    pub inline fn ptr(self: *Call) *c.zend_execute_data {
+    pub inline fn ptr(self: *CallFrame) *c.zend_execute_data {
         return @ptrCast(@alignCast(self));
     }
 
     /// Get the function executed by this call frame.
     ///
     /// Ownership: borrowed function pointer owned by Zend.
-    pub inline fn function(self: *Call) ?*zend.Function {
+    pub inline fn function(self: *CallFrame) ?*zend.Function {
         const fn_ptr = self.ptr().func orelse return null;
         return .from(fn_ptr);
     }
 
     /// Get the number of argument slots, including resolved named parameters and
     /// defaults filled by Zend. Extra named variadic arguments are not included.
-    pub inline fn argCount(self: *Call) u32 {
+    pub inline fn argCount(self: *CallFrame) u32 {
         return self.ptr().This.u2.num_args;
     }
 
@@ -75,7 +102,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   Pointer to the zval at position n
-    pub inline fn arg(self: *Call, n: u32) *c.zval {
+    pub inline fn arg(self: *CallFrame, n: u32) *c.zval {
         const base: [*]c.zval = @ptrCast(self.ptr());
         return &base[@as(usize, @intCast(c.ZEND_CALL_FRAME_SLOT)) + @as(usize, n) - 1];
     }
@@ -83,7 +110,7 @@ pub const Call = opaque {
     /// Borrow the argument slots, including resolved named parameters.
     /// Extra named variadic arguments are separate: use extraNamedArgs() to read
     /// them, or expectNoExtraNamedArgs() to reject them before processing slots.
-    pub fn args(self: *Call) []c.zval {
+    pub fn args(self: *CallFrame) []c.zval {
         const count = self.argCount();
         const base: [*]c.zval = @ptrCast(self.ptr());
         return base[c.ZEND_CALL_FRAME_SLOT..][0..count];
@@ -93,14 +120,14 @@ pub const Call = opaque {
     /// Check the call flag before reading the potentially uninitialized field.
     /// The call frame owns the table: do not release or structurally modify it.
     /// Copy/addref values explicitly if they must outlive the call.
-    pub fn extraNamedArgs(self: *Call) ?*zend.Array {
+    pub fn extraNamedArgs(self: *CallFrame) ?*zend.Array {
         if (c.ZEND_CALL_INFO(self.ptr()) & c.ZEND_CALL_HAS_EXTRA_NAMED_PARAMS == 0) return null;
         return .from(self.ptr().extra_named_params);
     }
 
     /// Reject extra named variadic arguments in the currently executing call.
     /// Names matched to declared parameters are unaffected.
-    pub fn expectNoExtraNamedArgs(self: *Call) errors.ArgumentCountError!void {
+    pub fn expectNoExtraNamedArgs(self: *CallFrame) errors.ArgumentCountError!void {
         if (c.ZEND_CALL_INFO(self.ptr()) & c.ZEND_CALL_HAS_EXTRA_NAMED_PARAMS != 0) {
             return errors.unexpectedExtraNamedArgs();
         }
@@ -109,7 +136,7 @@ pub const Call = opaque {
     /// Validate the number of argument slots against expected min/max.
     /// Does not check extra named variadic arguments.
     /// Call once at the top of each function, before accessing individual args.
-    pub fn expectArgCount(self: *Call, min: u32, max: u32) errors.WrongParameterCountError!void {
+    pub fn expectArgCount(self: *CallFrame, min: u32, max: u32) errors.WrongParameterCountError!void {
         const count = self.argCount();
         if (count < min or count > max) {
             return errors.wrongParameterCount(min, max);
@@ -117,7 +144,7 @@ pub const Call = opaque {
     }
 
     /// Expect zero arguments in the currently executing call, including named extras.
-    pub fn expectNoArgs(self: *Call) (errors.WrongParameterCountError || errors.ArgumentCountError)!void {
+    pub fn expectNoArgs(self: *CallFrame) (errors.WrongParameterCountError || errors.ArgumentCountError)!void {
         try self.expectNoExtraNamedArgs();
         if (self.argCount() != 0) {
             return errors.wrongParametersNone();
@@ -200,7 +227,7 @@ pub const Call = opaque {
     /// const value: *Zval = args4[0];
     /// ```
     pub fn expectArgs(
-        self: *Call,
+        self: *CallFrame,
         comptime specs: []const ExpectArgKind.Spec,
         runtime: ExpectArgsRuntime(specs),
     ) ExpectArgsError!ExpectArgResults(specs) {
@@ -214,7 +241,7 @@ pub const Call = opaque {
     /// Required, optional and type checks still apply, and positional arguments
     /// beyond specs.len are rejected. Operates on the currently executing call.
     pub fn expectArgsAllowExtraNamed(
-        self: *Call,
+        self: *CallFrame,
         comptime specs: []const ExpectArgKind.Spec,
         runtime: ExpectArgsRuntime(specs),
     ) ExpectArgsError!ExpectArgResults(specs) {
@@ -453,7 +480,7 @@ pub const Call = opaque {
     ///
     /// Prefer `expectArgs` for multi-arg cases.
     pub fn expectArg(
-        self: *Call,
+        self: *CallFrame,
         n: u32,
         comptime spec: ExpectArgKind.Spec,
         runtime: ExpectArgKind.Runtime(spec),
@@ -469,7 +496,7 @@ pub const Call = opaque {
     }
 
     inline fn extractArg(
-        self: *Call,
+        self: *CallFrame,
         n: u32,
         comptime spec: ExpectArgKind.Spec,
         runtime: ExpectArgKind.Runtime(spec),
@@ -774,7 +801,7 @@ pub const Call = opaque {
     /// ```
     /// Parses the currently executing call. Extra named variadic arguments are
     /// rejected because this interface cannot return their names and values.
-    pub fn parseArgs(self: *Call, comptime type_spec: [:0]const u8, type_args: anytype) ParseArgsError!void {
+    pub fn parseArgs(self: *CallFrame, comptime type_spec: [:0]const u8, type_args: anytype) ParseArgsError!void {
         if (@typeInfo(@TypeOf(type_args)) != .@"struct") {
             @compileError("parseArgs: args must be a tuple (use .{} syntax)");
         }
@@ -794,7 +821,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The $this object value, or null if not in an object context
-    pub fn thisValue(self: *Call) ?*Zval.Object {
+    pub fn thisValue(self: *CallFrame) ?*Zval.Object {
         return Zval.Object.from(&self.ptr().This) catch null;
     }
 
@@ -804,7 +831,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The Object pointer, or null if not in an object context
-    pub fn this(self: *Call) ?*zend.Object {
+    pub fn this(self: *CallFrame) ?*zend.Object {
         const value = self.thisValue() orelse return null;
         return value.zendObject();
     }
@@ -813,7 +840,7 @@ pub const Call = opaque {
     ///
     /// Unlike `this`, this may walk through unscoped internal-function frames
     /// and return an object from an eligible caller frame.
-    pub fn getThisObject(self: *Call) ?*zend.Object {
+    pub fn getThisObject(self: *CallFrame) ?*zend.Object {
         const obj = c.zend_get_this_object(self.ptr());
         return if (obj) |o| .from(o) else null;
     }
@@ -825,7 +852,7 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The class entry, or null if not in a class context
-    pub fn scope(self: *Call) ?*ClassEntry {
+    pub fn scope(self: *CallFrame) ?*ClassEntry {
         const raw = @as(?*c.zend_class_entry, @ptrCast(self.ptr().func.*.common.scope));
         return if (raw) |ce| ClassEntry.from(ce) else null;
     }
@@ -849,13 +876,14 @@ pub const Call = opaque {
     ///
     /// Returns:
     ///   The called class entry, or null when no called scope can be resolved
-    pub fn calledScope(self: *Call) ?*ClassEntry {
+    pub fn calledScope(self: *CallFrame) ?*ClassEntry {
         const raw = c.zend_get_called_scope(self.ptr());
         return if (raw) |ce| .from(ce) else null;
     }
 };
 
 test {
-    @import("std").testing.refAllDecls(Ctx);
-    @import("std").testing.refAllDecls(Call);
+    std.testing.refAllDecls(Ctx);
+    std.testing.refAllDecls(GuardCtx);
+    std.testing.refAllDecls(CallFrame);
 }

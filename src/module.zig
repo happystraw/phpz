@@ -108,7 +108,7 @@ fn makePhpHookFn(comptime hook_fn: PhpHookFn) *const fn (c_int, c_int) callconv(
             _ = module_type;
             _ = module_number;
             hook_fn() catch |err| {
-                errors.err(.err, "Module hook function failed: %s", .{@errorName(err).ptr});
+                errors.warning("Module hook function failed: %s", .{@errorName(err).ptr});
                 return c.FAILURE;
             };
             return c.SUCCESS;
@@ -141,7 +141,7 @@ fn makePhpModuleStartupFn(
             if (comptime classes) |items| {
                 inline for (items) |Class| {
                     Class.register() catch |err| {
-                        errors.err(.err, "Class registration failed: %s", .{@errorName(err).ptr});
+                        errors.warning("Class registration failed: %s", .{@errorName(err).ptr});
                         return c.FAILURE;
                     };
                 }
@@ -151,7 +151,7 @@ fn makePhpModuleStartupFn(
             }
             if (comptime hook_fn) |f| {
                 f() catch |err| {
-                    errors.err(.err, "Module startup function failed: %s", .{@errorName(err).ptr});
+                    errors.warning("Module startup function failed: %s", .{@errorName(err).ptr});
                     return c.FAILURE;
                 };
             }
@@ -180,7 +180,7 @@ fn makePhpModuleShutdownFn(
             }
             if (comptime hook_fn) |f| {
                 f() catch |err| {
-                    errors.err(.err, "Module shutdown function failed: %s", .{@errorName(err).ptr});
+                    errors.warning("Module shutdown function failed: %s", .{@errorName(err).ptr});
                     return c.FAILURE;
                 };
             }

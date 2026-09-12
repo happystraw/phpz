@@ -419,30 +419,30 @@ pub const Object = opaque {
         defer zstr.release();
 
         const CallResult = @typeInfo(@TypeOf(c.zend_call_method_if_exists)).@"fn".return_type.?;
-        const CallFrame = struct {
+        const Context = struct {
             object: *Object,
             method: *c.zend_string,
             retval: ?*c.zval,
             params: []c.zval,
 
-            fn call(frame: *@This()) CallResult {
+            fn call(context: *@This()) CallResult {
                 return c.zend_call_method_if_exists(
-                    frame.object.ptr(),
-                    frame.method,
-                    frame.retval,
-                    @intCast(frame.params.len),
-                    if (frame.params.len > 0) @ptrCast(frame.params.ptr) else null,
+                    context.object.ptr(),
+                    context.method,
+                    context.retval,
+                    @intCast(context.params.len),
+                    if (context.params.len > 0) @ptrCast(context.params.ptr) else null,
                 );
             }
         };
 
-        var frame: CallFrame = .{
+        var context: Context = .{
             .object = self,
             .method = zstr.ptr(),
             .retval = retval,
             .params = params,
         };
-        const result = try bailout.run(CallResult, CallFrame, &frame, CallFrame.call);
+        const result = try bailout.run(Context.call, &context);
         if (result == c.FAILURE) return error.MethodCallFailed;
         if (errors.hasException()) return error.PhpException;
     }

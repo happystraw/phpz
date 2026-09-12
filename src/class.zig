@@ -2,13 +2,14 @@
 
 const std = @import("std");
 
-const abi = @import("abi.zig");
 const c = @import("c.zig").c;
-const Ctx = @import("Ctx.zig");
+const CallFrame = @import("ctx.zig").CallFrame;
+const Ctx = @import("ctx.zig").Ctx;
+const GuardCtx = @import("ctx.zig").GuardCtx;
 const errors = @import("errors.zig");
 const function_helper = @import("function.zig");
-const globals = @import("globals.zig");
 const GcBuffer = @import("gc.zig").GcBuffer;
+const globals = @import("globals.zig");
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
@@ -61,7 +62,6 @@ pub const Operator = enum(u8) {
 pub const Comparison = enum(i32) { less = -1, equal = 0, greater = 1 };
 
 const Layout = enum { std, backed };
-const MethodHandler = function_helper.Handler;
 const MethodKind = enum { instance, static };
 const Method = struct { name: [:0]const u8, kind: MethodKind };
 const MethodMap = std.StaticStringMap(Method);
@@ -459,6 +459,7 @@ pub const ObjectHandlers = struct {
 /// - A backed `__construct` accepts no arguments or one `Ctx` and returns `T`
 ///   or `!T`. The result replaces the backing while PHP observes `void`;
 ///   any previous backing is released through `.deinit` when provided.
+/// Use `GuardCtx` in place of `Ctx` to enable native resource cleanup on bailout.
 ///
 /// ## Options
 ///
@@ -703,8 +704,8 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             }
         }
 
-        fn receiver(ctx: *Ctx) ?*Self {
-            const obj = ctx.call.this() orelse {
+        fn receiver(call: *CallFrame) ?*Self {
+            const obj = call.this() orelse {
                 errors.throwError(null, class_name ++ " must be called on an object", .{}) catch {};
                 return null;
             };
@@ -914,27 +915,25 @@ fn bind(
 }
 
 fn bindConstructor(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime func: anytype) void {
+    const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
+    if (params.len > 1 or (params.len == 1 and params[0] != Ctx and params[0] != GuardCtx)) {
+        @compileError("unsupported constructor signature for " ++ class_name ++ ": expected fn(Ctx), fn(GuardCtx), or fn()");
+    }
+    const Context = if (params.len == 1) params[0].? else Ctx;
     const Args = std.meta.ArgsTuple(@TypeOf(func));
-    const handler: MethodHandler = struct {
-        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
-            var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
-            const self = ClassType.receiver(&ctx) orelse return;
+    const handler = function_helper.createHandler(class_name ++ "::__construct()", struct {
+        fn invoke(ctx: Context) anyerror!void {
+            const self = ClassType.receiver(ctx.call) orelse return;
             const args: Args = if (comptime @typeInfo(Args).@"struct".field_types.len == 1)
                 .{ctx}
             else blk: {
-                ctx.call.expectNoArgs() catch return;
+                try ctx.call.expectNoArgs();
                 break :blk .{};
             };
-            const value = @as(anyerror!T, @call(.auto, func, args)) catch |err| {
-                if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
-                if (!errors.hasException()) {
-                    errors.throwError(null, "%s at " ++ class_name ++ "::__construct()", .{@errorName(err).ptr}) catch {};
-                }
-                return;
-            };
+            const value = try @as(anyerror!T, @call(.auto, func, args));
             self.commitBacking(value);
         }
-    }.handle;
+    }.invoke);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, "__construct") });
 }
 
@@ -944,15 +943,15 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
     if (params.len == 0 or (params[0] != *T and params[0] != *const T)) {
         @compileError("instance method " ++ func_desc ++ " must take *" ++ @typeName(T) ++ " or *const " ++ @typeName(T) ++ " as its first parameter");
     }
-    if (params.len > 2 or (params.len == 2 and params[1] != Ctx)) {
-        @compileError("unsupported instance method signature for " ++ func_desc ++ ": expected only an optional Ctx after the receiver");
+    if (params.len > 2 or (params.len == 2 and params[1] != Ctx and params[1] != GuardCtx)) {
+        @compileError("unsupported instance method signature for " ++ func_desc ++ ": expected only an optional Ctx or GuardCtx after the receiver");
     }
 
+    const Context = if (params.len == 2) params[1].? else Ctx;
     const Args = std.meta.ArgsTuple(@TypeOf(func));
-    const handler: MethodHandler = struct {
-        fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
-            var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
-            const self = ClassType.receiver(&ctx) orelse return;
+    const handler = function_helper.createHandler(func_desc, struct {
+        fn invoke(ctx: Context) anyerror!void {
+            const self = ClassType.receiver(ctx.call) orelse return;
             const backing = self.backing() orelse {
                 errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{}) catch {};
                 return;
@@ -960,17 +959,12 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
             const args: Args = if (comptime params.len == 2)
                 .{ backing, ctx }
             else blk: {
-                ctx.call.expectNoArgs() catch return;
+                try ctx.call.expectNoArgs();
                 break :blk .{backing};
             };
-            _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
-                if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
-                if (!errors.hasException()) {
-                    errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr}) catch {};
-                }
-            };
+            return @call(.auto, func, args);
         }
-    }.handle;
+    }.invoke);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, method_name) });
 }
 

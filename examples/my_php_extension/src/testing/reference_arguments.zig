@@ -1,6 +1,6 @@
 const std = @import("std");
 const phpz = @import("phpz");
-const Kind = phpz.Ctx.Call.ExpectArgKind;
+const Kind = phpz.CallFrame.ExpectArgKind;
 
 /// PHP: MyPHPExt\Test\referenceArgument(string $mode, string $type, bool $optional, bool $single, mixed &$value = null): string
 pub fn referenceArgument(ctx: phpz.Ctx) !void {

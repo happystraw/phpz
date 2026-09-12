@@ -209,30 +209,30 @@ pub const Function = opaque {
         const n = info.@"struct".field_types.len;
         switch (n) {
             0 => {
-                const CallFrame = struct {
+                const Context = struct {
                     function: *Function,
                     obj: ?*c.zend_object,
                     scope: ?*c.zend_class_entry,
                     retval: ?*c.zval,
                     named_params: ?*Array,
 
-                    fn call(frame: *@This()) void {
-                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, 0, null, if (frame.named_params) |args| args.ptr() else null);
+                    fn call(context: *@This()) void {
+                        c.zend_call_known_function(context.function.ptr(), context.obj, context.scope, context.retval, 0, null, if (context.named_params) |args| args.ptr() else null);
                     }
                 };
-                var frame: CallFrame = .{
+                var context: Context = .{
                     .function = self,
                     .obj = obj,
                     .scope = scope,
                     .retval = retval,
                     .named_params = named_params,
                 };
-                try bailout.run(void, CallFrame, &frame, CallFrame.call);
+                try bailout.run(Context.call, &context);
             },
             else => {
                 var arr: [n]c.zval = undefined;
                 inline for (0..n) |i| arr[i] = params[i];
-                const CallFrame = struct {
+                const Context = struct {
                     function: *Function,
                     obj: ?*c.zend_object,
                     scope: ?*c.zend_class_entry,
@@ -240,11 +240,11 @@ pub const Function = opaque {
                     params: *[n]c.zval,
                     named_params: ?*Array,
 
-                    fn call(frame: *@This()) void {
-                        c.zend_call_known_function(frame.function.ptr(), frame.obj, frame.scope, frame.retval, @intCast(n), @ptrCast(frame.params), if (frame.named_params) |args| args.ptr() else null);
+                    fn call(context: *@This()) void {
+                        c.zend_call_known_function(context.function.ptr(), context.obj, context.scope, context.retval, @intCast(n), @ptrCast(context.params), if (context.named_params) |args| args.ptr() else null);
                     }
                 };
-                var frame: CallFrame = .{
+                var context: Context = .{
                     .function = self,
                     .obj = obj,
                     .scope = scope,
@@ -252,7 +252,7 @@ pub const Function = opaque {
                     .params = &arr,
                     .named_params = named_params,
                 };
-                try bailout.run(void, CallFrame, &frame, CallFrame.call);
+                try bailout.run(Context.call, &context);
             },
         }
         if (errors.hasException()) return error.PhpException;

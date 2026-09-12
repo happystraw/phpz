@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 9749e872b911974c17dc2d37997e02cb722b60f1 */
+ * Stub hash: a4613c4e33ada022871c2a7dc93ce4cd6db5fea3 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -67,6 +67,12 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_Test_wrapClosure, 0, 1, 
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_allocatorBailout, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_guardResources, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, label, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, callback, IS_CALLABLE, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, fail, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_superglobalsSnapshot arginfo_MyPHPExt_Test_allocatorBailout
@@ -232,6 +238,7 @@ ZEND_FUNCTION(MyPHPExt_Test_makeHandlerClosure);
 ZEND_FUNCTION(MyPHPExt_Test_makeFnClosure);
 ZEND_FUNCTION(MyPHPExt_Test_wrapClosure);
 ZEND_FUNCTION(MyPHPExt_Test_allocatorBailout);
+ZEND_FUNCTION(MyPHPExt_Test_guardResources);
 ZEND_FUNCTION(MyPHPExt_Test_superglobalsSnapshot);
 ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
 ZEND_FUNCTION(MyPHPExt_Test_referenceArgument);
@@ -343,6 +350,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "allocatorBailout"), zif_MyPHPExt_Test_allocatorBailout, arginfo_MyPHPExt_Test_allocatorBailout, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "allocatorBailout"), zif_MyPHPExt_Test_allocatorBailout, arginfo_MyPHPExt_Test_allocatorBailout, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "guardResources"), zif_MyPHPExt_Test_guardResources, arginfo_MyPHPExt_Test_guardResources, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "guardResources"), zif_MyPHPExt_Test_guardResources, arginfo_MyPHPExt_Test_guardResources, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "superglobalsSnapshot"), zif_MyPHPExt_Test_superglobalsSnapshot, arginfo_MyPHPExt_Test_superglobalsSnapshot, 0, NULL, NULL)

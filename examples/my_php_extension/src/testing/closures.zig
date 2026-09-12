@@ -42,6 +42,8 @@ pub fn makeFnClosure(ctx: phpz.Ctx) !void {
         phpz.closure.fromFn(fail, ctx.ret);
     } else if (std.mem.eql(u8, kind, "value")) {
         phpz.closure.fromFn(value, ctx.ret);
+    } else if (std.mem.eql(u8, kind, "guard_value")) {
+        phpz.closure.fromFn(@import("guard.zig").value, ctx.ret);
     } else if (std.mem.eql(u8, kind, "named")) {
         phpz.closure.fromFn(named_arguments.collectAll, ctx.ret);
     } else if (std.mem.eql(u8, kind, "checked_named")) {

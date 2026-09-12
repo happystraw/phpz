@@ -2,8 +2,10 @@ const std = @import("std");
 
 const abi = @import("abi.zig");
 const c = @import("root.zig").c;
-const Ctx = @import("Ctx.zig");
+const Ctx = @import("ctx.zig").Ctx;
+const GuardCtx = @import("ctx.zig").GuardCtx;
 const errors = @import("errors.zig");
+const guard = @import("guard.zig");
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
 
@@ -159,6 +161,7 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 ///
 /// Supported function signatures:
 ///   - `fn (Ctx) void|!void`  - Access parameters and set return value via ctx
+///   - `fn (GuardCtx) void|!void` - Also enable native resource cleanup on bailout
 ///   - `fn () void|!void`     - No parameters or return value
 ///
 /// When the function takes no parameters, PHP will reject calls with extra arguments.
@@ -202,7 +205,7 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
         }
 
         const symbol = stub.functionSymbolName(func_name);
-        const handler = wrapFn(func_name ++ "()", func);
+        const handler = createHandler(func_name ++ "()", func);
         @export(&handler, .{ .name = symbol });
     }
 }
@@ -214,31 +217,37 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
 /// standard-layout classes and for static methods on backed classes.
 pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
     comptime {
-        const handler = wrapFn(class_name ++ "::" ++ func_name ++ "()", func);
+        const handler = createHandler(class_name ++ "::" ++ func_name ++ "()", func);
         @export(&handler, .{ .name = stub.methodSymbolName(class_name, func_name) });
     }
 }
 
-/// Adapt fn(Ctx) or fn(), returning void or !void, to PHP's handler calling convention.
-pub fn wrapFn(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
-    const Func = @TypeOf(func);
-    const fn_info = @typeInfo(Func).@"fn";
-    const params = fn_info.param_types;
-    if (params.len > 1 or (params.len == 1 and params[0] != Ctx)) {
-        @compileError("unsupported function signature for " ++ func_desc ++ ": expected fn(Ctx) or fn()");
+/// Create a PHP handler from fn(), fn(Ctx), or fn(GuardCtx), returning void or !void.
+/// GuardCtx enables bailout capture and resource cleanup.
+pub fn createHandler(comptime func_desc: [:0]const u8, comptime invoke: anytype) Handler {
+    const params = @typeInfo(@TypeOf(invoke)).@"fn".param_types;
+    if (params.len > 1 or (params.len == 1 and params[0] != Ctx and params[0] != GuardCtx)) {
+        @compileError("unsupported handler signature for " ++ func_desc ++ ": expected fn(), fn(Ctx), or fn(GuardCtx)");
     }
-
-    const Args = std.meta.ArgsTuple(Func);
+    const Context = if (params.len == 1) params[0].? else Ctx;
     return struct {
         fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
-            var ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
-            const args: Args = if (comptime @typeInfo(Args).@"struct".field_types.len == 1)
-                .{ctx}
-            else blk: {
-                ctx.call.expectNoArgs() catch return;
-                break :blk .{};
-            };
-            _ = @as(anyerror!void, @call(.auto, func, args)) catch |err| {
+            @as(
+                anyerror!void,
+                if (comptime Context == GuardCtx) blk: {
+                    var scope = guard.Scope.init(std.heap.c_allocator);
+                    defer scope.deinit();
+                    break :blk zend.bailout.run(invoke, GuardCtx{
+                        .call = .from(execute_data.?),
+                        .ret = .from(return_value.?),
+                        .guard_scope = &scope,
+                    }) catch |err| err;
+                } else if (comptime params.len == 0) blk: {
+                    const ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
+                    ctx.call.expectNoArgs() catch |err| break :blk err;
+                    break :blk invoke();
+                } else invoke(.{ .call = .from(execute_data.?), .ret = .from(return_value.?) }),
+            ) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {
                     errors.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr}) catch {};

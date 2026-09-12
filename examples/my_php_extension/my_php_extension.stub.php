@@ -216,6 +216,8 @@ namespace MyPHPExt\Test {
 
     function allocatorBailout(): array {}
 
+    function guardResources(string $label, callable $callback, bool $fail = false): void {}
+
     function superglobalsSnapshot(): array {}
 
     function mutateSuperglobals(): void {}

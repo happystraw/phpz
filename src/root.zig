@@ -31,8 +31,12 @@ pub const function = function_helper.function;
 pub const functions = function_helper.functions;
 pub const namedFunctions = function_helper.namedFunctions;
 
-pub const Ctx = @import("Ctx.zig");
+pub const Ctx = @import("ctx.zig").Ctx;
+pub const CallFrame = @import("ctx.zig").CallFrame;
+pub const GuardCtx = @import("ctx.zig").GuardCtx;
 pub const Zval = @import("zval.zig").Zval;
+pub const Guard = @import("guard.zig").Guard;
+
 pub const errors = @import("errors.zig");
 
 pub fn printf(fmt: [:0]const u8, args: anytype) usize {
@@ -40,7 +44,7 @@ pub fn printf(fmt: [:0]const u8, args: anytype) usize {
 }
 
 test {
-    _ = @import("Ctx.zig");
+    _ = @import("ctx.zig");
     _ = @import("class.zig");
     _ = @import("closure.zig");
     _ = @import("errors.zig");
@@ -48,6 +52,7 @@ test {
     _ = @import("globals.zig");
     _ = @import("gc.zig");
     _ = @import("heap.zig");
+    _ = @import("guard.zig");
     _ = @import("ini.zig");
     _ = @import("info.zig");
     _ = @import("module.zig");
@@ -65,4 +70,6 @@ test {
     _ = @import("zend/bailout.zig");
     _ = @import("zval/array.zig");
     _ = @import("zval/object.zig");
+
+    std.testing.refAllDecls(@This());
 }

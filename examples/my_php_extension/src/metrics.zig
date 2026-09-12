@@ -88,7 +88,7 @@ const Call = struct {
         return !std.mem.eql(u8, function.name(), "MyPHPExt\\Test\\allocatorBailout");
     }
 
-    fn begin(call: *phpz.Ctx.Call) void {
+    fn begin(call: *phpz.CallFrame) void {
         const function = call.function() orelse return;
         const function_calls = &Globals.get().function_calls;
         function_calls.total += 1;
@@ -110,7 +110,7 @@ const Call = struct {
         function_calls.depth = current_depth + 1;
     }
 
-    fn end(call: *phpz.Ctx.Call, retval: ?*phpz.Zval) void {
+    fn end(call: *phpz.CallFrame, retval: ?*phpz.Zval) void {
         _ = call;
         _ = retval;
         const function_calls = &Globals.get().function_calls;

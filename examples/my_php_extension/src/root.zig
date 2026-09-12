@@ -5,6 +5,7 @@ const functions = @import("functions.zig");
 const ini = @import("ini.zig");
 const metrics = @import("metrics.zig");
 const bailout = @import("testing/bailout.zig");
+const guard_tests = @import("testing/guard.zig");
 const superglobals = @import("testing/superglobals.zig");
 const reference_arguments = @import("testing/reference_arguments.zig");
 const named_arguments = @import("testing/named_arguments.zig");
@@ -36,6 +37,7 @@ comptime {
         .@"MyPHPExt\\Test\\makeHandlerClosure" = closure_tests.makeHandlerClosure,
         .@"MyPHPExt\\Test\\makeFnClosure" = closure_tests.makeFnClosure,
         .@"MyPHPExt\\Test\\allocatorBailout" = bailout.allocatorBailout,
+        .@"MyPHPExt\\Test\\guardResources" = guard_tests.guardResources,
         .@"MyPHPExt\\Test\\superglobalsSnapshot" = superglobals.superglobalsSnapshot,
         .@"MyPHPExt\\Test\\mutateSuperglobals" = superglobals.mutateSuperglobals,
         .@"MyPHPExt\\Test\\referenceArgument" = reference_arguments.referenceArgument,
