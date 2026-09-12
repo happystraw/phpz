@@ -64,12 +64,12 @@ pub fn wrapClosure(ctx: phpz.Ctx) !void {
     }, {});
     const object = if (args[1]) |arg| arg.asOptional() else null;
     const class_name = if (args[2]) |arg| arg.asOptional() else null;
-    const scope = if (class_name) |name| blk: {
-        const str = phpz.zend.String.init(name, false);
-        defer str.release();
-        const raw = phpz.c.zend_lookup_class(str.ptr()) orelse return error.ClassNotFound;
-        break :blk phpz.ClassEntry.from(raw);
-    } else if (object) |obj| obj.class() else null;
+    const scope = if (class_name) |name|
+        phpz.ClassEntry.lookup(name, true) orelse return error.ClassNotFound
+    else if (object) |obj|
+        obj.class()
+    else
+        null;
     const function = (if (scope) |ce|
         phpz.zend.Function.findMethod(ce, args[0])
     else

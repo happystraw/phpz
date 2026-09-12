@@ -1,9 +1,11 @@
+const globals = @import("../globals.zig");
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
 const Function = @import("function.zig").Function;
 const Object = @import("object.zig").Object;
 const PropertyInfo = @import("property_info.zig").PropertyInfo;
+const String = @import("string.zig").String;
 
 pub const ClassEntry = opaque {
     /// Enum backing type classification.
@@ -22,6 +24,34 @@ pub const ClassEntry = opaque {
     /// Get the underlying zend_class_entry pointer
     pub inline fn ptr(self: *ClassEntry) *c.zend_class_entry {
         return @ptrCast(@alignCast(self));
+    }
+
+    /// Look up a class by name in the global class table.
+    ///
+    /// The class table is keyed by lowercase names, so `class_name` must
+    /// already be lowercase. This performs no normalization and never invokes
+    /// autoloaders. Use `lookup` for case-insensitive lookup or autoloading.
+    ///
+    /// Ownership: borrowed class entry owned by the PHP runtime.
+    pub fn find(class_name: []const u8) ?*ClassEntry {
+        return globals.executor().classes().findPtr(ClassEntry, class_name);
+    }
+
+    /// Look up a class by name, optionally invoking registered autoloaders.
+    ///
+    /// Unlike `find`, the name is normalized following Zend's rules
+    /// (case-insensitive, with a leading namespace separator stripped).
+    /// When `autoload` is true, registered autoload callbacks are run if the
+    /// class is not already loaded; they may execute arbitrary PHP code and
+    /// trigger a Zend bailout. Returns null if the class cannot be found.
+    ///
+    /// Ownership: borrowed class entry owned by the PHP runtime.
+    pub fn lookup(class_name: []const u8, autoload: bool) ?*ClassEntry {
+        const zname = String.init(class_name, false);
+        defer zname.release();
+
+        const entry = c.zend_lookup_class_ex(zname.ptr(), null, if (autoload) 0 else c.ZEND_FETCH_CLASS_NO_AUTOLOAD);
+        return if (entry != null) .from(entry) else null;
     }
 
     /// Get the class name as a byte slice
