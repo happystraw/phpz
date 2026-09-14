@@ -58,6 +58,33 @@ extension patterns that tend to break in real projects:
   while `phpz.globals.executor().superglobalMut(.GET)` prepares the userland
   `$_GET` slot for mutation.
 
+## Retaining callables
+
+`MyPHPExt\Test\GcNode` demonstrates keeping a callable in Zig backing after its
+creating function returns. The constructor parses a borrowed `Callable`, calls
+`addref()`, and stores it. The `deinit` hook calls `delref()`, while the `gc` hook
+reports the retained references with `GcBuffer.addCallable()`.
+
+```php
+function makeCounterCallback(): MyPHPExt\Test\GcNode {
+    $value = 0;
+    return new MyPHPExt\Test\GcNode(callback: static function (int $step) use (&$value): int {
+        return $value += $step;
+    });
+}
+
+$saved = makeCounterCallback();
+echo $saved->invokeCallback(2);         // 2
+echo $saved->invokeCallback(3, true);   // 5
+unset($saved);
+```
+
+The callable remains valid within the same PHP request; reference counting does
+not make it persistent across requests. See [testing/gc.zig](src/testing/gc.zig)
+and [callable_retained.phpt](tests/callable_retained.phpt) for shared ownership
+and final release. Cycles through captured values are covered by
+[gc_callback.phpt](tests/gc_callback.phpt).
+
 ## Serialization
 
 Classes with Zig backing enable serialization by binding both `__serialize`

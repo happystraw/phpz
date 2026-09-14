@@ -17,15 +17,31 @@ const GcNode = struct {
         var self: GcNode = .{ .first = Zval.raw.undef, .second = Zval.raw.undef, .callback = callback };
         if (args[0]) |value| Zval.raw.copy(&self.first, value.ptr());
         if (args[1]) |value| Zval.raw.copy(&self.second, value.ptr());
+        // Parsing borrows the callable; retain it beyond this constructor call.
         if (self.callback.fci.size != 0) self.callback.addref();
         return self;
+    }
+
+    /// PHP: MyPHPExt\Test\GcNode::invokeCallback(mixed $value, bool $guarded = false): mixed
+    pub fn invokeCallback(self: *GcNode, ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .mixed = .{} },
+            .{ .bool = .{ .optional = true } },
+        }, {});
+        if (self.callback.fci.size == 0) return error.MissingCallback;
+        const params = .{args[0].ptr().*};
+        if (args[1] orelse false) {
+            try self.callback.tryCall(ctx.ret.ptr(), params, null);
+        } else {
+            try self.callback.call(ctx.ret.ptr(), params, null);
+        }
     }
 
     fn deinit(self: *GcNode) void {
         Zval.raw.release(&self.first);
         Zval.raw.release(&self.second);
         if (self.callback.fci.size != 0) {
-            self.callback.release();
+            // Balance the reference acquired by the constructor.
             self.callback.delref();
         }
     }
@@ -38,6 +54,7 @@ const GcNode = struct {
             else => buffer.add(first),
         }
         buffer.add(.from(&self.second));
+        // The retained callable may capture this node and form a cycle.
         buffer.addCallable(&self.callback);
     }
 };

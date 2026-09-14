@@ -44,10 +44,14 @@ pub const Callable = struct {
     ///
     /// Call trampolines are released after parsing for leak safety
     /// (`zend_call_function` re-fetches them automatically).
+    /// Normal parse/call use does not require separate cache cleanup.
     ///
     /// Returns `error.NotCallable` if the zval is not callable
     /// (a PHP error may be pending in `err`).
     /// On success the `fci` and `fcc` fields are populated and ready for `call()`.
+    /// The callable is borrowed; its source must remain alive during use.
+    /// Use addref()/delref() to retain it beyond the source lifetime.
+    /// Release any previous cache and owned references before parsing into this value.
     ///
     /// `err` optionally receives the error message from `zend_fcall_info_init`
     /// (e.g. "function 'xxx' not found"). Pass `null` to discard it.
@@ -86,94 +90,46 @@ pub const Callable = struct {
             @compileError("call: args must be a tuple, e.g. .{} or .{a, b}");
 
         var discard: c.zval = Zval.raw.undef;
-        self.fci.retval = retval orelse &discard;
+        var fci = self.fci;
+        fci.retval = retval orelse &discard;
 
         const n = info.@"struct".field_types.len;
-        const result = switch (n) {
-            0 => blk: {
-                self.fci.param_count = 0;
-                self.fci.params = null;
-                self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk c.zend_call_function(&self.fci, &self.fcc);
-            },
-            else => blk: {
-                var arr: [n]c.zval = undefined;
-                inline for (0..n) |i| arr[i] = args[i];
-                self.fci.param_count = @intCast(n);
-                self.fci.params = @ptrCast(&arr);
-                self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk c.zend_call_function(&self.fci, &self.fcc);
-            },
-        };
+        var params: [n]c.zval = undefined;
+        inline for (0..n) |i| params[i] = args[i];
+        fci.param_count = @intCast(n);
+        fci.params = if (n == 0) null else @ptrCast(&params);
+        fci.named_params = if (named_params) |values| values.ptr() else null;
+        const result = c.zend_call_function(&fci, &self.fcc);
         if (retval == null) Zval.raw.tryRelease(&discard);
         if (result == c.FAILURE) return error.CallFailed;
         if (errors.hasException()) return error.PhpException;
     }
 
     /// Invoke the callable and convert a Zend bailout into `error.ZendBailout`.
-    /// Arguments and ownership follow `call()`.
-    pub fn tryCall(self: *Callable, retval: ?*c.zval, args: anytype, named_params: ?*Array) TryCallError!void {
-        const info = @typeInfo(@TypeOf(args));
-        if (!(info == .@"struct" and info.@"struct".is_tuple))
-            @compileError("tryCall: args must be a tuple, e.g. .{} or .{a, b}");
-
-        var discard: c.zval = Zval.raw.undef;
-        self.fci.retval = retval orelse &discard;
-
-        const n = info.@"struct".field_types.len;
-        const CallResult = @typeInfo(@TypeOf(c.zend_call_function)).@"fn".return_type.?;
-        const Context = struct {
-            callable: *Callable,
-            discard: ?*c.zval,
-
-            fn call(context: *@This()) CallResult {
-                defer if (context.discard) |value| Zval.raw.tryRelease(value);
-                return c.zend_call_function(&context.callable.fci, &context.callable.fcc);
+    /// Arguments and ownership follow call(). The boundary includes destruction
+    /// of a discarded return value. After bailout, propagate ZendBailout after
+    /// native resource cleanup; do not resume normal PHP execution or retry
+    /// interrupted return-value cleanup.
+    pub fn tryCall(self: *Callable, retval: ?*c.zval, params: anytype, named_params: ?*Array) TryCallError!void {
+        return bailout.run(struct {
+            fn call(callable: *Callable, result: ?*c.zval, args: @TypeOf(params), named_args: ?*Array) CallError!void {
+                return callable.call(result, args, named_args);
             }
-        };
-
-        var context: Context = .{
-            .callable = self,
-            .discard = if (retval == null) &discard else null,
-        };
-        const result = switch (n) {
-            0 => blk: {
-                self.fci.param_count = 0;
-                self.fci.params = null;
-                self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(Context.call, .{&context});
-            },
-            else => blk: {
-                var arr: [n]c.zval = undefined;
-                inline for (0..n) |i| arr[i] = args[i];
-                self.fci.param_count = @intCast(n);
-                self.fci.params = @ptrCast(&arr);
-                self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(Context.call, .{&context});
-            },
-        };
-
-        if (result == c.FAILURE) return error.CallFailed;
-        if (errors.hasException()) return error.PhpException;
+        }.call, .{ self, retval, params, named_params });
     }
 
     /// Increment refcounts on `function_name` and `fcc.object`.
-    /// Prevents premature destruction when the callable is retained.
+    /// Retains a successfully parsed callable; pair each call with delref().
     pub inline fn addref(self: *Callable) void {
         Zval.raw.tryAddref(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.addref(.from(obj));
     }
 
-    /// Decrement refcounts on `function_name` and `fcc.object`.
+    /// Release references previously acquired by addref(), not borrowed references.
+    /// This value must not be used after its referenced callable is destroyed.
     pub inline fn delref(self: *Callable) void {
         Zval.raw.release(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.release(.from(obj));
-    }
-
-    /// Release call trampoline from the cache.
-    /// Call when the callable will not be invoked (prevents memory leaks).
-    pub inline fn release(self: *Callable) void {
-        c.zend_release_fcall_info_cache(&self.fcc);
     }
 };
 

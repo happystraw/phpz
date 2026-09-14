@@ -229,6 +229,8 @@ namespace MyPHPExt\Test {
     class GcNode
     {
         public function __construct(mixed $first = null, mixed $second = null, ?callable $callback = null) {}
+
+        public function invokeCallback(mixed $value, bool $guarded = false): mixed {}
     }
 
     function allocatorBailout(): array {}
