@@ -48,6 +48,8 @@ comptime {
         .@"MyPHPExt\\Test\\invokeArguments" = named_arguments.invokeArguments,
         .@"MyPHPExt\\Test\\newObject" = class_new.newObject,
         .@"MyPHPExt\\Test\\cloneObject" = @import("testing/objects.zig").cloneObject,
+        .@"MyPHPExt\\Test\\objectProperties" = @import("testing/objects.zig").objectProperties,
+        .@"MyPHPExt\\Test\\hasObjectProperty" = @import("testing/objects.zig").hasObjectProperty,
         .@"MyPHPExt\\Test\\initObject" = @import("testing/objects.zig").initObject,
         .@"MyPHPExt\\Test\\constructObject" = @import("testing/objects.zig").constructObject,
         .@"MyPHPExt\\Test\\copyArray" = @import("testing/arrays.zig").copyArray,

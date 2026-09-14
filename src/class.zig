@@ -630,7 +630,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
                 const buffer = GcBuffer.create();
                 resolved.gc.?(value, buffer);
                 buffer.use(table.?, n.?);
-                return if (instance.properties()) |props| props.ptr() else null;
+                return c.zend_std_get_properties(obj.?);
             }
 
             fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {

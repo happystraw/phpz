@@ -1,5 +1,19 @@
 const phpz = @import("phpz");
 
+pub fn objectProperties(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{ .{ .object = .{} }, .{ .bool = .{} } }, {});
+    const props = if (args[1]) try args[0].stdProperties() else try args[0].properties();
+    ctx.ret.set(.array, if (props) |table| table.dupe() else phpz.zend.Array.empty());
+}
+
+pub fn hasObjectProperty(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{ .{ .object = .{} }, .{ .string = .{} }, .{ .bool = .{} } }, {});
+    ctx.ret.set(.bool, if (args[2])
+        try args[0].hasStdProperty(args[1], .isset)
+    else
+        try args[0].hasProperty(args[1], .isset));
+}
+
 pub fn initObject(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{.{ .string = .{} }}, {});
     const entry = (try phpz.ClassEntry.lookup(args[0], true)) orelse return error.ClassNotFound;

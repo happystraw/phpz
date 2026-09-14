@@ -135,17 +135,26 @@ pub const Object = opaque {
         return self.ptr().handle;
     }
 
-    /// Get object properties.
+    /// Get properties through the object's get_properties handler.
+    /// This is not the purpose-specific get_properties_for API.
     ///
-    /// Ownership: borrowed properties table owned by the object.
-    pub inline fn properties(self: *Object) ?*Array {
-        const prop_ptr: ?*c.HashTable = c.zend_std_get_properties(self.ptr());
+    /// Ownership: borrowed table; keep the object alive and do not release the
+    /// table. Subsequent object operations may invalidate the table or its slots.
+    /// Returns PhpException if the handler leaves a pending exception.
+    pub fn properties(self: *Object) errors.Exception!?*Array {
+        const prop_ptr = self.ptr().handlers.*.get_properties.?(self.ptr());
+        if (errors.hasException()) return error.PhpException;
         return if (prop_ptr) |p| .from(p) else null;
     }
 
-    /// Get property count
-    pub fn propertyCount(self: *Object) usize {
-        return if (self.properties()) |props| props.len() else 0;
+    /// Get properties through zend_std_get_properties, bypassing a custom
+    /// get_properties handler. Lazy initialization may throw a PHP exception.
+    ///
+    /// Ownership: borrowed table, with the same lifetime as properties().
+    pub fn stdProperties(self: *Object) errors.Exception!?*Array {
+        const prop_ptr: ?*c.HashTable = c.zend_std_get_properties(self.ptr());
+        if (errors.hasException()) return error.PhpException;
+        return if (prop_ptr) |p| .from(p) else null;
     }
 
     /// Resolve GC roots through PHP's standard handler, wrapping
@@ -259,7 +268,7 @@ pub const Object = opaque {
         return result;
     }
 
-    /// Property existence check mode, passed to `hasProperty`.
+    /// Property check mode for hasProperty() and hasStdProperty().
     pub const PropertyCheck = enum(c_int) {
         /// `isset($obj->prop)` — property exists and is not null
         isset = c.ZEND_PROPERTY_ISSET,
@@ -270,14 +279,30 @@ pub const Object = opaque {
         _,
     };
 
-    /// Check if a property exists.
+    /// Check a property through the object's has_property handler.
     ///
-    /// Returns `error.PhpException` if a magic `__isset` handler throws.
+    /// Returns PhpException if the handler leaves a pending exception.
     pub fn hasProperty(
         self: *Object,
         name: []const u8,
         comptime check: PropertyCheck,
-    ) Function.Error!bool {
+    ) errors.Exception!bool {
+        const zstr = String.init(name, false);
+        defer zstr.release();
+
+        const result = self.ptr().handlers.*.has_property.?(self.ptr(), zstr.ptr(), @backingInt(check), null);
+        if (errors.hasException()) return error.PhpException;
+        return result != 0;
+    }
+
+    /// Check a property through zend_std_has_property, bypassing a custom
+    /// has_property handler. Standard behavior still includes magic methods.
+    /// Returns PhpException if the operation leaves a pending exception.
+    pub fn hasStdProperty(
+        self: *Object,
+        name: []const u8,
+        comptime check: PropertyCheck,
+    ) errors.Exception!bool {
         const zstr = String.init(name, false);
         defer zstr.release();
 

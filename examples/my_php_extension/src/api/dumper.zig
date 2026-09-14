@@ -6,11 +6,11 @@ const phpz = @import("phpz");
 pub fn dump(ctx: phpz.Ctx) !void {
     try ctx.call.expectNoExtraNamedArgs();
     for (ctx.call.args()) |*zv| {
-        dumpValue(.from(zv), 0);
+        try dumpValue(.from(zv), 0);
     }
 }
 
-fn dumpValue(value: *phpz.Zval, depth: usize) void {
+fn dumpValue(value: *phpz.Zval, depth: usize) phpz.errors.Exception!void {
     switch (value.kind()) {
         .null => {
             indent(depth);
@@ -53,7 +53,7 @@ fn dumpValue(value: *phpz.Zval, depth: usize) void {
                         key.ptr,
                     }),
                 }
-                dumpValue(.from(entry.value), depth + 1);
+                try dumpValue(.from(entry.value), depth + 1);
             }
 
             indent(depth);
@@ -62,7 +62,7 @@ fn dumpValue(value: *phpz.Zval, depth: usize) void {
         .reference => {
             indent(depth);
             _ = phpz.printf("&", .{});
-            dumpValue(.from(value.asUnchecked(.reference).val()), 0);
+            try dumpValue(.from(value.asUnchecked(.reference).val()), 0);
         },
         .resource => {
             indent(depth);
@@ -77,19 +77,23 @@ fn dumpValue(value: *phpz.Zval, depth: usize) void {
             }
 
             const class_name = object.class().name();
+            const properties = try object.properties();
             indent(depth);
             _ = phpz.printf("class %.*s#%d (%d) {\n", .{
                 class_name.len,
                 class_name.ptr,
                 object.handle(),
-                object.propertyCount(),
+                if (properties) |props| props.len() else 0,
             });
 
-            if (object.properties()) |properties| {
-                var iterator = properties.fastIterator();
+            if (properties) |props| {
+                var iterator = props.fastIterator();
                 while (iterator.next()) |entry| {
                     indent(depth + 1);
-                    printPropertyVisibility(entry.key.string);
+                    switch (entry.key) {
+                        .int => |index| _ = phpz.printf("[%ld]", .{index}),
+                        .string => |name| printPropertyVisibility(name),
+                    }
                     _ = phpz.printf(" =>\n", .{});
 
                     const property = phpz.Zval.from(entry.value);
@@ -97,7 +101,7 @@ fn dumpValue(value: *phpz.Zval, depth: usize) void {
                         property.asUnchecked(.indirect)
                     else
                         entry.value;
-                    dumpValue(.from(raw), depth + 1);
+                    try dumpValue(.from(raw), depth + 1);
                 }
             }
 
