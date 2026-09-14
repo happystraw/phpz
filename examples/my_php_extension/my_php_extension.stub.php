@@ -184,6 +184,9 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function compareArrays(array $left, array $right, bool $ordered, bool $strict): int {}
+    function copyArray(array $target, array $source): array {}
+    function mergeArray(array $target, array $source, bool $overwrite): array {}
     function constructObject(string $class, array $args, bool $guarded): object {}
     function initObject(string $class): object {}
     function cloneObject(object $object): object {}

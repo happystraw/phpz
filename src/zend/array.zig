@@ -1,4 +1,5 @@
 const c = @import("../root.zig").c;
+const errors = @import("../errors.zig");
 const Zval = @import("../zval.zig").Zval;
 
 pub const Array = opaque {
@@ -162,25 +163,49 @@ pub const Array = opaque {
         c.zend_hash_rehash(self.ptr());
     }
 
-    /// Copy from source array.
+    /// Copy source entries into this array, overwriting matching keys and
+    /// retaining other existing entries. Numeric keys are preserved.
     ///
-    /// Ownership: copied elements are shared according to Zend hash copy
-    /// semantics; addref values first if independent ownership is required.
+    /// Ownership: source is borrowed; the target owns the copied values using
+    /// Zend's zval_add_ref copy constructor. Values are shallow-copied, with
+    /// single-owner reference wrappers unwrapped according to Zend semantics.
+    /// The target must be mutable, uniquely owned, and distinct from source;
+    /// this raw array wrapper does not perform copy-on-write separation.
     pub fn copy(self: *Array, source: *Array) void {
-        c.zend_hash_copy(self.ptr(), source.ptr(), null);
+        c.zend_hash_copy(self.ptr(), source.ptr(), c.zval_add_ref);
     }
 
-    /// Merge from source array.
+    /// Merge source entries, preserving numeric keys. Matching keys are
+    /// replaced when overwrite is true and skipped otherwise.
     ///
-    /// Ownership: merged elements are shared according to Zend hash merge
-    /// semantics; addref values first if independent ownership is required.
+    /// Ownership and target preconditions follow copy(). Only inserted or
+    /// replaced values gain ownership; skipped source entries are unchanged.
+    /// This is Zend hash merging, not PHP array_merge() numeric renumbering.
     pub fn merge(self: *Array, source: *Array, overwrite: bool) void {
-        c.zend_hash_merge(self.ptr(), source.ptr(), null, overwrite);
+        c.zend_hash_merge(self.ptr(), source.ptr(), c.zval_add_ref, overwrite);
     }
 
-    /// Compare two arrays
-    pub fn compare(self: *Array, other: *Array, ordered: bool) c_int {
-        return c.zend_hash_compare(self.ptr(), other.ptr(), null, ordered);
+    /// Compare arrays using a typed value callback. Zend compares sizes and
+    /// keys; ordered additionally requires matching iteration order. The
+    /// callback determines value equality, not the ordered flag.
+    ///
+    /// Ownership: arrays are borrowed; callback arguments are borrowed read-only
+    /// zval slots (referenced payloads are not deeply immutable). Keep both arrays
+    /// alive and do not invalidate their entries during comparison. Reference
+    /// wrappers are passed through; dereferencing is the callback's policy.
+    /// Returns the raw Zend comparison result, not necessarily -1, 0, or 1.
+    /// Pending PHP exceptions return PhpException; Zend bailouts propagate.
+    pub fn compare(self: *Array, other: *Array, compare_fn: fn (*const c.zval, *const c.zval) c_int, ordered: bool) errors.Exception!c_int {
+        const Cb = struct {
+            fn cb(a: ?*const anyopaque, b: ?*const anyopaque) callconv(.c) c_int {
+                const left: *const c.zval = @ptrCast(@alignCast(a.?));
+                const right: *const c.zval = @ptrCast(@alignCast(b.?));
+                return compare_fn(left, right);
+            }
+        };
+        const result = c.zend_hash_compare(self.ptr(), other.ptr(), Cb.cb, ordered);
+        if (errors.hasException()) return error.PhpException;
+        return result;
     }
 
     /// HashTable apply result codes.
@@ -194,40 +219,50 @@ pub const Array = opaque {
     ///
     /// Return `.keep` to retain the element, `.remove` to delete it from the array,
     /// or `.stop` to halt iteration. Use `.remove` for filtering.
-    pub fn applyEach(self: *Array, apply_fn: fn (*c.zval) ApplyResult) void {
+    /// The callback must return `.stop` to stop after a PHP exception. Pending
+    /// exceptions are reported as PhpException after traversal returns.
+    pub fn apply(self: *Array, apply_fn: fn (*c.zval) ApplyResult) errors.Exception!void {
         const Cb = struct {
             fn cb(zv: ?*c.zval) callconv(.c) c_int {
                 return @backingInt(apply_fn(zv.?));
             }
         };
         c.zend_hash_apply(self.ptr(), Cb.cb);
+        if (errors.hasException()) return error.PhpException;
     }
 
     /// Apply a callback to each element, passing a user-provided argument pointer.
-    pub fn applyEachWithArg(
+    /// Callback control flow and exception handling follow apply().
+    pub fn applyWithArg(
         self: *Array,
         comptime ArgType: type,
         apply_fn: fn (*c.zval, *ArgType) ApplyResult,
         arg: *ArgType,
-    ) void {
+    ) errors.Exception!void {
         const Cb = struct {
             fn cb(zv: ?*c.zval, a: ?*anyopaque) callconv(.c) c_int {
                 return @backingInt(apply_fn(zv.?, @ptrCast(@alignCast(a.?))));
             }
         };
         c.zend_hash_apply_with_argument(self.ptr(), Cb.cb, arg);
+        if (errors.hasException()) return error.PhpException;
     }
 
     pub const SortOrder = enum(c_int) { less = -1, equal = 0, greater = 1 };
 
     /// Sort the array in-place with a custom compare function and optional renumbering.
-    pub fn sort(self: *Array, compare_fn: fn (*c.Bucket, *c.Bucket) SortOrder, renumber: bool) void {
+    /// Callback results are passed through; returning `.equal` does not stop
+    /// sorting. Zend may invoke further callbacks with a pending PHP exception.
+    /// Pending exceptions are reported as PhpException after sorting returns;
+    /// changes are not rolled back.
+    pub fn sort(self: *Array, compare_fn: fn (*c.Bucket, *c.Bucket) SortOrder, renumber: bool) errors.Exception!void {
         const Cb = struct {
             fn cb(a: ?*c.Bucket, b: ?*c.Bucket) callconv(.c) c_int {
                 return @backingInt(compare_fn(a.?, b.?));
             }
         };
         c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
+        if (errors.hasException()) return error.PhpException;
     }
 
     /// Get refcount
