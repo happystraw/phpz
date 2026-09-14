@@ -227,7 +227,7 @@ pub const Function = opaque {
                     .retval = retval,
                     .named_params = named_params,
                 };
-                try bailout.run(Context.call, &context);
+                try bailout.run(Context.call, .{&context});
             },
             else => {
                 var arr: [n]c.zval = undefined;
@@ -252,7 +252,7 @@ pub const Function = opaque {
                     .params = &arr,
                     .named_params = named_params,
                 };
-                try bailout.run(Context.call, &context);
+                try bailout.run(Context.call, .{&context});
             },
         }
         if (errors.hasException()) return error.PhpException;

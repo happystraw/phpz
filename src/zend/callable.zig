@@ -141,7 +141,7 @@ pub const Callable = struct {
                 self.fci.param_count = 0;
                 self.fci.params = null;
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(Context.call, &context);
+                break :blk try bailout.run(Context.call, .{&context});
             },
             else => blk: {
                 var arr: [n]c.zval = undefined;
@@ -149,7 +149,7 @@ pub const Callable = struct {
                 self.fci.param_count = @intCast(n);
                 self.fci.params = @ptrCast(&arr);
                 self.fci.named_params = if (named_params) |values| values.ptr() else null;
-                break :blk try bailout.run(Context.call, &context);
+                break :blk try bailout.run(Context.call, .{&context});
             },
         };
 

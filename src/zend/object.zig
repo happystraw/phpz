@@ -442,7 +442,7 @@ pub const Object = opaque {
             .retval = retval,
             .params = params,
         };
-        const result = try bailout.run(Context.call, &context);
+        const result = try bailout.run(Context.call, .{&context});
         if (result == c.FAILURE) return error.MethodCallFailed;
         if (errors.hasException()) return error.PhpException;
     }

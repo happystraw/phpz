@@ -237,11 +237,11 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime invoke: anytype)
                 if (comptime Context == GuardCtx) blk: {
                     var scope = guard.Scope.init(std.heap.c_allocator);
                     defer scope.deinit();
-                    break :blk zend.bailout.run(invoke, GuardCtx{
+                    break :blk zend.bailout.run(invoke, .{GuardCtx{
                         .call = .from(execute_data.?),
                         .ret = .from(return_value.?),
                         .guard_scope = &scope,
-                    }) catch |err| err;
+                    }});
                 } else if (comptime params.len == 0) blk: {
                     const ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
                     ctx.call.expectNoArgs() catch |err| break :blk err;
