@@ -64,9 +64,10 @@ pub const Array = opaque {
 
     /// Ensure this array zval owns writable storage before in-place mutation.
     ///
-    /// This applies PHP's copy-on-write array separation to the owner zval. If
-    /// the underlying array is shared, the zval is updated to point at a
-    /// duplicated array; otherwise this is a no-op.
+    /// Uses Zend's SEPARATE_ARRAY: shared or immutable PHP arrays are duplicated
+    /// and this owner zval is updated; uniquely owned mutable arrays are unchanged.
+    /// Reacquire array and element pointers from this zval after separation.
+    /// Separation is shallow and preserves shared PHP references in elements.
     ///
     /// Ownership: the wrapper remains borrowed from the same zval. No caller
     /// reference is added or transferred.
@@ -80,6 +81,9 @@ pub const Array = opaque {
     }
 
     /// Set a value by string key.
+    ///
+    /// Requires mutable, uniquely owned storage. Call separate() first if the
+    /// array may be shared or immutable; this method does not separate it.
     ///
     /// Ownership: scalar/string values are copied. Refcounted wrapper values
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
@@ -106,6 +110,8 @@ pub const Array = opaque {
     pub const SetAtError = error{SetIndexFailed};
 
     /// Set a value by index.
+    ///
+    /// Requires mutable, uniquely owned storage; see separate(). No automatic COW.
     ///
     /// Ownership: scalar/string values are copied. Refcounted wrapper values
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
@@ -136,6 +142,8 @@ pub const Array = opaque {
     pub const AppendError = error{AppendFailed};
 
     /// Append a value to the array.
+    ///
+    /// Requires mutable, uniquely owned storage; see separate(). No automatic COW.
     ///
     /// Ownership: scalar/string values are copied. Refcounted wrapper values
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are

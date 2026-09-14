@@ -173,28 +173,12 @@ pub const Object = opaque {
         return if (fn_ptr) |fp| Function.from(fp) else null;
     }
 
-    /// Resolve a method via PHP's OOP dispatch.
-    ///
-    /// Ownership: borrowed function pointer owned by the class entry/runtime.
-    ///
-    /// Goes through the full method resolution chain: handles visibility
-    /// (private/protected), triggers `__call` when the method is absent,
-    /// and respects inheritance. Use `findMethod` for a direct table lookup.
-    pub fn resolveMethod(self: *Object, method_name: []const u8) ?*Function {
-        const zstr = String.init(method_name, false);
-        defer zstr.release();
-
-        var obj_ptr = self.ptr();
-        const fn_ptr = c.zend_std_get_method(@ptrCast(&obj_ptr), zstr.ptr(), null);
-        return if (fn_ptr != null) .from(@ptrCast(fn_ptr)) else null;
-    }
-
     /// Look up a method directly from the class function table.
     ///
     /// Ownership: borrowed function pointer owned by the class entry.
     ///
-    /// Unlike `resolveMethod`, this bypasses OOP dispatch (`__call`, visibility checks)
-    /// and queries the flattened function table directly. The returned pointer can
+    /// Queries the flattened function table without visibility checks or `__call`
+    /// resolution. The returned pointer can
     /// be cached and passed to `zend_call_known_instance_method` for repeated calls.
     ///
     /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
@@ -413,43 +397,6 @@ pub const Object = opaque {
     ) TryCallError!void {
         const method = self.findMethod(method_name) orelse return error.MethodNotFound;
         try method.tryCallMethod(self, retval, params, named_params);
-    }
-
-    /// Call a known static method by name.
-    ///
-    /// Resolves the method from the class's function table,
-    /// Pass params as a tuple: `.{}`, `.{a}`, `.{a, b}`.
-    /// `named_params` is borrowed for the call; semantics follow `Function.call()`.
-    ///
-    /// Note: PHP stores method names lowercase — pass a lowercase `method_name`.
-    ///
-    /// Returns:
-    ///   error.MethodNotFound if the method is not in the class function table
-    ///   error.PhpException if the called method threw a PHP exception
-    pub fn callStatic(
-        self: *Object,
-        method_name: []const u8,
-        ce: *ClassEntry,
-        retval: ?*c.zval,
-        params: anytype,
-        named_params: ?*Array,
-    ) CallError!void {
-        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.callStatic(ce, retval, params, named_params);
-    }
-
-    /// Call a known static method by name and convert a Zend bailout into `error.ZendBailout`.
-    /// Arguments and ownership follow `call()`.
-    pub fn tryCallStatic(
-        self: *Object,
-        method_name: []const u8,
-        ce: *ClassEntry,
-        retval: ?*c.zval,
-        params: anytype,
-        named_params: ?*Array,
-    ) TryCallError!void {
-        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
-        try method.tryCallStatic(ce, retval, params, named_params);
     }
 
     pub const CallIfExistsError = error{MethodCallFailed} || Function.Error;

@@ -16,10 +16,12 @@ class Receiver {
     public function collect($first = 1, $second = 2, ...$extra) {
         return [$first, $second, $extra];
     }
+    public static function scope() { return static::class; }
     public static function staticcollect($first = 1, $second = 2, ...$extra) {
         return [$first, $second, $extra];
     }
 }
+class ChildReceiver extends Receiver {}
 $receiver = new Receiver;
 $targets = [
     'callable' => 'collect',
@@ -27,9 +29,10 @@ $targets = [
     'static' => [Receiver::class, 'staticcollect'],
     'method' => [$receiver, 'collect'],
     'object' => [$receiver, 'collect'],
-    'object-static' => [$receiver, 'staticcollect'],
+    'class-static' => [Receiver::class, 'staticcollect'],
 ];
 foreach ([false, true] as $guarded) {
+    check(invokeArguments('class-static', [ChildReceiver::class, 'scope'], [], null, $guarded), ChildReceiver::class);
     foreach ($targets as $mode => $target) {
         check(invokeArguments($mode, $target, [], null, $guarded), [1, 2, []]);
         check(invokeArguments($mode, $target, [10], null, $guarded), [10, 2, []]);
@@ -115,12 +118,12 @@ function normal: passed
 static normal: passed
 method normal: passed
 object normal: passed
-object-static normal: passed
+class-static normal: passed
 callable guarded: passed
 function guarded: passed
 static guarded: passed
 method guarded: passed
 object guarded: passed
-object-static guarded: passed
+class-static guarded: passed
 internal functions, references, closures and exceptions: passed
 explicit results, repeated discards and exception cleanup: passed

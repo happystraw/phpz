@@ -771,11 +771,12 @@ pub const CallFrame = opaque {
     ///
     /// // 's|z!': function(string $name, ?int $age = null)
     /// var person_name: []u8 = undefined;
-    /// var age_opt: Zval.Optional = .init;
-    /// try ctx.call.parseArgs("s|z!", .{ &person_name.ptr, &person_name.len, &age_opt.ptr });
-    /// if (age_opt.unwrap()) |age_zval| {
-    ///     if (age_zval.is(.int)) {
-    ///         const age = age_zval.asUnchecked(.int);
+    /// var age_opt: ?*c.zval = null;
+    /// try ctx.call.parseArgs("s|z!", .{ &person_name.ptr, &person_name.len, &age_opt });
+    /// // With z!, both omitted and PHP null leave a null pointer.
+    /// if (age_opt) |age_zval| {
+    ///     if (Zval.raw.is(age_zval, .int)) {
+    ///         const age = Zval.raw.asUnchecked(age_zval, .int);
     ///         _ = age;
     ///     }
     /// }

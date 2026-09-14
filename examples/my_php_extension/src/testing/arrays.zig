@@ -1,5 +1,15 @@
 const phpz = @import("phpz");
 
+pub fn separateArray(ctx: phpz.Ctx) !void {
+    _ = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+    ctx.ret.set(.mixed, ctx.call.arg(1));
+    const result = phpz.Zval.Array.fromUnchecked(ctx.ret.ptr());
+    result.separate();
+    result.set(.int, "count", 1);
+    try result.setAt(.int, 0, 2);
+    try result.append(.int, 3);
+}
+
 pub fn copyArray(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{ .{ .array = .{} }, .{ .array = .{} } }, {});
     const result = args[0].dupe();

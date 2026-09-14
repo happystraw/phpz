@@ -130,6 +130,37 @@ pub const ClassEntry = opaque {
         return Function.findMethod(self, method_name);
     }
 
+    pub const CallError = error{MethodNotFound} || Function.Error;
+    pub const TryCallError = error{MethodNotFound} || Function.TryCallError;
+
+    /// Call a known static method from this class's function table.
+    /// Pass a lowercase method name; no visibility checks or __callStatic resolution.
+    /// The method must be static. This class is used as the called scope.
+    /// Arguments and result ownership follow Function.callStatic().
+    pub fn callStatic(
+        self: *ClassEntry,
+        method_name: []const u8,
+        retval: ?*c.zval,
+        params: anytype,
+        named_params: ?*Array,
+    ) CallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
+        try method.callStatic(self, retval, params, named_params);
+    }
+
+    /// Call a known static method and convert a Zend bailout into ZendBailout.
+    /// Arguments, ownership and bailout handling follow Function.tryCallStatic().
+    pub fn tryCallStatic(
+        self: *ClassEntry,
+        method_name: []const u8,
+        retval: ?*c.zval,
+        params: anytype,
+        named_params: ?*Array,
+    ) TryCallError!void {
+        const method = self.findMethod(method_name) orelse return error.MethodNotFound;
+        try method.tryCallStatic(self, retval, params, named_params);
+    }
+
     /// Get the class constructor, or null if this class has none
     pub fn constructor(self: *ClassEntry) ?*Function {
         const ctor = self.ptr().*.constructor;

@@ -77,13 +77,13 @@ fn benchArraySumExpect(ctx: phpz.Ctx) !void {
     const arr = args[0];
 
     var sum: i64 = 0;
-    arr.eachValue(&sum, struct {
-        fn body(zv: *phpz.c.zval, s: *i64) void {
+    arr.eachValue(struct {
+        fn callback(zv: *phpz.c.zval, s: *i64) void {
             if (phpz.Zval.raw.is(zv, .int)) {
                 s.* += phpz.Zval.raw.asUnchecked(zv, .int);
             }
         }
-    }.body);
+    }.callback, .{&sum});
 
     ctx.ret.set(.int, sum);
 }
@@ -96,13 +96,13 @@ fn benchArraySumParse(ctx: phpz.Ctx) !void {
     const arr = phpz.Zval.raw.asUnchecked(arr_zv, .array);
 
     var sum: i64 = 0;
-    arr.eachValue(&sum, struct {
-        fn body(zv: *phpz.c.zval, s: *i64) void {
+    arr.eachValue(struct {
+        fn callback(zv: *phpz.c.zval, s: *i64) void {
             if (phpz.Zval.raw.is(zv, .int)) {
                 s.* += phpz.Zval.raw.asUnchecked(zv, .int);
             }
         }
-    }.body);
+    }.callback, .{&sum});
 
     ctx.ret.set(.int, sum);
 }

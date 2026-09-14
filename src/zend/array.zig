@@ -1,3 +1,4 @@
+const std = @import("std");
 const c = @import("../root.zig").c;
 const errors = @import("../errors.zig");
 const Zval = @import("../zval.zig").Zval;
@@ -299,9 +300,21 @@ pub const Array = opaque {
         value: *c.zval,
     };
 
+    // The iterator supplies the first callback argument (value or entry).
+    fn EachArgs(comptime Callback: type, comptime First: type) type {
+        const Args = std.meta.ArgsTuple(Callback);
+        const types = @typeInfo(Args).@"struct".field_types;
+        if (types.len == 0 or types[0] != First)
+            @compileError("array callback first parameter must be " ++ @typeName(First));
+        return @Tuple(types[1..]);
+    }
+
     /// Iterate values with a comptime callback — IS_UNDEF and user code in same scope.
     ///
     /// Ownership: callback values are borrowed from the array.
+    ///
+    /// Additional callback parameters are supplied by the typed `args` tuple.
+    /// Pass `.{}` without extra parameters.
     ///
     /// Equivalent to C's `ZEND_HASH_FOREACH_VAL`.
     /// Unlike pull-based iterators, this inlines the loop body so the compiler can
@@ -310,16 +323,16 @@ pub const Array = opaque {
     /// Example:
     /// ```zig
     /// var sum: i64 = 0;
-    /// arr.eachValue(&sum, struct {
-    ///     fn body(zv: *c.zval, s: *i64) void {
+    /// arr.eachValue(struct {
+    ///     fn callback(zv: *c.zval, s: *i64) void {
     ///         if (Zval.raw.is(zv, .int)) s.* += Zval.raw.asUnchecked(zv, .int);
     ///     }
-    /// }.body);
+    /// }.callback, .{&sum});
     /// ```
     pub inline fn eachValue(
         self: *Array,
-        ctx: anytype,
-        comptime body: if (@TypeOf(ctx) == void) fn (*c.zval) void else fn (*c.zval, @TypeOf(ctx)) void,
+        comptime callback: anytype,
+        args: EachArgs(@TypeOf(callback), *c.zval),
     ) void {
         const ht = self.ptr();
         const count = ht.nNumUsed;
@@ -336,11 +349,7 @@ pub const Array = opaque {
                 @branchHint(.unlikely);
                 continue;
             }
-            if (comptime @TypeOf(ctx) == void) {
-                @call(.always_inline, body, .{zv});
-            } else {
-                @call(.always_inline, body, .{ zv, ctx });
-            }
+            @call(.always_inline, callback, .{zv} ++ args);
         }
     }
 
@@ -351,23 +360,24 @@ pub const Array = opaque {
     /// Equivalent to C's `ZEND_HASH_FOREACH`. Walks the bucket array directly.
     /// Key extraction follows C semantics (before IS_UNDEF check).
     /// The callback receives an `Entry` (`.key` and `.value`).
-    /// When `ctx` is `void`, no context argument is passed.
+    /// Additional callback parameters are supplied by the typed `args` tuple.
+    /// Pass `.{}` without extra parameters.
     ///
     /// Example:
     /// ```zig
-    /// arr.each(&ctx, struct {
-    ///     fn body(e: Array.Entry, ctx: *Ctx) void {
+    /// arr.each(struct {
+    ///     fn callback(e: Array.Entry, ctx: *Ctx) void {
     ///         switch (e.key) {
     ///             .int => |i| // numeric key
     ///             .string => |s| // string key
     ///         }
     ///     }
-    /// }.body);
+    /// }.callback, .{&ctx});
     /// ```
     pub inline fn each(
         self: *Array,
-        ctx: anytype,
-        comptime body: if (@TypeOf(ctx) == void) fn (Entry) void else fn (Entry, @TypeOf(ctx)) void,
+        comptime callback: anytype,
+        args: EachArgs(@TypeOf(callback), Entry),
     ) void {
         const ht = self.ptr();
         const count = ht.nNumUsed;
@@ -388,11 +398,7 @@ pub const Array = opaque {
                     @branchHint(.unlikely);
                     continue; // IS_UNDEF check
                 }
-                if (comptime @TypeOf(ctx) == void) {
-                    @call(.always_inline, body, .{Entry{ .key = key, .value = zv }});
-                } else {
-                    @call(.always_inline, body, .{ Entry{ .key = key, .value = zv }, ctx });
-                }
+                @call(.always_inline, callback, .{Entry{ .key = key, .value = zv }} ++ args);
             }
         } else {
             // Hash
@@ -409,11 +415,7 @@ pub const Array = opaque {
                     @branchHint(.unlikely);
                     continue; // IS_UNDEF check
                 }
-                if (comptime @TypeOf(ctx) == void) {
-                    @call(.always_inline, body, .{Entry{ .key = key, .value = zv }});
-                } else {
-                    @call(.always_inline, body, .{ Entry{ .key = key, .value = zv }, ctx });
-                }
+                @call(.always_inline, callback, .{Entry{ .key = key, .value = zv }} ++ args);
             }
         }
     }

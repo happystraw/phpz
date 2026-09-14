@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 20aaba2e7049c9c427ae2132cc5fb0fe12a3cb3e */
+ * Stub hash: cf96164363c26e2d41cbae0f6a710521baa088f2 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -28,6 +28,10 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_separateArray, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, values, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_compareArrays, 0, 4, IS_LONG, 0)
@@ -321,6 +325,7 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_separateArray);
 ZEND_FUNCTION(MyPHPExt_Test_compareArrays);
 ZEND_FUNCTION(MyPHPExt_Test_copyArray);
 ZEND_FUNCTION(MyPHPExt_Test_mergeArray);
@@ -418,6 +423,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "separateArray"), zif_MyPHPExt_Test_separateArray, arginfo_MyPHPExt_Test_separateArray, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "separateArray"), zif_MyPHPExt_Test_separateArray, arginfo_MyPHPExt_Test_separateArray, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "compareArrays"), zif_MyPHPExt_Test_compareArrays, arginfo_MyPHPExt_Test_compareArrays, 0, NULL, NULL)

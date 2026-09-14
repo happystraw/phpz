@@ -385,84 +385,6 @@ pub const Zval = opaque {
         return raw.refcount(self.ptr());
     }
 
-    /// Optional zval wrapper for handling nullable PHP parameters.
-    ///
-    /// This structure is used when parsing optional parameters that can be null.
-    /// It wraps a potentially-null zval pointer and provides convenience methods
-    /// for checking and unwrapping the value.
-    ///
-    /// Usage pattern:
-    /// ```zig
-    /// fn myFunction(ctx: Ctx) !void {
-    ///     var required_name: []u8 = undefined;
-    ///     var optional_age: Zval.Optional = .init;
-    ///
-    ///     // 's' = required string, '|' = following params optional, 'z!' = nullable zval
-    ///     try ctx.call.parseArgs("s|z!", .{ &required_name.ptr, &required_name.len, &optional_age.ptr });
-    ///
-    ///     // Check if the optional parameter was provided
-    ///     if (optional_age.unwrap()) |age_zval| {
-    ///         if (age_zval.is(.int)) {
-    ///             const age = age_zval.asUnchecked(.int);
-    ///             std.debug.print("Age: {d}\n", .{age});
-    ///         } else if (age_zval.is(.null)) {
-    ///             std.debug.print("Age is null\n", .{});
-    ///         }
-    ///     } else {
-    ///         std.debug.print("Age parameter not provided\n", .{});
-    ///     }
-    /// }
-    /// ```
-    pub const Optional = struct {
-        /// The underlying zval pointer (null if parameter not provided)
-        ptr: ?*c.zval = null,
-
-        /// A constant for initializing Optional values
-        pub const init: Optional = .{};
-
-        /// Check if the parameter was provided (not null pointer).
-        ///
-        /// Note: This checks if the parameter exists, not if its value is null.
-        /// A provided null value will return true here.
-        ///
-        /// Returns:
-        ///   true if the parameter was provided
-        pub fn isSome(self: Optional) bool {
-            return self.ptr != null;
-        }
-
-        /// Check if the parameter was not provided (null pointer).
-        ///
-        /// Returns:
-        ///   true if the parameter was not provided
-        pub fn isNone(self: Optional) bool {
-            return self.ptr == null;
-        }
-
-        /// Unwrap the optional to get the zval, if present.
-        ///
-        /// Returns:
-        ///   A Zval wrapper if the parameter was provided, null otherwise
-        ///
-        /// Example:
-        /// ```zig
-        /// if (optional.unwrap()) |zval| {
-        ///     // Parameter was provided (but might still be null value)
-        ///     if (zval.is(.null)) {
-        ///         std.debug.print("Got null value\n", .{});
-        ///     } else {
-        ///         // Process the value
-        ///     }
-        /// } else {
-        ///     // Parameter was not provided at all
-        ///     std.debug.print("Parameter not provided\n", .{});
-        /// }
-        /// ```
-        pub fn unwrap(self: *Optional) ?*Zval {
-            return if (self.ptr) |zv| Zval.from(zv) else null;
-        }
-    };
-
     /// Operations on raw `*c.zval` pointers, without the `*Zval` wrapper.
     ///
     /// Useful when `zend_parse_parameters` gives you a `*c.zval` directly
@@ -751,6 +673,5 @@ pub const Zval = opaque {
 
 test {
     std.testing.refAllDecls(Zval);
-    std.testing.refAllDecls(Zval.Optional);
     std.testing.refAllDecls(Zval.raw);
 }

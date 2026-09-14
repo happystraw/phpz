@@ -116,12 +116,9 @@ fn invoke(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Callable, params
     } else if (std.mem.eql(u8, mode, "static")) {
         const scope = phpz.ClassEntry.from(callback.fcc.called_scope orelse return error.ClassNotFound);
         if (guarded) try function.tryCallStatic(scope, ctx.ret.ptr(), params, named_params) else try function.callStatic(scope, ctx.ret.ptr(), params, named_params);
-    } else if (std.mem.eql(u8, mode, "object-static")) {
-        // Read the receiver from the original callable array;
-        // fcc.object may be null for static methods.
-        const target = try Zval.raw.as(ctx.call.arg(2), .array);
-        const object = try Zval.raw.as(target.findIndex(0) orelse return error.ObjectNotFound, .object);
-        if (guarded) try object.tryCallStatic(function.name(), object.class(), ctx.ret.ptr(), params, named_params) else try object.callStatic(function.name(), object.class(), ctx.ret.ptr(), params, named_params);
+    } else if (std.mem.eql(u8, mode, "class-static")) {
+        const scope = phpz.ClassEntry.from(callback.fcc.called_scope orelse return error.ClassNotFound);
+        if (guarded) try scope.tryCallStatic(function.name(), ctx.ret.ptr(), params, named_params) else try scope.callStatic(function.name(), ctx.ret.ptr(), params, named_params);
     } else {
         const object = phpz.zend.Object.from(callback.fcc.object orelse return error.ObjectNotFound);
         if (std.mem.eql(u8, mode, "method")) {

@@ -184,6 +184,7 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function separateArray(array $values): array {}
     function compareArrays(array $left, array $right, bool $ordered, bool $strict): int {}
     function copyArray(array $target, array $source): array {}
     function mergeArray(array $target, array $source, bool $overwrite): array {}

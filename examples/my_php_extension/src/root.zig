@@ -51,6 +51,7 @@ comptime {
         .@"MyPHPExt\\Test\\initObject" = @import("testing/objects.zig").initObject,
         .@"MyPHPExt\\Test\\constructObject" = @import("testing/objects.zig").constructObject,
         .@"MyPHPExt\\Test\\copyArray" = @import("testing/arrays.zig").copyArray,
+        .@"MyPHPExt\\Test\\separateArray" = @import("testing/arrays.zig").separateArray,
         .@"MyPHPExt\\Test\\mergeArray" = @import("testing/arrays.zig").mergeArray,
         .@"MyPHPExt\\Test\\compareArrays" = @import("testing/arrays.zig").compareArrays,
         .@"MyPHPExt\\Test\\lookupClass" = @import("testing/class_entry.zig").lookupClass,
