@@ -1,5 +1,4 @@
 const c = @import("../root.zig").c;
-const Array = @import("array.zig").Array;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
 
 pub const PropertyInfo = opaque {
@@ -17,15 +16,6 @@ pub const PropertyInfo = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Find a property by name from a class entry's properties_info HashTable.
-    ///
-    /// Searches only this class's own property declarations (not inherited).
-    /// Returns null if the property is not declared by this class.
-    pub fn find(ce: *ClassEntry, prop_name: []const u8) ?*PropertyInfo {
-        const info = c.zend_hash_str_find_ptr(&ce.ptr().*.properties_info, prop_name.ptr, prop_name.len);
-        return if (info != null) .from(@ptrCast(@alignCast(info))) else null;
-    }
-
     /// Get the property name as a byte slice
     pub fn name(self: *PropertyInfo) [:0]const u8 {
         const n = self.ptr().name;
@@ -34,8 +24,7 @@ pub const PropertyInfo = opaque {
 
     /// Get the declaring class entry.
     ///
-    /// For private properties inherited from parent classes, this points
-    /// to the parent class where the property was originally declared.
+    /// Inherited entries retain the class where the property was declared.
     pub inline fn declaringClass(self: *PropertyInfo) *ClassEntry {
         return ClassEntry.from(self.ptr().ce);
     }
@@ -68,11 +57,6 @@ pub const PropertyInfo = opaque {
     /// Check if the property is static
     pub fn isStatic(self: *PropertyInfo) bool {
         return (self.flags() & c.ZEND_ACC_STATIC) != 0;
-    }
-
-    /// Create an iterator over a class's own declared properties.
-    pub fn iterator(ce: *ClassEntry) Array.PtrValueIterator(PropertyInfo) {
-        return .init(.from(&ce.ptr().*.properties_info));
     }
 };
 

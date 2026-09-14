@@ -7,6 +7,7 @@ const Zval = @import("../zval.zig").Zval;
 const Array = @import("array.zig").Array;
 const Function = @import("function.zig").Function;
 const Object = @import("object.zig").Object;
+const ClassConstant = @import("class_constant.zig").ClassConstant;
 const PropertyInfo = @import("property_info.zig").PropertyInfo;
 const String = @import("string.zig").String;
 
@@ -104,19 +105,42 @@ pub const ClassEntry = opaque {
         return (self.flags() & c.ZEND_ACC_ENUM) != 0;
     }
 
-    /// Get the number of declared properties
-    pub fn propertyCount(self: *ClassEntry) usize {
-        return @intCast(self.ptr().*.properties_info.nNumOfElements);
-    }
-
-    /// Find a property by name (this class's own declarations only)
+    /// Find a property by name in the class's properties_info table.
+    ///
+    /// Includes inherited entries present in the table. Returns null if the
+    /// name is not found. Use PropertyInfo.declaringClass() to identify its declaring class.
     pub fn findPropertyInfo(self: *ClassEntry, prop_name: []const u8) ?*PropertyInfo {
-        return PropertyInfo.find(self, prop_name);
+        const info = c.zend_hash_str_find_ptr(&self.ptr().*.properties_info, prop_name.ptr, prop_name.len);
+        return if (info != null) .from(@ptrCast(@alignCast(info))) else null;
     }
 
-    /// Iterate over this class's own declared properties
+    /// Iterate over properties_info, including inherited entries.
+    /// Use PropertyInfo.declaringClass() to identify the declaring class of each entry.
     pub fn propertyInfoIterator(self: *ClassEntry) Array.PtrValueIterator(PropertyInfo) {
-        return PropertyInfo.iterator(self);
+        return .init(.from(&self.ptr().*.properties_info));
+    }
+
+    /// Find borrowed metadata in the class's active constant table, including inherited entries.
+    /// Does not check visibility or evaluate expressions. Do not modify or release the entry.
+    /// Use ClassConstant.declaringClass() to identify where the constant was declared.
+    pub fn findConstant(self: *ClassEntry, constant_name: []const u8) ?*ClassConstant {
+        const raw = c.zend_hash_str_find_ptr(c.zend_class_constants_table(self.ptr()), constant_name.ptr, constant_name.len);
+        return if (raw != null) .from(@ptrCast(@alignCast(raw))) else null;
+    }
+
+    /// Read a constant from this registered class using the class itself as the
+    /// access scope. Includes inherited constants and resolves constant expressions.
+    /// Silent lookup returns null for missing/inaccessible constants; evaluation
+    /// exceptions are still reported as PhpException.
+    ///
+    /// Ownership: borrowed value owned by Zend; do not modify or release it.
+    pub fn constant(self: *ClassEntry, constant_name: []const u8, silent: bool) errors.Exception!?*Zval {
+        const key = String.init(constant_name, false);
+        defer key.release();
+        const fetch_flags: u32 = if (silent) c.ZEND_FETCH_CLASS_EXCEPTION | c.ZEND_FETCH_CLASS_SILENT else c.ZEND_FETCH_CLASS_EXCEPTION;
+        const value = c.zend_get_class_constant_ex(self.ptr().name, key.ptr(), self.ptr(), fetch_flags);
+        if (errors.hasException()) return error.PhpException;
+        return if (value) |v| .from(v) else null;
     }
 
     /// Get the class method table.

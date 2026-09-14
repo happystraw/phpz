@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: ff84c9b9bd2e7555bf2efc1b75a7036abbb0c8eb */
+ * Stub hash: 08cfe9a78c05ebb1d48bed7ce6b8ff906978394c */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -28,6 +28,16 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_checkArrayCallbacks arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkObjectPropertyHandlers, 0, 0, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, lazy, IS_OBJECT, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkObjectCreation, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, stage, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_separateArray, 0, 1, IS_ARRAY, 0)
@@ -87,6 +97,15 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readStaticProperty
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, silent, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_checkConstantMetadata arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readConstant, 0, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, silent, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_readClassConstant arginfo_MyPHPExt_Test_readStaticProperty
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setMixedProperty, 0, 4, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, target, IS_OBJECT, 0)
@@ -336,6 +355,9 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
+ZEND_FUNCTION(MyPHPExt_Test_checkObjectPropertyHandlers);
+ZEND_FUNCTION(MyPHPExt_Test_checkObjectCreation);
 ZEND_FUNCTION(MyPHPExt_Test_separateArray);
 ZEND_FUNCTION(MyPHPExt_Test_compareArrays);
 ZEND_FUNCTION(MyPHPExt_Test_copyArray);
@@ -347,6 +369,9 @@ ZEND_FUNCTION(MyPHPExt_Test_objectProperties);
 ZEND_FUNCTION(MyPHPExt_Test_hasObjectProperty);
 ZEND_FUNCTION(MyPHPExt_Test_lookupClass);
 ZEND_FUNCTION(MyPHPExt_Test_readStaticProperty);
+ZEND_FUNCTION(MyPHPExt_Test_checkConstantMetadata);
+ZEND_FUNCTION(MyPHPExt_Test_readConstant);
+ZEND_FUNCTION(MyPHPExt_Test_readClassConstant);
 ZEND_FUNCTION(MyPHPExt_Test_setMixedProperty);
 ZEND_FUNCTION(MyPHPExt_Test_setMixedReferenceProperty);
 ZEND_FUNCTION(MyPHPExt_Test_newObject);
@@ -438,6 +463,21 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArrayCallbacks"), zif_MyPHPExt_Test_checkArrayCallbacks, arginfo_MyPHPExt_Test_checkArrayCallbacks, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArrayCallbacks"), zif_MyPHPExt_Test_checkArrayCallbacks, arginfo_MyPHPExt_Test_checkArrayCallbacks, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectPropertyHandlers"), zif_MyPHPExt_Test_checkObjectPropertyHandlers, arginfo_MyPHPExt_Test_checkObjectPropertyHandlers, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectPropertyHandlers"), zif_MyPHPExt_Test_checkObjectPropertyHandlers, arginfo_MyPHPExt_Test_checkObjectPropertyHandlers, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectCreation"), zif_MyPHPExt_Test_checkObjectCreation, arginfo_MyPHPExt_Test_checkObjectCreation, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectCreation"), zif_MyPHPExt_Test_checkObjectCreation, arginfo_MyPHPExt_Test_checkObjectCreation, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "separateArray"), zif_MyPHPExt_Test_separateArray, arginfo_MyPHPExt_Test_separateArray, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "separateArray"), zif_MyPHPExt_Test_separateArray, arginfo_MyPHPExt_Test_separateArray, 0)
@@ -491,6 +531,21 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStaticProperty"), zif_MyPHPExt_Test_readStaticProperty, arginfo_MyPHPExt_Test_readStaticProperty, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStaticProperty"), zif_MyPHPExt_Test_readStaticProperty, arginfo_MyPHPExt_Test_readStaticProperty, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkConstantMetadata"), zif_MyPHPExt_Test_checkConstantMetadata, arginfo_MyPHPExt_Test_checkConstantMetadata, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkConstantMetadata"), zif_MyPHPExt_Test_checkConstantMetadata, arginfo_MyPHPExt_Test_checkConstantMetadata, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readConstant"), zif_MyPHPExt_Test_readConstant, arginfo_MyPHPExt_Test_readConstant, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readConstant"), zif_MyPHPExt_Test_readConstant, arginfo_MyPHPExt_Test_readConstant, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readClassConstant"), zif_MyPHPExt_Test_readClassConstant, arginfo_MyPHPExt_Test_readClassConstant, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readClassConstant"), zif_MyPHPExt_Test_readClassConstant, arginfo_MyPHPExt_Test_readClassConstant, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setMixedProperty"), zif_MyPHPExt_Test_setMixedProperty, arginfo_MyPHPExt_Test_setMixedProperty, 0, NULL, NULL)

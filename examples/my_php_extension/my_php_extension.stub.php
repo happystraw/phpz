@@ -184,6 +184,9 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function checkArrayCallbacks(): void {}
+    function checkObjectPropertyHandlers(?object $lazy = null): void {}
+    function checkObjectCreation(string $stage): void {}
     function separateArray(array $values): array {}
     function compareArrays(array $left, array $right, bool $ordered, bool $strict): int {}
     function copyArray(array $target, array $source): array {}
@@ -195,6 +198,9 @@ namespace MyPHPExt\Test {
     function hasObjectProperty(object $object, string $name, bool $standard): bool {}
     function lookupClass(string $name, bool $autoload): ?string {}
     function readStaticProperty(string $class, string $name, bool $silent): mixed {}
+    function checkConstantMetadata(): void {}
+    function readConstant(string $name, bool $silent): mixed {}
+    function readClassConstant(string $class, string $name, bool $silent): mixed {}
     function setMixedProperty(object $target, string $name, mixed $value, string $api): void {}
     function setMixedReferenceProperty(object $target, string $name, mixed &$value, string $api): void {}
     function newObject(bool $bare, array $positional, ?array $named_params, bool $guarded): object {}
