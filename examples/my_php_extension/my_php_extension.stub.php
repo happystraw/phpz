@@ -184,6 +184,9 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function constructObject(string $class, array $args, bool $guarded): object {}
+    function initObject(string $class): object {}
+    function cloneObject(object $object): object {}
     function lookupClass(string $name, bool $autoload): ?string {}
     function readStaticProperty(string $class, string $name, bool $silent): mixed {}
     function setMixedProperty(object $target, string $name, mixed $value, string $api): void {}

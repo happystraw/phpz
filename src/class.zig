@@ -779,14 +779,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         /// `register()` must have succeeded before calling this function.
         /// The class's create_object callback must preserve this Self layout.
         pub fn create() CreateError!*Self {
-            var value = Zval.raw.undef;
-            const object_value = Zval.Object.init(&value, entry) catch return error.PhpException;
-            const obj = object_value.zendObject();
-            errdefer {
-                c.zend_object_store_ctor_failed(obj.ptr());
-                obj.release();
-            }
-            if (errors.hasException()) return error.PhpException;
+            const obj = try zend.Object.init(entry);
             return fromStdUnchecked(obj.ptr());
         }
 
@@ -806,16 +799,8 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         /// Zend bailouts propagate without running Zig defer/errdefer.
         /// `register()` must have succeeded before calling this function.
         pub fn new(params: anytype, named_params: ?*zend.Array) NewError!*Self {
-            const instance = try create();
-            const obj = instance.object();
-            errdefer obj.release();
-            if (try obj.constructor()) |constructor| {
-                constructor.callMethod(obj, null, params, named_params) catch |err| {
-                    c.zend_object_store_ctor_failed(obj.ptr());
-                    return err;
-                };
-            }
-            return instance;
+            const obj = try zend.Object.new(entry, params, named_params);
+            return fromStdUnchecked(obj.ptr());
         }
 
         /// Creates a new instance and calls its PHP constructor when present,
@@ -828,11 +813,8 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         /// normal PHP execution or retry interrupted object cleanup.
         /// `register()` must have succeeded before calling this function.
         pub fn tryNew(params: anytype, named_params: ?*zend.Array) TryNewError!*Self {
-            return zend.bailout.run(struct {
-                fn call(args: @TypeOf(params), named: ?*zend.Array) NewError!*Self {
-                    return Self.new(args, named);
-                }
-            }.call, .{ params, named_params });
+            const obj = try zend.Object.tryNew(entry, params, named_params);
+            return fromStdUnchecked(obj.ptr());
         }
     };
 }

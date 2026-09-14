@@ -12,27 +12,83 @@ const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
 
 pub const Object = opaque {
-    pub const InitError = error{InitFailed};
-
     /// Create a standard object (stdClass).
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
-    pub fn std() InitError!*Object {
+    /// Allocation failure raises a Zend bailout.
+    pub fn std() *Object {
         const std_class = globals.class.rawEntry("zend_standard_class_def");
-        const obj = c.zend_objects_new(std_class);
-        if (obj == null) return error.InitFailed;
-        c.object_properties_init(obj, std_class);
+        return initStd(.from(std_class));
+    }
+
+    /// Allocate a standard-layout object and initialize its default properties.
+    /// Wraps zend_objects_new() and object_properties_init(); does not dispatch
+    /// create_object, check instantiability, or call the PHP constructor.
+    /// The caller must ensure class constants are resolved and standard
+    /// allocation is valid for this class and its handlers. For arbitrary
+    /// classes, use init(), which wraps object_init_ex().
+    ///
+    /// Ownership: caller owns the returned object; call `release()` when done.
+    /// Allocation failure raises a Zend bailout.
+    pub fn initStd(ce: *ClassEntry) *Object {
+        const obj = c.zend_objects_new(ce.ptr());
+        c.object_properties_init(obj, ce.ptr());
         return @ptrCast(obj);
     }
 
-    /// Create an object from a class entry.
+    /// Create an object through object_init_ex without calling its constructor.
+    /// Zend checks instantiability, resolves class constants and default property
+    /// expressions, and dispatches the class's create_object callback.
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
-    pub fn init(ce: *ClassEntry) InitError!*Object {
-        const obj = c.zend_objects_new(ce.ptr());
-        if (obj == null) return error.InitFailed;
-        c.object_properties_init(obj, ce.ptr());
-        return @ptrCast(obj);
+    /// Initialization exceptions release the object without calling its PHP
+    /// destructor and return PhpException, preserving the pending exception.
+    /// Zend bailouts propagate without running Zig defer/errdefer.
+    pub fn init(ce: *ClassEntry) errors.Exception!*Object {
+        var value = Zval.raw.undef;
+        const object_value = Zval.Object.init(&value, ce) catch return error.PhpException;
+        const obj = object_value.zendObject();
+        if (errors.hasException()) {
+            c.zend_object_store_ctor_failed(obj.ptr());
+            obj.release();
+            return error.PhpException;
+        }
+        return obj;
+    }
+
+    /// Create an object and call its constructor through get_constructor.
+    /// Pass positional params as a tuple and null for no named_params.
+    /// named_params is borrowed; argument matching and references follow
+    /// Function.callMethod(). Without a constructor, all arguments are ignored.
+    ///
+    /// Ownership: caller owns the returned object; call `release()` when done.
+    /// Constructor lookup/call errors release the object. A failed constructor
+    /// call also suppresses its PHP destructor. Initialization follows init().
+    /// Zend bailouts propagate without running Zig defer/errdefer.
+    pub fn new(ce: *ClassEntry, params: anytype, named_params: ?*Array) errors.Exception!*Object {
+        const obj = try init(ce);
+        errdefer obj.release();
+        if (try obj.constructor()) |constructor_fn| {
+            constructor_fn.callMethod(obj, null, params, named_params) catch |err| {
+                c.zend_object_store_ctor_failed(obj.ptr());
+                return err;
+            };
+        }
+        return obj;
+    }
+
+    /// Like new(), converting bailouts from initialization, constructor
+    /// lookup/call, and ordinary failure cleanup into ZendBailout.
+    ///
+    /// On bailout, Zig defer/errdefer are skipped; PHP objects remain for request
+    /// shutdown. Propagate ZendBailout after native resource cleanup; do not
+    /// resume normal PHP execution or retry interrupted object cleanup.
+    pub fn tryNew(ce: *ClassEntry, params: anytype, named_params: ?*Array) (errors.Exception || bailout.Error)!*Object {
+        return bailout.run(struct {
+            fn call(class_entry: *ClassEntry, args: @TypeOf(params), named: ?*Array) errors.Exception!*Object {
+                return Object.new(class_entry, args, named);
+            }
+        }.call, .{ ce, params, named_params });
     }
 
     /// Create an object from an existing zend_object pointer.
@@ -459,18 +515,26 @@ pub const Object = opaque {
         if (errors.hasException()) return error.PhpException;
     }
 
-    pub const CloneError = error{CloneFailed};
+    pub const CloneError = error{ Uncloneable, CloneFailed } || errors.Exception;
 
-    /// Clone the object.
+    /// Clone through the object's clone_obj handler.
     ///
     /// Ownership: caller owns the returned object; call `release()` when done.
     ///
-    /// Returns `error.CloneFailed` if the object is uncloneable or `__clone` throws.
-    /// Check `errors.hasException()` to distinguish.
+    /// Returns Uncloneable when the handler is absent, PhpException for a
+    /// pending PHP exception (releasing any returned clone), or CloneFailed
+    /// when the handler returns null without an exception.
+    /// Like direct C handler calls, this does not check __clone visibility.
+    /// Zend bailouts propagate directly.
     pub fn clone(self: *Object) CloneError!*Object {
-        const cloned = c.zend_objects_clone_obj(self.ptr());
-        if (cloned == null) return error.CloneFailed;
-        return @ptrCast(cloned);
+        const obj = self.ptr();
+        const clone_obj = obj.handlers.*.clone_obj orelse return error.Uncloneable;
+        const cloned: ?*c.zend_object = clone_obj(obj);
+        if (errors.hasException()) {
+            if (cloned) |result| c.zend_object_release(result);
+            return error.PhpException;
+        }
+        return .from(cloned orelse return error.CloneFailed);
     }
 
     /// Get refcount
