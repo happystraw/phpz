@@ -235,13 +235,14 @@ const Exception = struct {
     }
 };
 
-const Request = struct {
+const State = struct {
+    mode: @import("ini.zig").Mode = .safe,
     function_calls: Call = .{},
     errors: Error = .{},
     exceptions: Exception = .{},
 };
 
-pub const Globals = phpz.ModuleGlobals(Request);
+pub const Globals = phpz.ModuleGlobals(State);
 
 fn now() u64 {
     const io = std.Io.Threaded.global_single_threaded.io();
@@ -267,7 +268,10 @@ pub const observer: phpz.observer.Config = .{
 };
 
 pub fn reset() void {
-    Globals.get().* = .{};
+    const state = Globals.get();
+    state.function_calls = .{};
+    state.errors = .{};
+    state.exceptions = .{};
 }
 
 pub fn requestStartup() !void {

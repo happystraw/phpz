@@ -36,7 +36,7 @@ pub const Config = struct {
 
     /// Typed module globals managed by PHP for the extension lifetime.
     /// In ZTS builds, each TSRM thread receives a separate instance.
-    /// The type must be a non-zero-sized struct that can be initialized with `.{}`.
+    /// Pass the wrapper returned by `ModuleGlobals(T)`.
     globals: ?type = null,
 
     /// Observer configuration for profiling, error monitoring, and exception tracking.
@@ -198,6 +198,13 @@ fn makePhpInfoFn(comptime info_fn: PhpInfoFn) *const fn ([*c]ModuleEntry) callco
 }
 
 inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
+    inline for (cfg.ini) |Entry| {
+        if (@hasDecl(Entry, "Globals")) {
+            if (Entry.Globals) |G| {
+                if (cfg.globals != G) @compileError("INI globals binding must match module .globals");
+            }
+        }
+    }
     const ini_defs = ini_helper.collect(cfg.ini);
     const registered_ini_defs: ?[]const c.zend_ini_entry_def = if (cfg.ini.len == 0) null else &ini_defs;
 
@@ -262,7 +269,32 @@ pub fn ModuleGlobals(comptime T: type) type {
 
     if (comptime c.USING_ZTS != 0) {
         return struct {
+            const G = @This();
+
             var id: c.phpz_rsrc_id = 0;
+
+            /// Bind an INI callback to a field in the current thread's globals.
+            pub fn iniField(comptime field: []const u8) type {
+                comptime {
+                    if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
+                    const info = @typeInfo(T).@"struct";
+                    if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
+                    for (info.field_names, info.field_attrs) |name, attrs| {
+                        if (std.mem.eql(u8, name, field) and attrs.@"comptime")
+                            @compileError("INI globals field must be a runtime field: " ++ field);
+                    }
+                }
+                return struct {
+                    pub const Globals = G;
+                    pub const Value = @FieldType(T, field);
+
+                    /// Address of this field while the current thread's globals are alive.
+                    /// Direct writes bypass Zend INI state; use the directive's set() to modify it.
+                    pub inline fn ptr() *Value {
+                        return &@field(Globals.get().*, field);
+                    }
+                };
+            }
 
             /// Returns the current thread's module globals.
             pub inline fn get() *T {
@@ -292,7 +324,33 @@ pub fn ModuleGlobals(comptime T: type) type {
     }
 
     return struct {
+        const G = @This();
+
         var storage: T = undefined;
+
+        /// Bind an INI callback to a globals field.
+        pub fn iniField(comptime field: []const u8) type {
+            comptime {
+                if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
+                const info = @typeInfo(T).@"struct";
+                if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
+                for (info.field_names, info.field_attrs) |name, attrs| {
+                    if (std.mem.eql(u8, name, field) and attrs.@"comptime")
+                        @compileError("INI globals field must be a runtime field: " ++ field);
+                }
+            }
+
+            return struct {
+                pub const Globals = G;
+                pub const Value = @FieldType(T, field);
+
+                /// Address of this field while the current thread's globals are alive.
+                /// Direct writes bypass Zend INI state; use the directive's set() to modify it.
+                pub inline fn ptr() *Value {
+                    return &@field(Globals.get().*, field);
+                }
+            };
+        }
 
         /// Returns the module globals.
         pub inline fn get() *T {

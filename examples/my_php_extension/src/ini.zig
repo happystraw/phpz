@@ -2,9 +2,11 @@ const std = @import("std");
 
 const phpz = @import("phpz");
 
-pub const greeting = phpz.ini.string.new("my_php_extension.greeting", "Hello", .all);
-pub const max_users = phpz.ini.int.new("my_php_extension.max_users", 100, .system);
-pub const debug = phpz.ini.boolean.new("my_php_extension.debug", false, .user);
+const Globals = @import("metrics.zig").Globals;
+
+pub const greeting = phpz.ini.string.new(.{ .name = "my_php_extension.greeting", .default = "Hello", .access = .all });
+pub const max_users = phpz.ini.int.new(.{ .name = "my_php_extension.max_users", .default = 100, .access = .system });
+pub const debug = phpz.ini.boolean.new(.{ .name = "my_php_extension.debug", .default = false, .access = .user });
 
 pub const Mode = enum {
     safe,
@@ -23,13 +25,14 @@ pub const Mode = enum {
         };
     }
 };
+
 pub const mode = phpz.ini.Typed(Mode).new(.{
     .name = "my_php_extension.mode",
-    .default = .safe,
     .default_text = "safe",
     .access = .all,
     .parse = Mode.parse,
     .format = Mode.format,
+    .bind = Globals.iniField("mode"),
 });
 
 pub const definitions = &.{ greeting, max_users, debug, mode };

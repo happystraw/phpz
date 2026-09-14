@@ -27,6 +27,12 @@ var_dump(
     MyPHPExt\Config::mode(),
 );
 
+var_dump(ini_set("my_php_extension.mode", "invalid"));
+var_dump(MyPHPExt\Config::mode(), ini_get("my_php_extension.mode"));
+ini_restore("my_php_extension.mode");
+MyPHPExt\Metrics::reset();
+var_dump(MyPHPExt\Config::mode(), ini_get("my_php_extension.mode"));
+
 ?>
 --EXPECT--
 string(8) "ZigRules"
@@ -38,3 +44,8 @@ string(7) "Runtime"
 int(42)
 bool(false)
 string(4) "safe"
+bool(false)
+string(4) "safe"
+string(4) "safe"
+string(4) "fast"
+string(4) "fast"

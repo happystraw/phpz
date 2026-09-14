@@ -167,6 +167,10 @@ pub const ExecutorGlobals = opaque {
         const object = self.ptr().exception orelse return null;
         return zend.Object.from(object);
     }
+
+    pub inline fn iniDirectives(self: *ExecutorGlobals) *zend.Array {
+        return zend.Array.from(self.ptr().ini_directives);
+    }
 };
 
 pub const CompilerGlobals = opaque {
