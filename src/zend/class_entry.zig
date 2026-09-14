@@ -1,3 +1,6 @@
+const std = @import("std");
+
+const errors = @import("../errors.zig");
 const globals = @import("../globals.zig");
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
@@ -157,9 +160,14 @@ pub const ClassEntry = opaque {
         return if (case_obj) |obj| Object.from(obj) else null;
     }
 
-    pub const SetStaticPropertyError = error{UpdateStaticPropertyFailed};
+    pub const SetStaticPropertyError = error{ PhpException, UpdateStaticPropertyFailed };
 
-    /// Set static property value. Returns `error.UpdateStaticPropertyFailed` on failure.
+    /// Set static property value. Refcounted inputs are borrowed; `.mixed` must
+    /// already be dereferenced. The caller keeps its input reference on
+    /// both success and failure.
+    /// `.reference` is not accepted; pass `reference.val()` with `.mixed` instead.
+    /// Returns `error.PhpException` for a pending PHP exception, otherwise
+    /// `error.UpdateStaticPropertyFailed` if Zend reports failure.
     pub fn setStaticProperty(self: *ClassEntry, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) SetStaticPropertyError!void {
         const ce = self.ptr();
         const result = switch (zk) {
@@ -168,6 +176,11 @@ pub const ClassEntry = opaque {
             .int => c.zend_update_static_property_long(ce, prop_name.ptr, prop_name.len, prop_value),
             .float => c.zend_update_static_property_double(ce, prop_name.ptr, prop_name.len, prop_value),
             .string => c.zend_update_static_property_stringl(ce, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+            .mixed => blk: {
+                std.debug.assert(!Zval.raw.is(prop_value, .reference));
+                break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, prop_value);
+            },
+            .reference => @compileError("property writes do not accept .reference; pass reference.val() with .mixed instead"),
             .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as static property"),
             inline else => blk: {
                 var zv: c.zval = undefined;
@@ -175,6 +188,7 @@ pub const ClassEntry = opaque {
                 break :blk c.zend_update_static_property(ce, prop_name.ptr, prop_name.len, &zv);
             },
         };
+        if (errors.hasException()) return error.PhpException;
         if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
     }
 

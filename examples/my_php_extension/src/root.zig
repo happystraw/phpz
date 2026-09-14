@@ -47,6 +47,8 @@ comptime {
         .@"MyPHPExt\\Test\\collectReferenceArguments" = named_arguments.collectAll,
         .@"MyPHPExt\\Test\\invokeArguments" = named_arguments.invokeArguments,
         .@"MyPHPExt\\Test\\newObject" = class_new.newObject,
+        .@"MyPHPExt\\Test\\setMixedProperty" = @import("testing/properties.zig").setMixedProperty,
+        .@"MyPHPExt\\Test\\setMixedReferenceProperty" = @import("testing/properties.zig").setMixedProperty,
         .@"MyPHPExt\\Test\\castValue" = @import("testing/zval.zig").castValue,
         .@"MyPHPExt\\Test\\castReferenceValue" = @import("testing/zval.zig").castValue,
     });

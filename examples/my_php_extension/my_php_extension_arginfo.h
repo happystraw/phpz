@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: c0f9912eac86243afc30eb0d8716d068591fb2f4 */
+ * Stub hash: b8187f380175811f86270c8244e8fb7cc7fd2f51 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -28,6 +28,20 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setMixedProperty, 0, 4, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, target, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setMixedReferenceProperty, 0, 4, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, target, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_newObject, 0, 4, IS_OBJECT, 0)
@@ -264,6 +278,8 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_setMixedProperty);
+ZEND_FUNCTION(MyPHPExt_Test_setMixedReferenceProperty);
 ZEND_FUNCTION(MyPHPExt_Test_newObject);
 ZEND_FUNCTION(MyPHPExt_Test_castValue);
 ZEND_FUNCTION(MyPHPExt_Test_castReferenceValue);
@@ -351,6 +367,16 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setMixedProperty"), zif_MyPHPExt_Test_setMixedProperty, arginfo_MyPHPExt_Test_setMixedProperty, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setMixedProperty"), zif_MyPHPExt_Test_setMixedProperty, arginfo_MyPHPExt_Test_setMixedProperty, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setMixedReferenceProperty"), zif_MyPHPExt_Test_setMixedReferenceProperty, arginfo_MyPHPExt_Test_setMixedReferenceProperty, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setMixedReferenceProperty"), zif_MyPHPExt_Test_setMixedReferenceProperty, arginfo_MyPHPExt_Test_setMixedReferenceProperty, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "newObject"), zif_MyPHPExt_Test_newObject, arginfo_MyPHPExt_Test_newObject, 0, NULL, NULL)

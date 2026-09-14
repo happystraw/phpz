@@ -351,6 +351,8 @@ pub const Zval = opaque {
     /// stored without addref; addref first if the input is borrowed and remains
     /// independently owned elsewhere. Destroy any previous zval contents before
     /// overwriting them.
+    /// `.mixed` copies the dereferenced input and adds a reference when needed;
+    /// it does not consume or clear the source zval.
     pub fn set(self: *Zval, comptime zk: Kind, val: Type(zk)) void {
         raw.set(self.ptr(), zk, val);
     }
@@ -649,6 +651,8 @@ pub const Zval = opaque {
         /// stored without addref; addref first if the input is borrowed and remains
         /// independently owned elsewhere. Destroy any previous zval contents before
         /// overwriting them.
+        /// `.mixed` copies the dereferenced input and adds a reference when needed;
+        /// it does not consume or clear the source zval.
         pub fn set(zv: *c.zval, comptime zk: Kind, val: Type(zk)) void {
             switch (zk) {
                 .undef => {

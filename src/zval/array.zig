@@ -85,6 +85,8 @@ pub const Array = opaque {
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
+    /// `.mixed` preserves reference wrappers and does not clear the source zval;
+    /// do not release the transferred reference after writing.
     pub fn set(self: *Array, comptime zk: Zval.Kind, key: []const u8, val: Zval.Type(zk)) void {
         switch (zk) {
             .null => c.add_assoc_null_ex(self.ptr(), key.ptr, key.len),
@@ -109,6 +111,9 @@ pub const Array = opaque {
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
+    /// `.mixed` preserves reference wrappers and does not clear the source zval.
+    /// On success, do not release the transferred reference; on failure, the
+    /// caller still owns it and must release it or reuse it.
     pub fn setAt(self: *Array, comptime zk: Zval.Kind, index: isize, val: Zval.Type(zk)) SetAtError!void {
         const idx: c.zend_ulong = @bitCast(index);
         switch (zk) {
@@ -136,6 +141,9 @@ pub const Array = opaque {
     /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
+    /// `.mixed` preserves reference wrappers and does not clear the source zval.
+    /// On success, do not release the transferred reference; on failure, the
+    /// caller still owns it and must release it or reuse it.
     pub fn append(self: *Array, comptime zk: Zval.Kind, val: Zval.Type(zk)) AppendError!void {
         const result = switch (zk) {
             .null => c.add_next_index_null(self.ptr()),

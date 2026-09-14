@@ -184,6 +184,8 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function setMixedProperty(object $target, string $name, mixed $value, string $api): void {}
+    function setMixedReferenceProperty(object $target, string $name, mixed &$value, string $api): void {}
     function newObject(bool $bare, array $positional, ?array $named_params, bool $guarded): object {}
 
     class NewValue

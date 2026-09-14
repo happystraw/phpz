@@ -1,3 +1,6 @@
+const std = @import("std");
+const assert = std.debug.assert;
+
 const c = @import("../c.zig").c;
 const errors = @import("../errors.zig");
 const globals = @import("../globals.zig");
@@ -256,7 +259,11 @@ pub const Object = opaque {
 
     /// Set object property value.
     ///
-    /// Returns `error.PhpException` if a magic `__set` handler throws.
+    /// Refcounted inputs are borrowed; `.mixed` must already be dereferenced.
+    /// The property handler retains any value it stores. The caller keeps its
+    /// input reference on both success and failure.
+    /// `.reference` is not accepted; pass `reference.val()` with `.mixed` instead.
+    /// Returns `error.PhpException` if the property write raises a PHP exception.
     pub fn setProperty(self: *Object, comptime zk: Zval.Kind, prop_name: []const u8, prop_value: Zval.Type(zk)) Function.Error!void {
         const ce = self.class().ptr();
         const obj = self.ptr();
@@ -266,6 +273,11 @@ pub const Object = opaque {
             .int => c.zend_update_property_long(ce, obj, prop_name.ptr, prop_name.len, prop_value),
             .float => c.zend_update_property_double(ce, obj, prop_name.ptr, prop_name.len, prop_value),
             .string => c.zend_update_property_stringl(ce, obj, prop_name.ptr, prop_name.len, prop_value.ptr, prop_value.len),
+            .mixed => {
+                assert(!Zval.raw.is(prop_value, .reference));
+                c.zend_update_property(ce, obj, prop_name.ptr, prop_name.len, prop_value);
+            },
+            .reference => @compileError("property writes do not accept .reference; pass reference.val() with .mixed instead"),
             .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as object property"),
             inline else => {
                 var zv: c.zval = undefined;
@@ -500,5 +512,5 @@ pub const Object = opaque {
 };
 
 test {
-    @import("std").testing.refAllDecls(Object);
+    std.testing.refAllDecls(Object);
 }
