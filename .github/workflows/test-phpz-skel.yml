@@ -5,6 +5,9 @@ on:
     branches: ["dev"]
     paths:
       - "tools/phpz_skel.php"
+      - "tools/php/**"
+      - "build/Phpz.zig"
+      - "examples/skeleton/**"
       - ".github/scripts/test-phpz-skel.sh"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-phpz-skel.yml"
@@ -12,6 +15,9 @@ on:
     branches: ["dev"]
     paths:
       - "tools/phpz_skel.php"
+      - "tools/php/**"
+      - "build/Phpz.zig"
+      - "examples/skeleton/**"
       - ".github/scripts/test-phpz-skel.sh"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-phpz-skel.yml"

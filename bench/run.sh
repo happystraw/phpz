@@ -20,7 +20,6 @@ echo "=== Building Zig extension ==="
 (
     cd "$SCRIPT_DIR/zig_ext"
     git clean -fdX
-    cp "$SCRIPT_DIR/c_ext/run-tests.php" .
     zig build -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
     echo "  Zig extension built"
     zig build run-tests -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"

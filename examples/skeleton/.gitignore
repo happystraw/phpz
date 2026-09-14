@@ -8,6 +8,7 @@
 /zig-out/
 /.zig-cache/
 /zig-pkg/
+/run-tests.php
 
 # php build system
 *.lo
@@ -41,7 +42,6 @@ modules
 php_test_results_*.txt
 phpt.*
 run-test-info.php
-# run-tests.php
 tests/**/*.diff
 tests/**/*.out
 tests/**/*.php

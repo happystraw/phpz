@@ -24,8 +24,6 @@ readonly class Args
         public string $phpz,
         public string $zig,
         public PhpConfig $phpConfig,
-        public ToolOption $genStub,
-        public ToolOption $runTests,
         public bool $unix,
         public bool $windows,
         public bool $phpBuildSystem,
@@ -45,8 +43,6 @@ readonly class Args
         $phpz = DEFAULT_PHPZ_SPEC;
         $zig = is_string($envZig) && $envZig !== '' ? $envZig : 'zig';
         $phpConfig = PhpConfig::auto();
-        $genStub = ToolOption::auto();
-        $runTests = ToolOption::auto();
         $unix = true;
         $windows = true;
         $phpBuildSystem = false;
@@ -67,14 +63,6 @@ readonly class Args
                 $verbose = true;
                 continue;
             }
-            if ($arg === '--without-gen-stub') {
-                $genStub = ToolOption::disabled();
-                continue;
-            }
-            if ($arg === '--without-run-tests') {
-                $runTests = ToolOption::disabled();
-                continue;
-            }
             if ($arg === '--onlyunix') {
                 $windows = false;
                 continue;
@@ -93,21 +81,6 @@ readonly class Args
             }
 
             switch ($name) {
-                case '--with-gen-stub':
-                case '--with-run-tests':
-                    if ($value === null && isset($argv[$i + 1]) && !str_starts_with($argv[$i + 1], '--')) {
-                        $value = $argv[++$i];
-                    }
-                    $toolArg = $value === null || $value === ''
-                        ? ToolOption::auto()
-                        : ToolOption::explicit(PathUtil::absolute($value));
-                    if ($name === '--with-gen-stub') {
-                        $genStub = $toolArg;
-                    } else {
-                        $runTests = $toolArg;
-                    }
-                    break;
-
                 case '--ext':
                 case '--dir':
                 case '--phpz':
@@ -157,8 +130,6 @@ readonly class Args
             PackageSpec::resolve($phpz),
             PathUtil::resolveBin($zig),
             $phpConfig,
-            $genStub,
-            $runTests,
             $unix,
             $windows,
             $phpBuildSystem,
@@ -189,47 +160,6 @@ readonly class PhpConfig
     public function isExplicit(): bool
     {
         return $this->explicit;
-    }
-}
-
-enum ToolOptionMode
-{
-    case Auto;
-    case Disabled;
-    case Explicit;
-}
-
-readonly class ToolOption
-{
-    private function __construct(
-        public ToolOptionMode $mode,
-        public ?string $path,
-    ) {
-    }
-
-    public static function auto(): self
-    {
-        return new self(ToolOptionMode::Auto, null);
-    }
-
-    public static function disabled(): self
-    {
-        return new self(ToolOptionMode::Disabled, null);
-    }
-
-    public static function explicit(string $path): self
-    {
-        return new self(ToolOptionMode::Explicit, $path);
-    }
-
-    public function isDisabled(): bool
-    {
-        return $this->mode === ToolOptionMode::Disabled;
-    }
-
-    public function isExplicit(): bool
-    {
-        return $this->mode === ToolOptionMode::Explicit;
     }
 }
 
@@ -713,91 +643,6 @@ final class PhpToolResolver
         return self::phpConfigValue($phpConfig, $phpConfig->isExplicit(), '--include-dir')
             ?? DEFAULT_PHP_INCLUDE_DIR;
     }
-
-    public static function resolveOptional(
-        ToolOption $config,
-        string $filename,
-        PhpConfig $phpConfig,
-        ?string $targetDir = null,
-    ): ?string {
-        if ($config->isDisabled()) {
-            Console::check("for $filename", 'disabled');
-            return null;
-        }
-
-        if ($config->isExplicit()) {
-            $path = (string) $config->path;
-            if (!is_file($path)) {
-                Console::fail("$filename not found: $path");
-            }
-            Console::check("for $filename", $path);
-            return $path;
-        }
-
-        $path = self::detectPhpBuildTool($phpConfig, $filename);
-        if ($path === null) {
-            $path = $targetDir !== null && $filename === 'run-tests.php'
-                ? self::detectPhpzPackageRunTests($targetDir)
-                : null;
-            if ($path !== null) {
-                Console::check("for $filename", $path);
-                return $path;
-            }
-
-            Console::check("for $filename", 'no');
-            return null;
-        }
-
-        Console::check("for $filename", $path);
-        return $path;
-    }
-
-    private static function detectPhpBuildTool(PhpConfig $phpConfig, string $filename): ?string
-    {
-        $candidates = [];
-
-        $libDir = self::phpConfigValue($phpConfig, false, '--lib-dir');
-        if ($libDir !== null) {
-            $candidates[] = PathUtil::normalize($libDir . '/php/build/' . $filename);
-        }
-
-        $prefix = self::phpConfigValue($phpConfig, $phpConfig->isExplicit(), '--prefix');
-        if ($prefix !== null) {
-            $candidates[] = PathUtil::normalize($prefix . '/lib/php/build/' . $filename);
-            $candidates[] = PathUtil::normalize($prefix . '/lib64/php/build/' . $filename);
-        }
-
-        $extensionDir = self::phpConfigValue($phpConfig, $phpConfig->isExplicit(), '--extension-dir');
-        if ($extensionDir !== null) {
-            $candidates[] = PathUtil::normalize(dirname($extensionDir) . '/build/' . $filename);
-        }
-
-        foreach (array_values(array_unique($candidates)) as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static function detectPhpzPackageRunTests(string $targetDir): ?string
-    {
-        $roots = glob($targetDir . '/zig-pkg/phpz-*', GLOB_ONLYDIR);
-        if ($roots === false || $roots === []) {
-            return null;
-        }
-        sort($roots);
-
-        foreach ($roots as $root) {
-            $candidate = PathUtil::normalize($root . '/examples/skeleton/run-tests.php');
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
 }
 
 final class ProjectInstaller
@@ -854,51 +699,6 @@ final class ProjectInstaller
             $keepCommandOutput,
         );
     }
-
-    public static function installRunTests(string $source, string $targetDir, bool $force): void
-    {
-        $dest = $targetDir . '/run-tests.php';
-        if (file_exists($dest) && !$force) {
-            Console::fail("Refusing to overwrite $dest");
-        }
-        if (!copy($source, $dest)) {
-            Console::fail("Unable to copy $source to $dest");
-        }
-        if (!chmod($dest, 0755)) {
-            Console::fail("Unable to chmod $dest");
-        }
-    }
-
-    public static function installGenStub(string $source, string $targetDir, bool $force): string
-    {
-        $buildDir = $targetDir . '/build';
-        PathUtil::mkdir($buildDir);
-
-        $localGenStub = $buildDir . '/gen_stub.php';
-        if (file_exists($localGenStub) && !$force) {
-            Console::fail("Refusing to overwrite $localGenStub");
-        }
-        if (!copy($source, $localGenStub)) {
-            Console::fail("Unable to copy $source to $localGenStub");
-        }
-
-        return $localGenStub;
-    }
-
-    public static function runGenStub(
-        string $localGenStub,
-        string $targetDir,
-        string $ext,
-        bool $keepCommandOutput,
-    ): void {
-        ProcessRunner::runStep(
-            'generating arginfo',
-            [\PHP_BINARY, $localGenStub, $ext . '.stub.php'],
-            $targetDir,
-            $keepCommandOutput,
-            true,
-        );
-    }
 }
 
 // Template definitions.
@@ -906,9 +706,8 @@ const PHPZ_TEST_STEP_TEMPLATE = <<<'ZIG'
 
         // Add PHPT test step.
         const run_tests_step = b.step("run-tests", "Run PHPT tests");
-        const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
-            "php",
-            "run-tests.php",
+        const test_phpt_cmd = addRunPhpTool(b, phpz_dep.path("tools/php/run-tests.php"), "run-tests.php");
+        test_phpt_cmd.addArgs(&.{
             "-q",
             "--show-diff",
             "-d",
@@ -974,16 +773,16 @@ MD;
 const PHPZ_UNIX_RUN_SECTION_TEMPLATE = <<<'MD'
 ### Unix
 
-{{PHPZ_BUILD_ACTION}}:
+Build and run PHPT tests:
 
 ```bash
-{{PHPZ_TEST_COMMAND}} -Dphp-include-dir="$(php-config --include-dir)"
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
 ```
 
 If `php-config` is not available, pass the PHP include root directly:
 
 ```bash
-{{PHPZ_TEST_COMMAND}} -Dphp-include-dir=/usr/include/php
+zig build run-tests -Dphp-include-dir=/usr/include/php
 ```
 
 Try it manually:
@@ -999,10 +798,10 @@ const PHPZ_WINDOWS_RUN_SECTION_TEMPLATE = <<<'MD'
 
 Windows builds require a PHP development package from php.net matching the runtime PHP version, architecture, thread safety mode, and debug mode.
 
-{{PHPZ_BUILD_ACTION}}:
+Build and run PHPT tests:
 
 ```powershell
-{{PHPZ_TEST_COMMAND}} `
+zig build run-tests `
   -Dtarget=native-native-msvc `
   -Dphp-include-dir=C:\php-sdk\include `
   -Dphp-lib-dir=C:\php-sdk\lib
@@ -1011,7 +810,7 @@ Windows builds require a PHP development package from php.net matching the runti
 For a thread-safe PHP SDK/runtime, add `-Dwindows-zts=true`:
 
 ```powershell
-{{PHPZ_TEST_COMMAND}} `
+zig build run-tests `
   -Dtarget=native-native-msvc `
   -Dphp-include-dir=C:\php-sdk\include `
   -Dphp-lib-dir=C:\php-sdk\lib `
@@ -1041,10 +840,6 @@ Windows build options:
 | `-Dlibc-file=...`             | Optional libc paths file, mainly useful for cross-compilation.                       |
 MD;
 
-const PHPZ_TEST_FILES_STRUCTURE_TEMPLATE = <<<'MD'
-├── run-tests.php          # PHP PHPT test runner
-MD;
-
 const PHPZ_TEST_DIR_STRUCTURE_TEMPLATE = <<<'MD'
 └── tests/
     ├── hello.phpt
@@ -1058,18 +853,13 @@ const PHPZ_GEN_STUB_REGEN_TEMPLATE = <<<'MD'
 After changing `{{EXT_NAME}}.stub.php`, regenerate `{{EXT_NAME}}_arginfo.h`:
 
 ```bash
-php build/gen_stub.php {{EXT_NAME}}.stub.php
+zig build gen-stub
 ```
-MD;
 
-const PHPZ_GEN_STUB_MISSING_TEMPLATE = <<<'MD'
-## Regenerate arginfo
-
-Arginfo generation is not configured. To regenerate `{{EXT_NAME}}_arginfo.h` after changing `{{EXT_NAME}}.stub.php`,
-copy gen_stub.php to `build/gen_stub.php`, then run:
+Or use the generator from a PHP source checkout:
 
 ```bash
-php build/gen_stub.php {{EXT_NAME}}.stub.php
+php /path/to/php-src/build/gen_stub.php {{EXT_NAME}}.stub.php
 ```
 MD;
 
@@ -1265,7 +1055,6 @@ modules
 php_test_results_*.txt
 phpt.*
 run-test-info.php
-# run-tests.php
 tests/**/*.diff
 tests/**/*.out
 tests/**/*.php
@@ -1289,6 +1078,7 @@ const PHPZ_TEMPLATE_FILES = [
 /zig-out/
 /.zig-cache/
 /zig-pkg/
+/run-tests.php
 {{PHPZ_PHP_BUILD_GITIGNORE}}
 TXT,
     'build.zig' => <<<'ZIG'
@@ -1350,6 +1140,24 @@ pub fn build(b: *std.Build) void {
     } else {
         b.installArtifact(extension);
     }
+
+    // Regenerate arginfo only when explicitly requested.
+    const gen_stub_step = b.step("gen-stub", "Regenerate arginfo from the PHP stub");
+    const gen_stub_cmd = addRunPhpTool(b, phpz_dep.path("tools/php/gen_stub.php"), "build/gen_stub.php");
+    gen_stub_cmd.addArg(extension_name ++ ".stub.php");
+    gen_stub_step.dependOn(&gen_stub_cmd.step);
+}
+
+// Update the project-local tool from the bundle before running it.
+fn addRunPhpTool(b: *std.Build, source: std.Build.LazyPath, destination: []const u8) *std.Build.Step.Run {
+    const copy = std.Build.Step.UpdateSourceFiles.create(b);
+    copy.addCopyFileToSource(source, destination);
+
+    const run = b.addSystemCommand(&.{ "php", destination });
+    run.setCwd(b.path("."));
+    run.has_side_effects = true;
+    run.step.dependOn(&copy.step);
+    return run;
 }
 
 ZIG,
@@ -1373,7 +1181,7 @@ A minimal PHP extension built with phpz.
 ├── {{EXT_NAME}}.h             # C header: phpz.h + generated arginfo
 ├── {{EXT_NAME}}.stub.php      # PHP API declarations
 ├── {{EXT_NAME}}_arginfo.h     # Generated arginfo (do not edit directly)
-{{PHPZ_TEST_FILES_STRUCTURE}}{{PHPZ_SRC_TREE_ENTRY}}
+├── src/
 │   └── root.zig           # Module setup, functions, and Counter class
 {{PHPZ_TEST_DIR_STRUCTURE}}
 ```
@@ -1619,8 +1427,6 @@ final class TemplateWriter
         string $contents,
         string $ext,
         string $phpIncludeDir,
-        bool $hasRunTests,
-        bool $hasGenStub,
         bool $unix,
         bool $windows,
         bool $phpBuildSystem,
@@ -1688,25 +1494,16 @@ final class TemplateWriter
         $contents = str_replace("\n{{PHPZ_PHP_BUILD_GITIGNORE}}", $phpBuildSystem ? "\n\n" . PHPZ_PHP_BUILD_GITIGNORE_TEMPLATE : '', $contents);
         $contents = str_replace('{{PHPZ_UNIX_MANUAL_COMMANDS}}', PHPZ_UNIX_MANUAL_COMMANDS_TEMPLATE, $contents);
         $contents = str_replace('{{PHPZ_WINDOWS_MANUAL_COMMANDS}}', PHPZ_WINDOWS_MANUAL_COMMANDS_TEMPLATE, $contents);
-        $contents = str_replace('{{PHPZ_BUILD_ACTION}}', $hasRunTests ? 'Build and run PHPT tests' : 'Build', $contents);
-        $contents = str_replace('{{PHPZ_TEST_FILES_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_FILES_STRUCTURE_TEMPLATE . "\n" : '', $contents);
-        $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', $hasRunTests ? PHPZ_TEST_DIR_STRUCTURE_TEMPLATE : '', $contents);
-        $contents = str_replace('{{PHPZ_SRC_TREE_ENTRY}}', $hasRunTests ? '├── src/' : '└── src/', $contents);
+        $contents = str_replace('{{PHPZ_TEST_DIR_STRUCTURE}}', PHPZ_TEST_DIR_STRUCTURE_TEMPLATE, $contents);
         $contents = str_replace(
             "{{PHPZ_TEST_STEP}}\n",
-            $hasRunTests ? PHPZ_TEST_STEP_TEMPLATE . "\n" : '',
+            PHPZ_TEST_STEP_TEMPLATE . "\n",
             $contents,
         );
-        $contents = str_replace('{{PHPZ_TEST_COMMAND}}', $hasRunTests ? 'zig build run-tests' : 'zig build', $contents);
         $contents = str_replace('{{PHP_INCLUDE_DIR}}', TemplateVars::escapeZigString($phpIncludeDir), $contents);
         $contents = str_replace(
-            '{{PHPZ_GEN_STUB_RUN_COMMAND}}',
-            $hasGenStub ? "php build/gen_stub.php {{EXT_NAME}}.stub.php\n" : '',
-            $contents,
-        );
-        $contents = str_replace(
             '{{PHPZ_GEN_STUB_REGEN_SECTION}}',
-            $hasGenStub ? PHPZ_GEN_STUB_REGEN_TEMPLATE : PHPZ_GEN_STUB_MISSING_TEMPLATE,
+            PHPZ_GEN_STUB_REGEN_TEMPLATE,
             $contents,
         );
         $stub = self::withFinalNewline(TemplateVars::replace(PHPZ_TEMPLATE_FILES['{{EXT_NAME}}.stub.php'], $ext));
@@ -1739,30 +1536,19 @@ final class TemplateWriter
         return $templates;
     }
 
-    /**
-     * @return array{int, int}
-     */
     public static function write(
         string $targetDir,
         string $ext,
         string $phpIncludeDir,
         bool $force,
-        bool $hasRunTests,
-        bool $hasGenStub,
         bool $unix,
         bool $windows,
         bool $phpBuildSystem,
-    ): array {
+    ): int {
         $written = 0;
-        $skippedTests = 0;
 
         $templates = PHPZ_TEMPLATE_FILES + self::phpBuildTemplates($phpBuildSystem, $unix, $windows);
         foreach ($templates as $relative => $contents) {
-            if (!$hasRunTests && str_starts_with($relative, 'tests/')) {
-                $skippedTests++;
-                continue;
-            }
-
             $destRelative = TemplateVars::replace($relative, $ext);
             $destPath = $targetDir . '/' . $destRelative;
             PathUtil::mkdir(dirname($destPath));
@@ -1772,7 +1558,7 @@ final class TemplateWriter
             }
 
             $rendered = self::withFinalNewline(
-                self::render($contents, $ext, $phpIncludeDir, $hasRunTests, $hasGenStub, $unix, $windows, $phpBuildSystem),
+                self::render($contents, $ext, $phpIncludeDir, $unix, $windows, $phpBuildSystem),
             );
             if (file_put_contents($destPath, $rendered) === false) {
                 Console::fail("Unable to write $destPath");
@@ -1780,7 +1566,7 @@ final class TemplateWriter
             $written++;
         }
 
-        return [$written, $skippedTests];
+        return $written;
     }
 }
 
@@ -1813,46 +1599,17 @@ final class Command
         ProjectInstaller::initZigProject($targetDir, $zig, $args->force, $args->verbose);
         ProjectInstaller::fetchPhpz($targetDir, $args->zig, $args->phpz, $args->verbose);
 
-        $genStubPath = PhpToolResolver::resolveOptional(
-            $args->genStub,
-            'gen_stub.php',
-            $args->phpConfig,
-        );
-        $runTestsPath = PhpToolResolver::resolveOptional(
-            $args->runTests,
-            'run-tests.php',
-            $args->phpConfig,
-            $targetDir,
-        );
-
-        [$templateCount, $skippedTestTemplateCount] = TemplateWriter::write(
+        $templateCount = TemplateWriter::write(
             $targetDir,
             $args->ext,
             $phpIncludeDir,
             $args->force,
-            $runTestsPath !== null,
-            $genStubPath !== null,
             $args->unix,
             $args->windows,
             $args->phpBuildSystem,
         );
-        $templateResult = $templateCount . ' files';
-        if ($skippedTestTemplateCount > 0) {
-            $templateResult .= ", $skippedTestTemplateCount PHPT skipped";
-        }
-        Console::info("writing template files... $templateResult");
-
-        $testsStatus = self::installRunTests($runTestsPath, $targetDir, $args->force);
-        $arginfoStatus = self::installGenStubAndGenerate($genStubPath, $targetDir, $args->ext, $args);
-
-        self::printSummary(
-            $args,
-            $targetDir,
-            $testsStatus,
-            $arginfoStatus,
-            $runTestsPath !== null,
-            $genStubPath !== null,
-        );
+        Console::info("writing template files... $templateCount files");
+        self::printSummary($args, $targetDir);
     }
 
     /**
@@ -1902,12 +1659,7 @@ Options:
                            Bare values are treated as phpz tags, e.g. dev.
                            Default: git+https://github.com/happystraw/phpz.
   --zig <path>             Zig executable (default: \$ZIG, or zig).
-  --with-php-config <path> php-config executable for auto-detecting PHP tools.
-  --with-gen-stub [path]   Use gen_stub.php; without path, auto-detect via php-config.
-  --without-gen-stub       Disable gen_stub.php and arginfo generation.
-  --with-run-tests [path]  Use run-tests.php; without path, auto-detect via php-config
-                           or zig-pkg/phpz-*/examples/skeleton/run-tests.php.
-  --without-run-tests      Disable run-tests.php; omit tests/ and the build test step.
+  --with-php-config <path> php-config executable for locating PHP development headers.
   --with-php-build-system  Generate PHP build system files (default: disabled).
   --onlyunix               Only include Unix support in build.zig.
   --onlywindows            Only include Windows support in build.zig.
@@ -1917,7 +1669,7 @@ Options:
 
 Examples:
   php tools/phpz_skel.php --ext demo_ext
-  php tools/phpz_skel.php --ext demo_ext --phpz dev --without-gen-stub
+  php tools/phpz_skel.php --ext demo_ext --phpz dev
 
 Output:
   Commands are quiet by default. Failed commands print the command and output.
@@ -1926,42 +1678,9 @@ USAGE;
         exit(0);
     }
 
-    private static function installRunTests(?string $runTestsPath, string $targetDir, bool $force): string
-    {
-        if ($runTestsPath === null) {
-            Console::info('configuring PHPT tests... disabled');
-            return 'disabled';
-        }
-
-        ProjectInstaller::installRunTests($runTestsPath, $targetDir, $force);
-        Console::info('installing run-tests.php... done');
-        return 'enabled';
-    }
-
-    private static function installGenStubAndGenerate(
-        ?string $genStubPath,
-        string $targetDir,
-        string $extName,
-        Args $args,
-    ): string {
-        if ($genStubPath === null) {
-            Console::info('generating arginfo... skipped');
-            return 'skipped';
-        }
-
-        $localGenStub = ProjectInstaller::installGenStub($genStubPath, $targetDir, $args->force);
-        Console::info('installing gen_stub.php... done');
-        ProjectInstaller::runGenStub($localGenStub, $targetDir, $extName, $args->verbose);
-        return 'generated';
-    }
-
     private static function printSummary(
         Args $args,
         string $targetDir,
-        string $testsStatus,
-        string $arginfoStatus,
-        bool $hasRunTests,
-        bool $hasGenStub,
     ): void {
         $stubFile = TemplateVars::replace('{{EXT_NAME}}.stub.php', $args->ext);
 
@@ -1972,18 +1691,13 @@ USAGE;
         echo '  platforms:    ' . ($args->unix && $args->windows
             ? 'Unix, Windows'
             : ($args->unix ? 'Unix' : 'Windows')) . "\n";
-        echo "  arginfo:      $arginfoStatus\n";
-        echo "  PHPT tests:   $testsStatus\n";
+        echo "  arginfo:      supplied template\n";
+        echo "  PHPT tests:   enabled\n";
         echo "\nQuick start:\n";
         echo '  $ cd ' . ProcessRunner::shellArg($targetDir) . "\n";
-        echo $hasRunTests ? "  $ zig build run-tests\n" : "  $ zig build\n";
+        echo "  $ zig build run-tests\n";
         echo "\nRegenerate arginfo after changing $stubFile:\n";
-        if ($hasGenStub) {
-            echo "  $ php build/gen_stub.php $stubFile\n";
-        } else {
-            echo "  copy gen_stub.php to build/gen_stub.php, then run:\n";
-            echo "  $ php build/gen_stub.php $stubFile\n";
-        }
+        echo "  $ zig build gen-stub\n";
     }
 }
 

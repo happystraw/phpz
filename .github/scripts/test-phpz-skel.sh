@@ -77,12 +77,13 @@ assert_file() {
     [ -f "$1" ] || fail "expected file: $1"
 }
 
-assert_executable() {
-    [ -x "$1" ] || fail "expected executable file: $1"
-}
-
 assert_dir() {
     [ -d "$1" ] || fail "expected directory: $1"
+}
+
+assert_same_tool() {
+    # Git checkouts and Zig packages may use different line endings.
+    cmp <(sed $'s/\r$//' "$1") <(sed $'s/\r$//' "$2") || fail "tool differs from bundle: $1"
 }
 
 assert_no_path() {
@@ -171,7 +172,6 @@ note "lint and help"
 "$PHP_BIN" -l "$SKEL" >/dev/null
 "$PHP_BIN" "$SKEL" --help >"$TMP_ROOT/help"
 assert_contains "$TMP_ROOT/help" "--with-php-config <path>"
-assert_contains "$TMP_ROOT/help" "--without-run-tests"
 assert_contains "$TMP_ROOT/help" "--with-php-build-system"
 
 note "default + zig build run-tests"
@@ -182,11 +182,9 @@ run_skel \
     --phpz "$PHPZ_REF"
 assert_file "$(target_dir)/build.zig"
 assert_dir "$(target_dir)/tests"
-if [ "$IS_WINDOWS" -eq 1 ]; then
-    assert_file "$(target_dir)/run-tests.php"
-else
-    assert_executable "$(target_dir)/run-tests.php"
-fi
+assert_no_path "$(target_dir)/run-tests.php"
+assert_no_path "$(target_dir)/build/gen_stub.php"
+assert_file "$(target_dir)/demo_ext_arginfo.h"
 assert_platform_template
 assert_contains "$(target_dir)/build.zig" "const extension_name = @tagName(package.name);"
 assert_contains "$(target_dir)/build.zig" 'extension_info.addOption([:0]const u8, "version", extension_version);'
@@ -198,8 +196,41 @@ assert_no_path "$(target_dir)/Makefile.frag"
 assert_no_path "$(target_dir)/php_demo_ext.h"
 assert_not_contains "$(target_dir)/README.md" "## PHP build system"
 assert_contains "$CASE_DIR/stdout" "extension:    demo_ext"
+run_zig default-help build --help
+assert_no_path "$(target_dir)/run-tests.php"
+assert_no_path "$(target_dir)/build/gen_stub.php"
+run_zig default-build build
+assert_no_path "$(target_dir)/run-tests.php"
+assert_no_path "$(target_dir)/build/gen_stub.php"
 run_zig default-build-run-tests build run-tests
+assert_file "$(target_dir)/run-tests.php"
+assert_no_path "$(target_dir)/build/gen_stub.php"
 run_php_ri default-ri
+
+note "gen-stub copies its tool and regenerates changed arginfo"
+rm "$(target_dir)/run-tests.php"
+printf '\n// Regenerate after a stub change.\n' >>"$(target_dir)/demo_ext.stub.php"
+run_zig default-gen-stub build gen-stub
+assert_file "$(target_dir)/build/gen_stub.php"
+assert_no_path "$(target_dir)/run-tests.php"
+run_zig regenerated-build build
+
+note "modified and missing tool copies are restored from the bundle"
+for tool in build/gen_stub.php run-tests.php; do
+    case "$tool" in
+    build/*) step=gen-stub ;;
+    *) step=run-tests ;;
+    esac
+    mkdir -p "$(dirname "$(target_dir)/$tool")"
+    printf '<?php file_put_contents(__DIR__ . "/tool-used", "yes");\n' >"$(target_dir)/$tool"
+    run_zig "update-$step" build "$step"
+    assert_same_tool "$(target_dir)/$tool" "$ROOT_DIR/tools/php/$(basename "$tool")"
+    assert_no_path "$(dirname "$(target_dir)/$tool")/tool-used"
+    rm "$(target_dir)/$tool"
+    run_zig "restore-$step" build "$step"
+    assert_file "$(target_dir)/$tool"
+    assert_same_tool "$(target_dir)/$tool" "$ROOT_DIR/tools/php/$(basename "$tool")"
+done
 
 note "PHP build system integration"
 new_case php_build_system
@@ -281,35 +312,5 @@ if [ -n "$PHP_CONFIG_BIN" ]; then
 else
     note "explicit php-config + zig build run-tests skipped"
 fi
-
-note "without run-tests"
-new_case without_run_tests
-run_skel \
-    --ext demo_ext \
-    --dir "$(php_path "$CASE_DIR/out")" \
-    --phpz "$PHPZ_REF" \
-    --without-run-tests
-assert_no_path "$(target_dir)/tests"
-assert_no_path "$(target_dir)/run-tests.php"
-assert_platform_template
-assert_not_contains "$(target_dir)/build.zig" "Run PHPT tests"
-assert_not_contains "$(target_dir)/build.zig" "run-tests.php"
-assert_not_contains "$(target_dir)/README.md" "zig build run-tests"
-run_zig without-run-tests-build build
-run_php_ri without-run-tests-ri
-
-note "without gen-stub + zig build run-tests"
-new_case without_gen_stub
-run_skel \
-    --ext demo_ext \
-    --dir "$(php_path "$CASE_DIR/out")" \
-    --phpz "$PHPZ_REF" \
-    --without-gen-stub
-assert_no_path "$(target_dir)/build/gen_stub.php"
-assert_file "$(target_dir)/demo_ext_arginfo.h"
-assert_dir "$(target_dir)/tests"
-assert_platform_template
-run_zig without-gen-stub-build-run-tests build run-tests
-run_php_ri without-gen-stub-ri
 
 note "ok"

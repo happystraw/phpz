@@ -61,9 +61,8 @@ pub fn build(b: *std.Build) void {
 
     // Add PHPT test step.
     const run_tests_step = b.step("run-tests", "Run PHPT tests");
-    const test_phpt_cmd = b.addSystemCommand(&[_][]const u8{
-        "php",
-        "run-tests.php",
+    const test_phpt_cmd = addRunPhpTool(b, phpz_dep.path("tools/php/run-tests.php"), "run-tests.php");
+    test_phpt_cmd.addArgs(&.{
         "-q",
         "--show-diff",
         "-d",
@@ -71,4 +70,16 @@ pub fn build(b: *std.Build) void {
     });
     test_phpt_cmd.step.dependOn(b.getInstallStep());
     run_tests_step.dependOn(&test_phpt_cmd.step);
+}
+
+// Update the project-local tool from the bundle before running it.
+fn addRunPhpTool(b: *std.Build, source: std.Build.LazyPath, destination: []const u8) *std.Build.Step.Run {
+    const copy = std.Build.Step.UpdateSourceFiles.create(b);
+    copy.addCopyFileToSource(source, destination);
+
+    const run = b.addSystemCommand(&.{ "php", destination });
+    run.setCwd(b.path("."));
+    run.has_side_effects = true;
+    run.step.dependOn(&copy.step);
+    return run;
 }

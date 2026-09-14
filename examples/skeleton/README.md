@@ -20,7 +20,6 @@ A minimal PHP extension built with phpz.
 ├── skeleton.h             # C header: phpz.h + generated arginfo
 ├── skeleton.stub.php      # PHP API declarations
 ├── skeleton_arginfo.h     # Generated arginfo (do not edit directly)
-├── run-tests.php          # PHP PHPT test runner
 ├── src/
 │   └── root.zig           # Module setup, functions, and Counter class
 └── tests/
@@ -34,6 +33,12 @@ A minimal PHP extension built with phpz.
 ## Regenerate arginfo
 
 After changing `skeleton.stub.php`, regenerate `skeleton_arginfo.h`:
+
+```bash
+zig build gen-stub
+```
+
+Or use the generator from a PHP source checkout:
 
 ```bash
 php /path/to/php-src/build/gen_stub.php skeleton.stub.php
