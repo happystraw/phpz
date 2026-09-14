@@ -635,7 +635,15 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
 
             fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
                 const intern = alloc(ce.?);
-                intern.initBacking();
+                if (resolved.init) |initializer| {
+                    intern.backingStorage().* = initializer() catch |err| {
+                        if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
+                        if (!errors.hasException()) {
+                            errors.throwError(null, "%s while initializing " ++ class_name, .{@errorName(err).ptr}) catch {};
+                        }
+                        return &intern.std;
+                    };
+                }
                 return &intern.std;
             }
 
@@ -674,18 +682,6 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
                 return intern;
             }
         };
-
-        fn initBacking(self: *Self) void {
-            if (resolved.init) |initializer| {
-                self.backingStorage().* = initializer() catch |err| {
-                    if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
-                    if (!errors.hasException()) {
-                        errors.throwError(null, "%s while initializing " ++ class_name, .{@errorName(err).ptr}) catch {};
-                    }
-                    return;
-                };
-            }
-        }
 
         fn clearBacking(self: *Self) void {
             var old = self.backingStorage().*;
@@ -767,49 +763,76 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             return fromObject(operand.asUnchecked(.object));
         }
 
-        /// Creates an instance without calling its PHP constructor.
+        pub const CreateError = errors.Exception;
+
+        /// Creates an instance through object_init_ex without calling its PHP constructor.
+        /// Zend checks instantiability, updates class constants, and dispatches create_object.
         ///
-        /// Applies `.init`; when omitted, initializes backing only if every
-        /// field of `T` has a default value.
+        /// The registered create_object callback applies `.init`; when omitted,
+        /// backing is initialized only if every field of `T` has a default value.
         ///
         /// Ownership: caller owns the returned object reference; call
         /// `object().release()` unless ownership is transferred to PHP or a zval.
+        /// Initialization exceptions release the object without calling its PHP
+        /// destructor and return PhpException, preserving the pending exception.
+        /// Zend bailouts propagate without running Zig defer/errdefer.
         /// `register()` must have succeeded before calling this function.
-        pub fn create() *Self {
-            const intern = lifecycle.alloc(entry.ptr());
-            intern.initBacking();
-            return intern;
+        /// The class's create_object callback must preserve this Self layout.
+        pub fn create() CreateError!*Self {
+            var value = Zval.raw.undef;
+            const object_value = Zval.Object.init(&value, entry) catch return error.PhpException;
+            const obj = object_value.zendObject();
+            errdefer {
+                c.zend_object_store_ctor_failed(obj.ptr());
+                obj.release();
+            }
+            if (errors.hasException()) return error.PhpException;
+            return fromStdUnchecked(obj.ptr());
         }
 
-        /// Errors returned while locating or invoking a PHP constructor.
-        pub const NewError = zend.Object.ConstructorError || zend.Function.Error;
+        /// Errors returned while initializing an object or locating/invoking its constructor.
+        pub const NewError = CreateError;
         /// `NewError` plus converted Zend bailout errors.
-        pub const TryNewError = zend.Object.ConstructorError || zend.Function.TryCallError;
+        pub const TryNewError = NewError || zend.bailout.Error;
 
         /// Creates a new instance and calls its PHP constructor when present.
+        /// Pass positional params as a tuple and null for no named_params.
+        /// named_params is borrowed; argument matching and references follow
+        /// Function.call(). Without a constructor, all arguments are ignored.
         ///
         /// Ownership: caller owns the returned object reference. On constructor
-        /// failure the newly created object is released automatically.
+        /// lookup/call errors the owned reference is released automatically.
+        /// A failed constructor call suppresses the object's PHP destructor.
+        /// Zend bailouts propagate without running Zig defer/errdefer.
         /// `register()` must have succeeded before calling this function.
-        pub fn new(params: anytype) NewError!*Self {
-            const instance = create();
-            const zend_object = instance.object();
-            errdefer zend_object.release();
-            if (try zend_object.constructor()) |constructor| try constructor.callMethod(zend_object, null, params, null);
+        pub fn new(params: anytype, named_params: ?*zend.Array) NewError!*Self {
+            const instance = try create();
+            const obj = instance.object();
+            errdefer obj.release();
+            if (try obj.constructor()) |constructor| {
+                constructor.callMethod(obj, null, params, named_params) catch |err| {
+                    c.zend_object_store_ctor_failed(obj.ptr());
+                    return err;
+                };
+            }
             return instance;
         }
+
         /// Creates a new instance and calls its PHP constructor when present,
-        /// converting Zend bailouts into errors.
+        /// converting bailouts from creation, constructor lookup/call, and
+        /// ordinary failure cleanup into ZendBailout.
         ///
-        /// Ownership: caller owns the returned object reference. On constructor
-        /// failure the newly created object is released automatically.
+        /// Ownership and ordinary error cleanup follow new(). On bailout, Zig
+        /// defer/errdefer are skipped; PHP objects remain for request shutdown.
+        /// Propagate ZendBailout after native resource cleanup; do not resume
+        /// normal PHP execution or retry interrupted object cleanup.
         /// `register()` must have succeeded before calling this function.
-        pub fn tryNew(params: anytype) TryNewError!*Self {
-            const instance = create();
-            const zend_object = instance.object();
-            errdefer zend_object.release();
-            if (try zend_object.constructor()) |constructor| try constructor.tryCallMethod(zend_object, null, params, null);
-            return instance;
+        pub fn tryNew(params: anytype, named_params: ?*zend.Array) TryNewError!*Self {
+            return zend.bailout.run(struct {
+                fn call(args: @TypeOf(params), named: ?*zend.Array) NewError!*Self {
+                    return Self.new(args, named);
+                }
+            }.call, .{ params, named_params });
         }
     };
 }
@@ -991,11 +1014,11 @@ test "concrete Zig class public declarations compile" {
 
     const VerifyGenericMethods = struct {
         fn new() TestClass.NewError!*TestClass {
-            return TestClass.new(.{});
+            return TestClass.new(.{}, null);
         }
 
         fn tryNew() TestClass.TryNewError!*TestClass {
-            return TestClass.tryNew(.{});
+            return TestClass.tryNew(.{}, null);
         }
     };
     _ = &VerifyGenericMethods.new;

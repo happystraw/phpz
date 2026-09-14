@@ -52,7 +52,7 @@ pub fn makeCounter(ctx: phpz.Ctx) !void {
         .{ .int = .{ .optional = true } },
         .{ .mixed = .{ .optional = true } },
     }, {});
-    const owner = CounterClass.create();
+    const owner = try CounterClass.create();
     defer owner.object().release();
     const backing = owner.backing().?;
     backing.value = args[0] orelse 0;
@@ -96,7 +96,7 @@ pub fn makeReference(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
         .{ .reference = .{ .result = .zval } },
     }, {});
-    const owner = ReferenceClass.create();
+    const owner = try ReferenceClass.create();
     defer owner.object().release();
     Zval.raw.copy(&owner.backing().?.value, args[0].ptr());
     const invoke = phpz.zend.Function.findMethod(ReferenceClass.entry, "__invoke").?;

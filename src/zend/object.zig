@@ -98,20 +98,20 @@ pub const Object = opaque {
         return if (prop_ptr) |p| .from(p) else null;
     }
 
-    pub const ConstructorError = error{AccessDenied};
+    pub const ConstructorError = errors.Exception;
 
-    /// Look up the constructor via PHP's standard handler.
+    /// Look up the constructor through the object's get_constructor handler.
     ///
-    /// Ownership: borrowed function pointer owned by the class entry.
+    /// Ownership: borrowed function pointer owned by the class/runtime.
     ///
-    /// Returns `null` if the class defines no constructor. Returns
-    /// `error.AccessDenied` if the constructor exists but is inaccessible
-    /// (private/protected) — in that case a PHP exception is also pending.
+    /// Returns null if the handler returns no constructor without an exception.
+    /// Returns PhpException for a pending PHP exception, including visibility
+    /// errors and custom handler failures. Zend bailouts propagate directly.
     pub fn constructor(self: *Object) ConstructorError!?*Function {
-        const fn_ptr = c.zend_std_get_constructor(self.ptr());
-        return if (fn_ptr) |fp|
-            Function.from(fp)
-        else if (errors.hasException()) error.AccessDenied else null;
+        const obj = self.ptr();
+        const fn_ptr = obj.handlers.*.get_constructor.?(obj);
+        if (errors.hasException()) return error.PhpException;
+        return if (fn_ptr) |fp| Function.from(fp) else null;
     }
 
     /// Resolve a method via PHP's OOP dispatch.

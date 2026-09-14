@@ -12,6 +12,7 @@ const named_arguments = @import("testing/named_arguments.zig");
 const closure_tests = @import("testing/closures.zig");
 const gc = @import("testing/gc.zig");
 const serialization = @import("testing/serialization.zig");
+const class_new = @import("testing/class_new.zig");
 const closures = @import("closures.zig");
 
 fn info(m: *phpz.ModuleEntry) void {
@@ -45,6 +46,7 @@ comptime {
         .@"MyPHPExt\\Test\\checkedNamedArguments" = named_arguments.checkedNamedArguments,
         .@"MyPHPExt\\Test\\collectReferenceArguments" = named_arguments.collectAll,
         .@"MyPHPExt\\Test\\invokeArguments" = named_arguments.invokeArguments,
+        .@"MyPHPExt\\Test\\newObject" = class_new.newObject,
         .@"MyPHPExt\\Test\\castValue" = @import("testing/zval.zig").castValue,
         .@"MyPHPExt\\Test\\castReferenceValue" = @import("testing/zval.zig").castValue,
     });
@@ -52,7 +54,7 @@ comptime {
     phpz.module(.{
         .name = extension.name,
         .version = extension.version,
-        .classes = &(api.classes.* ++ .{ gc.Class, serialization.Class } ++ closures.classes),
+        .classes = &(api.classes.* ++ .{ gc.Class, serialization.Class } ++ closures.classes ++ class_new.classes),
         .ini = ini.definitions,
         .globals = metrics.Globals,
         .observer = metrics.observer,

@@ -184,6 +184,19 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function newObject(bool $bare, array $positional, ?array $named_params, bool $guarded): object {}
+
+    class NewValue
+    {
+        public function __construct(int $first, int $second = 7, bool $fail = false) {}
+
+        public function values(): array {}
+
+        public function __destruct() {}
+    }
+
+    class NewBare {}
+
     function castValue(mixed $value, string $type, bool $convert): mixed {}
 
     function castReferenceValue(mixed &$value, string $type, bool $convert): mixed {}

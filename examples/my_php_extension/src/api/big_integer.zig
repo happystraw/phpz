@@ -68,9 +68,8 @@ const BigInteger = struct {
 
         /// Keep the new object locally owned until the arithmetic has succeeded.
         fn output() !*Class {
-            const instance = Class.create();
+            const instance = try Class.create();
             errdefer instance.object().release();
-            if (phpz.errors.hasException()) return error.PhpException;
             _ = instance.backing() orelse return error.UninitializedBacking;
             return instance;
         }
