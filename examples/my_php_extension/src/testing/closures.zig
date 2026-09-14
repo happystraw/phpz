@@ -65,7 +65,7 @@ pub fn wrapClosure(ctx: phpz.Ctx) !void {
     const object = if (args[1]) |arg| arg.asOptional() else null;
     const class_name = if (args[2]) |arg| arg.asOptional() else null;
     const scope = if (class_name) |name|
-        phpz.ClassEntry.lookup(name, true) orelse return error.ClassNotFound
+        (try phpz.ClassEntry.lookup(name, true)) orelse return error.ClassNotFound
     else if (object) |obj|
         obj.class()
     else

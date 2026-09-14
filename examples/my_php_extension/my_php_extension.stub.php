@@ -184,6 +184,8 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function lookupClass(string $name, bool $autoload): ?string {}
+    function readStaticProperty(string $class, string $name, bool $silent): mixed {}
     function setMixedProperty(object $target, string $name, mixed $value, string $api): void {}
     function setMixedReferenceProperty(object $target, string $name, mixed &$value, string $api): void {}
     function newObject(bool $bare, array $positional, ?array $named_params, bool $guarded): object {}

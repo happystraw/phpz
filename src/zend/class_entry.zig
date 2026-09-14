@@ -46,15 +46,18 @@ pub const ClassEntry = opaque {
     /// (case-insensitive, with a leading namespace separator stripped).
     /// When `autoload` is true, registered autoload callbacks are run if the
     /// class is not already loaded; they may execute arbitrary PHP code and
-    /// trigger a Zend bailout. Returns null if the class cannot be found.
+    /// trigger a Zend bailout. Returns null if the class cannot be found without
+    /// a pending exception; returns `error.PhpException` if one is pending after
+    /// lookup, including an exception raised by an autoloader.
     ///
     /// Ownership: borrowed class entry owned by the PHP runtime.
-    pub fn lookup(class_name: []const u8, autoload: bool) ?*ClassEntry {
+    pub fn lookup(class_name: []const u8, autoload: bool) errors.Exception!?*ClassEntry {
         const zname = String.init(class_name, false);
         defer zname.release();
 
         const entry = c.zend_lookup_class_ex(zname.ptr(), null, if (autoload) 0 else c.ZEND_FETCH_CLASS_NO_AUTOLOAD);
-        return if (entry != null) .from(entry) else null;
+        if (errors.hasException()) return error.PhpException;
+        return if (entry) |ce| .from(ce) else null;
     }
 
     /// Get the class name as a byte slice
@@ -192,10 +195,19 @@ pub const ClassEntry = opaque {
         if (result != c.SUCCESS) return error.UpdateStaticPropertyFailed;
     }
 
-    /// Read static property.
-    pub fn staticProperty(self: *ClassEntry, prop_name: []const u8, silent: bool) *Zval {
+    /// Read a static property using this class as the access scope.
+    ///
+    /// Returns `error.PhpException` for a pending PHP exception, even if Zend
+    /// returned a non-null pointer. A null result means Zend returned no slot
+    /// without an exception, such as a missing property when `silent` is true.
+    /// Silent reads can return an IS_UNDEF slot for an uninitialized typed
+    /// property; they do not suppress exceptions from class initialization.
+    ///
+    /// Ownership: borrowed property slot owned by PHP; do not release it.
+    pub fn staticProperty(self: *ClassEntry, prop_name: []const u8, silent: bool) errors.Exception!?*Zval {
         const val = c.zend_read_static_property(self.ptr(), prop_name.ptr, prop_name.len, silent);
-        return .from(val);
+        if (errors.hasException()) return error.PhpException;
+        return if (val) |value| .from(value) else null;
     }
 };
 
