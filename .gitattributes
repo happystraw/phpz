@@ -1,0 +1,2 @@
+tools/php/gen_stub.php linguist-vendored
+tools/php/run-tests.php linguist-vendored

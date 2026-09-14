@@ -184,6 +184,10 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function castValue(mixed $value, string $type, bool $convert): mixed {}
+
+    function castReferenceValue(mixed &$value, string $type, bool $convert): mixed {}
+
     function checkedNamedArguments(int $name, int $age = 2, mixed ...$args): array {}
 
     function collectArguments(int $name = 1, int $age = 2, mixed ...$args): array {}

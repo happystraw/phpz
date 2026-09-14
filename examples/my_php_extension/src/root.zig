@@ -45,6 +45,8 @@ comptime {
         .@"MyPHPExt\\Test\\checkedNamedArguments" = named_arguments.checkedNamedArguments,
         .@"MyPHPExt\\Test\\collectReferenceArguments" = named_arguments.collectAll,
         .@"MyPHPExt\\Test\\invokeArguments" = named_arguments.invokeArguments,
+        .@"MyPHPExt\\Test\\castValue" = @import("testing/zval.zig").castValue,
+        .@"MyPHPExt\\Test\\castReferenceValue" = @import("testing/zval.zig").castValue,
     });
 
     phpz.module(.{

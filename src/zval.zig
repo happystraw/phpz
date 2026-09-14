@@ -2,6 +2,7 @@ const std = @import("std");
 
 const c = @import("root.zig").c;
 const zend = @import("zend.zig");
+const errors = @import("errors.zig");
 
 /// Zval is a wrapper around PHP's zval (Zend Value) structure, providing
 /// type-safe access to PHP values from Zig code.
@@ -224,6 +225,39 @@ pub const Zval = opaque {
     /// ```
     pub fn as(self: *Zval, comptime zk: Kind) Error!Type(zk) {
         return raw.as(self.ptr(), zk);
+    }
+
+    pub const CastError = errors.Exception;
+    pub const ConvertError = CastError;
+
+    /// Result type for a non-mutating PHP cast.
+    pub fn CastType(comptime zk: Kind) type {
+        return switch (zk) {
+            .int, .float, .bool, .array, .object => Type(zk),
+            .string => *zend.String,
+            else => @compileError("PHP casts do not support target ." ++ @tagName(zk)),
+        };
+    }
+
+    /// Return a PHP cast result without replacing this zval's value.
+    /// Supports .int, .float, .bool, .string, .array, and .object. The caller owns
+    /// returned strings/arrays/objects and must release() or transfer ownership.
+    /// Payloads may be shared, as with PHP casts; this is not a deep copy.
+    /// Requires an initialized PHP value (or a reference to one), not an internal value.
+    /// Returns PhpException if a PHP exception is pending after conversion.
+    pub fn cast(self: *Zval, comptime zk: Kind) CastError!CastType(zk) {
+        return raw.cast(self.ptr(), zk);
+    }
+
+    /// Convert in place using PHP's explicit conversion rules, then return the value.
+    /// Supports .int, .float, .bool, .string, .array, and .object.
+    /// References are unwrapped; other owners of the reference keep their value.
+    /// Returned slices/pointers are borrowed from this zval until it changes or is released.
+    /// Requires an initialized PHP value (or a reference to one), not an internal value.
+    /// Returns PhpException if a PHP exception is pending after conversion.
+    /// On failure, the zval may already have changed.
+    pub fn convert(self: *Zval, comptime zk: Kind) ConvertError!Type(zk) {
+        return raw.convert(self.ptr(), zk);
     }
 
     /// Convert this zval to a Zig value without type checking.
@@ -540,6 +574,47 @@ pub const Zval = opaque {
             return raw.asUnchecked(zv, zk);
         }
 
+        /// Raw-pointer equivalent of `Zval.cast`, with the same ownership and errors.
+        pub fn cast(zv: *c.zval, comptime zk: Kind) CastError!CastType(zk) {
+            const result: CastType(zk) = switch (zk) {
+                .int => c.zval_get_long(zv),
+                .float => c.zval_get_double(zv),
+                .bool => blk: {
+                    const result = c.zend_is_true(zv);
+                    break :blk if (@TypeOf(result) == bool) result else result != 0;
+                },
+                .string => zend.String.from(c.zval_get_string(zv)),
+                .array, .object => {
+                    var value = raw.undef;
+                    raw.copyDeref(&value, zv);
+                    errdefer raw.release(&value);
+                    return raw.convert(&value, zk);
+                },
+                else => unreachable,
+            };
+            if (errors.hasException()) {
+                if (zk == .string) result.release();
+                return error.PhpException;
+            }
+            return result;
+        }
+
+        /// Raw-pointer equivalent of `Zval.convert`, with the same ownership and errors.
+        pub fn convert(zv: *c.zval, comptime zk: Kind) ConvertError!Type(zk) {
+            const converter = comptime switch (zk) {
+                .int => c.convert_to_long,
+                .float => c.convert_to_double,
+                .bool => c.convert_to_boolean,
+                .string => c._convert_to_string,
+                .array => c.convert_to_array,
+                .object => c.convert_to_object,
+                else => @compileError("PHP casts do not support target ." ++ @tagName(zk)),
+            };
+            converter(zv);
+            if (errors.hasException()) return error.PhpException;
+            return raw.asUnchecked(zv, zk);
+        }
+
         /// Convert a raw zval to a Zig value without type checking.
         ///
         /// Ownership: scalar values are copied. Returned slices/wrappers/pointers
@@ -600,7 +675,7 @@ pub const Zval = opaque {
                 },
                 .array => {
                     zv.value.arr = val.ptr();
-                    zv.u1.type_info = c.IS_ARRAY_EX;
+                    zv.u1.type_info = if (val.isImmutable()) c.IS_ARRAY else c.IS_ARRAY_EX;
                 },
                 .object => {
                     zv.value.obj = val.ptr();
