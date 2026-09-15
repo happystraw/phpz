@@ -46,7 +46,7 @@ pub fn label(ctx: phpz.Ctx) !void {
     defer phpz.Zval.raw.tryRelease(&scratch);
 
     const name = try user.property("name", false, &scratch);
-    ctx.ret.set(.string, phpz.Zval.raw.asUnchecked(name.ptr(), .string));
+    ctx.retval.set(.string, phpz.Zval.raw.asUnchecked(name.ptr(), .string));
 }
 
 pub const Class = phpz.Class("MyPHPExt\\User", @This(), .{ .register = register });

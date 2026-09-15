@@ -1325,7 +1325,7 @@ const functions = struct {
 
         var buffer: [256]u8 = undefined;
         const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
-        ctx.ret.set(.string, result);
+        ctx.ret(.string, result);
     }
 };
 
@@ -1361,7 +1361,7 @@ const Counter = struct {
 
     /// public function value(): int
     pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
-        ctx.ret.set(.int, self.n);
+        ctx.ret(.int, self.n);
     }
 };
 ZIG,

@@ -15,7 +15,7 @@ pub fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
     const files = php.httpGlobal(.FILES) orelse return error.SuperglobalUnavailable;
     const request = executor.superglobal(.REQUEST) orelse return error.SuperglobalUnavailable;
 
-    const result = Zval.Array.empty(ctx.ret.ptr());
+    const result = Zval.Array.empty(ctx.retval.ptr());
     setBorrowed(result, "GET", get);
     setBorrowed(result, "POST", post);
     setBorrowed(result, "COOKIE", cookie);

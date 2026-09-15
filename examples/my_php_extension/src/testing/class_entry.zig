@@ -39,14 +39,14 @@ fn expectPhpException(result: phpz.errors.Exception!?*phpz.Zval) !void {
 pub fn readConstant(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{ .{ .string = .{} }, .{ .bool = .{} } }, {});
     const value = (try phpz.zend.Constant.get(args[0], null, args[1])) orelse return error.ConstantNotFound;
-    ctx.ret.set(.mixed, value.ptr());
+    ctx.retval.set(.mixed, value.ptr());
 }
 
 pub fn readClassConstant(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{ .{ .string = .{} }, .{ .string = .{} }, .{ .bool = .{} } }, {});
     const entry = (try phpz.ClassEntry.lookup(args[0], true)) orelse return error.ClassNotFound;
     const value = (try entry.constant(args[1], args[2])) orelse return error.ConstantNotFound;
-    ctx.ret.set(.mixed, value.ptr());
+    ctx.retval.set(.mixed, value.ptr());
 }
 
 pub fn lookupClass(ctx: phpz.Ctx) !void {
@@ -55,9 +55,9 @@ pub fn lookupClass(ctx: phpz.Ctx) !void {
         .{ .bool = .{} },
     }, {});
     if (try phpz.ClassEntry.lookup(args[0], args[1])) |entry| {
-        ctx.ret.set(.string, entry.name());
+        ctx.retval.set(.string, entry.name());
     } else {
-        ctx.ret.set(.null, {});
+        ctx.retval.set(.null, {});
     }
 }
 
@@ -72,5 +72,5 @@ pub fn readStaticProperty(ctx: phpz.Ctx) !void {
     const entry = (try phpz.ClassEntry.lookup(args[0], true)) orelse return error.ClassNotFound;
     const value = (try entry.staticProperty(args[1], args[2])) orelse return error.PropertyNotFound;
     if (value.is(.undef)) return error.UninitializedProperty;
-    ctx.ret.set(.mixed, value.ptr());
+    ctx.retval.set(.mixed, value.ptr());
 }

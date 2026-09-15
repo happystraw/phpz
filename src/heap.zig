@@ -44,28 +44,16 @@ const php_allocator_impl = struct {
         // Same as Zend MM allocator alignment.
         std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
 
-        const Context = struct {
-            len: usize,
-            return_address: usize,
-            result: ?*anyopaque = null,
-
-            fn call(raw: ?*anyopaque) callconv(.c) void {
-                const self: *@This() = @ptrCast(@alignCast(raw.?));
+        return @ptrCast(zend.bailout.run(struct {
+            fn call(size: usize, address: usize) ?*anyopaque {
                 if (comptime c.ZEND_DEBUG == 1) {
-                    const src = DebugSourceLocation.resolve(self.return_address);
-                    self.result = c._emalloc(self.len, src.file.ptr, @intCast(src.line), null, 0);
+                    const src = DebugSourceLocation.resolve(address);
+                    return c._emalloc(size, src.file.ptr, @intCast(src.line), null, 0);
                 } else {
-                    self.result = c.emalloc(self.len);
+                    return c.emalloc(size);
                 }
             }
-        };
-
-        var ctx: Context = .{
-            .len = len,
-            .return_address = return_address,
-        };
-        zend.bailout.runRaw(Context.call, &ctx) catch return null;
-        return @ptrCast(ctx.result);
+        }.call, .{ len, return_address }) catch return null);
     }
 
     fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) bool {
@@ -82,30 +70,16 @@ const php_allocator_impl = struct {
         // Same as Zend MM allocator alignment.
         std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
 
-        const Context = struct {
-            memory: []u8,
-            new_len: usize,
-            return_address: usize,
-            result: ?*anyopaque = null,
-
-            fn call(raw: ?*anyopaque) callconv(.c) void {
-                const self: *@This() = @ptrCast(@alignCast(raw.?));
+        return @ptrCast(zend.bailout.run(struct {
+            fn call(buffer: []u8, size: usize, address: usize) ?*anyopaque {
                 if (comptime c.ZEND_DEBUG == 1) {
-                    const src = DebugSourceLocation.resolve(self.return_address);
-                    self.result = c._erealloc(self.memory.ptr, self.new_len, src.file.ptr, @intCast(src.line), null, 0);
+                    const src = DebugSourceLocation.resolve(address);
+                    return c._erealloc(buffer.ptr, size, src.file.ptr, @intCast(src.line), null, 0);
                 } else {
-                    self.result = c.erealloc(self.memory.ptr, self.new_len);
+                    return c.erealloc(buffer.ptr, size);
                 }
             }
-        };
-
-        var ctx: Context = .{
-            .memory = memory,
-            .new_len = new_len,
-            .return_address = return_address,
-        };
-        zend.bailout.runRaw(Context.call, &ctx) catch return null;
-        return @ptrCast(ctx.result);
+        }.call, .{ memory, new_len, return_address }) catch return null);
     }
 
     fn free(context: *anyopaque, memory: []u8, alignment: Alignment, return_address: usize) void {

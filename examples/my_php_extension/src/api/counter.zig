@@ -15,7 +15,7 @@ const Counter = struct {
             .{ .int = .{ .optional = true } },
         }, {});
         self.current_value +|= args[0] orelse 1;
-        ctx.ret.set(.int, self.current_value);
+        ctx.retval.set(.int, self.current_value);
     }
 
     /// PHP: MyPHPExt\Counter::decrement(int $by = 1): int
@@ -24,12 +24,12 @@ const Counter = struct {
             .{ .int = .{ .optional = true } },
         }, {});
         self.current_value -|= args[0] orelse 1;
-        ctx.ret.set(.int, self.current_value);
+        ctx.retval.set(.int, self.current_value);
     }
 
     /// PHP: MyPHPExt\Counter::value(): int
     pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
-        ctx.ret.set(.int, self.current_value);
+        ctx.retval.set(.int, self.current_value);
     }
 
     /// PHP: MyPHPExt\Counter::reset(int $value = 0): void

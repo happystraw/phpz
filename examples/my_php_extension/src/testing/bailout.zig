@@ -34,7 +34,7 @@ pub fn allocatorBailout(ctx: phpz.Ctx) !void {
         error.OutOfMemory => out_of_memory = true,
     };
 
-    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    var result = phpz.Zval.Array.empty(ctx.retval.ptr());
     result.set(.bool, "out_of_memory", out_of_memory);
     result.set(.bool, "scope_defer", scope_defer);
     result.set(.bool, "cleanup_defer", cleanup_defer);

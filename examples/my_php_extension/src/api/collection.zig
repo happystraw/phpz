@@ -46,7 +46,7 @@ const Collection = struct {
 
     /// PHP: MyPHPExt\Collection::toArray(): array
     pub fn toArray(self: *const Collection, ctx: phpz.Ctx) void {
-        ctx.ret.set(.array, self.data.dupe());
+        ctx.retval.set(.array, self.data.dupe());
     }
 
     /// PHP: MyPHPExt\Collection::offsetExists(mixed $offset): bool
@@ -56,7 +56,7 @@ const Collection = struct {
         }, {});
         const offset = args[0];
 
-        ctx.ret.set(.bool, switch (offset.kind()) {
+        ctx.retval.set(.bool, switch (offset.kind()) {
             .int => self.data.hasIndex(@intCast(offset.asUnchecked(.int))),
             .string => self.data.has(offset.asUnchecked(.string)),
             else => false,
@@ -78,9 +78,9 @@ const Collection = struct {
 
         if (value) |found| {
             Zval.raw.tryAddref(found);
-            ctx.ret.set(.mixed, found);
+            ctx.retval.set(.mixed, found);
         } else {
-            ctx.ret.set(.null, {});
+            ctx.retval.set(.null, {});
         }
     }
 
@@ -140,16 +140,16 @@ const Collection = struct {
 
     /// PHP: MyPHPExt\Collection::count(): int
     pub fn count(self: *const Collection, ctx: phpz.Ctx) void {
-        ctx.ret.set(.int, @intCast(self.data.len()));
+        ctx.retval.set(.int, @intCast(self.data.len()));
     }
 
     /// PHP: MyPHPExt\Collection::current(): mixed
     pub fn current(self: *Collection, ctx: phpz.Ctx) void {
         if (self.iterator.currentValue()) |value| {
             Zval.raw.tryAddref(value);
-            ctx.ret.set(.mixed, value);
+            ctx.retval.set(.mixed, value);
         } else {
-            ctx.ret.set(.null, {});
+            ctx.retval.set(.null, {});
         }
     }
 
@@ -157,11 +157,11 @@ const Collection = struct {
     pub fn key(self: *Collection, ctx: phpz.Ctx) void {
         if (self.iterator.currentKey()) |key_value| {
             switch (key_value) {
-                .int => |index| ctx.ret.set(.int, index),
-                .string => |key_name| ctx.ret.set(.string, key_name),
+                .int => |index| ctx.retval.set(.int, index),
+                .string => |key_name| ctx.retval.set(.string, key_name),
             }
         } else {
-            ctx.ret.set(.null, {});
+            ctx.retval.set(.null, {});
         }
     }
 
@@ -177,7 +177,7 @@ const Collection = struct {
 
     /// PHP: MyPHPExt\Collection::valid(): bool
     pub fn valid(self: *Collection, ctx: phpz.Ctx) void {
-        ctx.ret.set(.bool, self.iterator.current() != null);
+        ctx.retval.set(.bool, self.iterator.current() != null);
     }
 };
 

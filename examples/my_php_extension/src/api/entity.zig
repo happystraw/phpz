@@ -19,7 +19,7 @@ pub fn getId(ctx: phpz.Ctx) !void {
     defer phpz.Zval.raw.tryRelease(&scratch);
 
     const id = try entity.property("id", false, &scratch);
-    ctx.ret.set(.int, phpz.Zval.raw.asUnchecked(id.ptr(), .int));
+    ctx.retval.set(.int, phpz.Zval.raw.asUnchecked(id.ptr(), .int));
 }
 
 pub const Class = phpz.Class("MyPHPExt\\Entity", @This(), .{ .register = register });

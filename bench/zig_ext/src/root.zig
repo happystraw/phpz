@@ -85,7 +85,7 @@ fn benchArraySumExpect(ctx: phpz.Ctx) !void {
         }
     }.callback, .{&sum});
 
-    ctx.ret.set(.int, sum);
+    ctx.retval.set(.int, sum);
 }
 
 // ── 3b. Array sum parse ─────────────────────────────────────────────
@@ -104,5 +104,5 @@ fn benchArraySumParse(ctx: phpz.Ctx) !void {
         }
     }.callback, .{&sum});
 
-    ctx.ret.set(.int, sum);
+    ctx.retval.set(.int, sum);
 }

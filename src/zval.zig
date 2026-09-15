@@ -19,7 +19,7 @@ const errors = @import("errors.zig");
 ///     try ctx.call.parseArgs("l", .{&input});
 ///
 ///     // Return a value to PHP
-///     ctx.ret.set(.int, input * 2);
+///     ctx.retval.set(.int, input * 2);
 /// }
 /// ```
 ///
@@ -325,19 +325,19 @@ pub const Zval = opaque {
     /// ```zig
     /// fn myFunction(ctx: Ctx) !void {
     ///     // Return an integer
-    ///     ctx.ret.set(.int, 42);
+    ///     ctx.retval.set(.int, 42);
     ///
     ///     // Return a string
-    ///     ctx.ret.set(.string, "Hello, PHP!");
+    ///     ctx.retval.set(.string, "Hello, PHP!");
     ///
     ///     // Return a boolean
-    ///     ctx.ret.set(.bool, true);
+    ///     ctx.retval.set(.bool, true);
     ///
     ///     // Return null
-    ///     ctx.ret.set(.null, {});
+    ///     ctx.retval.set(.null, {});
     ///
     ///     // Return a float
-    ///     ctx.ret.set(.float, 3.14);
+    ///     ctx.retval.set(.float, 3.14);
     /// }
     /// ```
     ///

@@ -280,7 +280,7 @@ pub fn requestStartup() !void {
 
 pub fn writeSnapshot(ctx: phpz.Ctx) !void {
     const request = Globals.get();
-    const result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    const result = phpz.Zval.Array.empty(ctx.retval.ptr());
     try request.function_calls.write(result);
     request.errors.write(result);
     request.exceptions.write(result);

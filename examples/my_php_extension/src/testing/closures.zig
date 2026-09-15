@@ -4,20 +4,20 @@ const named_arguments = @import("named_arguments.zig");
 const Handler = @typeInfo(@typeInfo(phpz.c.zif_handler).optional.child).pointer.child;
 
 fn sumHandler(execute_data: ?*phpz.c.zend_execute_data, return_value: ?*phpz.c.zval) callconv(@typeInfo(Handler).@"fn".attrs.@"callconv") void {
-    const ctx: phpz.Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
+    const ctx: phpz.Ctx = .{ .call = .from(execute_data.?), .retval = .from(return_value.?) };
     const args = ctx.call.expectArgs(&.{ .{ .int = .{} }, .{ .int = .{} } }, {}) catch return;
-    ctx.ret.set(.int, args[0] +| args[1]);
+    ctx.retval.set(.int, args[0] +| args[1]);
 }
 
 /// PHP: MyPHPExt\Test\makeHandlerClosure(): Closure
 pub fn makeHandlerClosure(ctx: phpz.Ctx) !void {
     try ctx.call.expectNoArgs();
-    phpz.closure.fromHandler(&sumHandler, ctx.ret);
+    phpz.closure.fromHandler(&sumHandler, ctx.retval);
 }
 
 fn sum(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{ .{ .int = .{} }, .{ .int = .{} } }, {});
-    ctx.ret.set(.int, args[0] +| args[1]);
+    ctx.retval.set(.int, args[0] +| args[1]);
 }
 
 fn empty() void {}
@@ -27,7 +27,7 @@ fn fail() !void {
 }
 
 fn value(ctx: phpz.Ctx) void {
-    ctx.ret.set(.int, 42);
+    ctx.retval.set(.int, 42);
 }
 
 /// PHP: MyPHPExt\Test\makeFnClosure(string $kind = "sum"): Closure
@@ -35,23 +35,23 @@ pub fn makeFnClosure(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{.{ .string = .{ .optional = true } }}, {});
     const kind = args[0] orelse "sum";
     if (std.mem.eql(u8, kind, "sum")) {
-        phpz.closure.fromFn(sum, ctx.ret);
+        phpz.closure.fromFn(sum, ctx.retval);
     } else if (std.mem.eql(u8, kind, "empty")) {
-        phpz.closure.fromFn(empty, ctx.ret);
+        phpz.closure.fromFn(empty, ctx.retval);
     } else if (std.mem.eql(u8, kind, "fail")) {
-        phpz.closure.fromFn(fail, ctx.ret);
+        phpz.closure.fromFn(fail, ctx.retval);
     } else if (std.mem.eql(u8, kind, "value")) {
-        phpz.closure.fromFn(value, ctx.ret);
+        phpz.closure.fromFn(value, ctx.retval);
     } else if (std.mem.eql(u8, kind, "guard_value")) {
-        phpz.closure.fromFn(@import("guard.zig").value, ctx.ret);
+        phpz.closure.fromFn(@import("guard.zig").value, ctx.retval);
     } else if (std.mem.eql(u8, kind, "named")) {
-        phpz.closure.fromFn(named_arguments.collectAll, ctx.ret);
+        phpz.closure.fromFn(named_arguments.collectAll, ctx.retval);
     } else if (std.mem.eql(u8, kind, "checked_named")) {
-        phpz.closure.fromFn(named_arguments.checkedNamedArguments, ctx.ret);
+        phpz.closure.fromFn(named_arguments.checkedNamedArguments, ctx.retval);
     } else if (std.mem.eql(u8, kind, "parse")) {
-        phpz.closure.fromFn(named_arguments.parsedSum, ctx.ret);
+        phpz.closure.fromFn(named_arguments.parsedSum, ctx.retval);
     } else if (std.mem.eql(u8, kind, "parse_variadic")) {
-        phpz.closure.fromFn(named_arguments.parsedVariadicCount, ctx.ret);
+        phpz.closure.fromFn(named_arguments.parsedVariadicCount, ctx.retval);
     } else return error.UnknownClosureKind;
 }
 
@@ -74,5 +74,5 @@ pub fn wrapClosure(ctx: phpz.Ctx) !void {
         phpz.zend.Function.findMethod(ce, args[0])
     else
         phpz.zend.Function.fetch(args[0])) orelse return error.FunctionNotFound;
-    try function.toClosure(ctx.ret, .{ .object = object, .called_scope = scope });
+    try function.toClosure(ctx.retval, .{ .object = object, .called_scope = scope });
 }

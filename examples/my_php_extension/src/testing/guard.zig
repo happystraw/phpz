@@ -35,5 +35,5 @@ pub fn guardResources(ctx: phpz.GuardCtx) !void {
 
 pub fn value(ctx: phpz.GuardCtx) void {
     registerResources(ctx, "closure") catch return;
-    ctx.ret.set(.int, 42);
+    ctx.ret(.int, 42);
 }

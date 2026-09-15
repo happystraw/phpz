@@ -55,7 +55,7 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
         }
     }
     const value = if (comptime spec.reference.optional) parsed orelse {
-        ctx.ret.set(.string, "omitted");
+        ctx.retval.set(.string, "omitted");
         return;
     } else parsed;
 
@@ -76,5 +76,5 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
         },
     };
     if (inner.is(.int)) inner.set(.int, inner.asUnchecked(.int) + 1);
-    ctx.ret.set(.string, @tagName(inner.kind()));
+    ctx.retval.set(.string, @tagName(inner.kind()));
 }

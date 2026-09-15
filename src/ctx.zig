@@ -15,7 +15,7 @@ const Zval = @import("zval.zig").Zval;
 ///
 /// Fields:
 ///   - `call`: parameter parsing, argument access, scope info
-///   - `ret`: set the PHP return value
+///   - `retval`: set the PHP return value
 ///
 /// Example:
 /// ```zig
@@ -24,12 +24,16 @@ const Zval = @import("zval.zig").Zval;
 ///         .{ .int = .{} },
 ///         .{ .int = .{} },
 ///     }, {});
-///     ctx.ret.set(.int, args[0] + args[1]);
+///     ctx.ret(.int, args[0] + args[1]);
 /// }
 /// ```
 pub const Ctx = struct {
     call: *CallFrame,
-    ret: *Zval,
+    retval: *Zval,
+
+    pub inline fn ret(self: Ctx, comptime kind: Zval.Kind, value: Zval.Type(kind)) void {
+        self.retval.set(kind, value);
+    }
 };
 
 /// Use instead of Ctx in a function, method, constructor, or Closure callback
@@ -37,12 +41,16 @@ pub const Ctx = struct {
 /// Do not retain this context beyond the handler or across threads or Fiber suspension.
 pub const GuardCtx = struct {
     call: *CallFrame,
-    ret: *Zval,
+    retval: *Zval,
     guard_scope: *GuardScope,
+
+    pub inline fn ret(self: GuardCtx, comptime kind: Zval.Kind, value: Zval.Type(kind)) void {
+        self.retval.set(kind, value);
+    }
 
     /// Borrow the call frame and return value without guard access.
     pub fn asCtx(self: GuardCtx) Ctx {
-        return .{ .call = self.call, .ret = self.ret };
+        return .{ .call = self.call, .retval = self.retval };
     }
 
     /// Transfer a native resource to this handler on success. Remaining resources

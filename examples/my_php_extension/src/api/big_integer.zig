@@ -50,7 +50,7 @@ const BigInteger = struct {
     pub fn value(self: *const BigInteger, ctx: phpz.Ctx) !void {
         const text = try self.integer.toString(allocator, 10, .lower);
         defer allocator.free(text);
-        ctx.ret.set(.string, text);
+        ctx.retval.set(.string, text);
     }
 
     const ops = struct {

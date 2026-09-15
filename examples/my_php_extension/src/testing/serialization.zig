@@ -11,12 +11,12 @@ const SerializableValue = struct {
 
     /// PHP: MyPHPExt\Test\SerializableValue::value(): int
     pub fn value(self: *const SerializableValue, ctx: phpz.Ctx) void {
-        ctx.ret.set(.int, self.number);
+        ctx.retval.set(.int, self.number);
     }
 
     /// PHP: MyPHPExt\Test\SerializableValue::__serialize(): array
     pub fn __serialize(self: *const SerializableValue, ctx: phpz.Ctx) void {
-        const data = phpz.Zval.Array.init(ctx.ret.ptr(), 1);
+        const data = phpz.Zval.Array.init(ctx.retval.ptr(), 1);
         data.set(.int, "value", self.number);
     }
 

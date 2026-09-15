@@ -12,15 +12,15 @@ pub fn castValue(ctx: phpz.Ctx) !void {
     inline for (.{ .int, .float, .bool, .string, .array, .object }) |kind| {
         if (std.mem.eql(u8, args[1], @tagName(kind))) {
             if (args[2]) {
-                Zval.raw.copy(ctx.ret.ptr(), args[0].ptr());
-                _ = try ctx.ret.convert(kind);
+                Zval.raw.copy(ctx.retval.ptr(), args[0].ptr());
+                _ = try ctx.retval.convert(kind);
             } else {
                 const result = try args[0].cast(kind);
                 if (comptime kind == .string) {
                     defer result.release();
-                    ctx.ret.set(.string, result.slice());
+                    ctx.retval.set(.string, result.slice());
                 } else {
-                    ctx.ret.set(kind, result);
+                    ctx.retval.set(kind, result);
                 }
             }
             return;

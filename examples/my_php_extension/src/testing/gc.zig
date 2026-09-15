@@ -31,9 +31,9 @@ const GcNode = struct {
         if (self.callback.fci.size == 0) return error.MissingCallback;
         const params = .{args[0].ptr().*};
         if (args[1] orelse false) {
-            try self.callback.tryCall(ctx.ret.ptr(), params, null);
+            try self.callback.tryCall(ctx.retval.ptr(), params, null);
         } else {
-            try self.callback.call(ctx.ret.ptr(), params, null);
+            try self.callback.call(ctx.retval.ptr(), params, null);
         }
     }
 

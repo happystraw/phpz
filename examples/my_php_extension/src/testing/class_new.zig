@@ -23,7 +23,7 @@ const Value = struct {
 
     pub fn values(self: *const Value, ctx: phpz.Ctx) !void {
         try ctx.call.expectNoArgs();
-        const result = phpz.Zval.Array.empty(ctx.ret.ptr());
+        const result = phpz.Zval.Array.empty(ctx.retval.ptr());
         try result.append(.int, self.first);
         try result.append(.int, self.second);
     }
@@ -71,5 +71,5 @@ fn create(comptime Class: type, ctx: phpz.Ctx, positional: *phpz.zend.Array, nam
 fn construct(comptime Class: type, ctx: phpz.Ctx, params: anytype, named: ?*phpz.zend.Array, guarded: bool) !void {
     const instance = if (guarded) try Class.tryNew(params, named) else try Class.new(params, named);
     // Transfer the owned object reference to PHP's return slot.
-    ctx.ret.set(.object, instance.object());
+    ctx.retval.set(.object, instance.object());
 }

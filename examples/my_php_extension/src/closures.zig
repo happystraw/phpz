@@ -4,13 +4,13 @@ const Zval = phpz.Zval;
 /// PHP: {closure}(...$args) — accepts two integers and returns their sum.
 fn sum(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{ .{ .int = .{} }, .{ .int = .{} } }, {});
-    ctx.ret.set(.int, args[0] +| args[1]);
+    ctx.retval.set(.int, args[0] +| args[1]);
 }
 
 /// PHP: MyPHPExt\makeSumClosure(): Closure
 pub fn makeSumClosure(ctx: phpz.Ctx) !void {
     try ctx.call.expectNoArgs();
-    phpz.closure.fromFn(sum, ctx.ret);
+    phpz.closure.fromFn(sum, ctx.retval);
 }
 
 const Counter = struct {
@@ -28,7 +28,7 @@ const Counter = struct {
             .{ .int = .{ .optional = true } },
         }, {});
         self.value +|= args[0] orelse 1;
-        ctx.ret.set(.int, self.value);
+        ctx.retval.set(.int, self.value);
     }
 
     fn deinit(self: *Counter) void {
@@ -58,7 +58,7 @@ pub fn makeCounter(ctx: phpz.Ctx) !void {
     backing.value = args[0] orelse 0;
     if (args[1]) |held| Zval.raw.copy(&backing.held, held.ptr());
     const invoke = phpz.zend.Function.findMethod(CounterClass.entry, "__invoke").?;
-    try invoke.toClosure(ctx.ret, .{ .object = owner.object() });
+    try invoke.toClosure(ctx.retval, .{ .object = owner.object() });
 }
 
 const Reference = struct {
@@ -73,7 +73,7 @@ const Reference = struct {
     pub fn __invoke(self: *const Reference, ctx: phpz.Ctx) !void {
         try ctx.call.expectNoArgs();
         // Returning a reference adds an owned reference to the return slot.
-        Zval.raw.copy(ctx.ret.ptr(), @constCast(&self.value));
+        Zval.raw.copy(ctx.retval.ptr(), @constCast(&self.value));
     }
 
     fn deinit(self: *Reference) void {
@@ -100,7 +100,7 @@ pub fn makeReference(ctx: phpz.Ctx) !void {
     defer owner.object().release();
     Zval.raw.copy(&owner.backing().?.value, args[0].ptr());
     const invoke = phpz.zend.Function.findMethod(ReferenceClass.entry, "__invoke").?;
-    try invoke.toClosure(ctx.ret, .{ .object = owner.object() });
+    try invoke.toClosure(ctx.retval, .{ .object = owner.object() });
 }
 
 pub const classes = .{ CounterClass, ReferenceClass };

@@ -16,7 +16,7 @@ pub fn greet(ctx: phpz.Ctx) !void {
 
     var buffer: [4096]u8 = undefined;
     const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{args[0]});
-    ctx.ret.set(.string, result);
+    ctx.retval.set(.string, result);
 }
 
 /// PHP: MyPHPExt\increment(int &$value, int $by = 1): void
@@ -46,7 +46,7 @@ pub fn mapValues(ctx: phpz.Ctx) !void {
         },
     );
 
-    var result = phpz.Zval.Array.empty(ctx.ret.ptr());
+    var result = phpz.Zval.Array.empty(ctx.retval.ptr());
     var iterator = values.fastIterator();
     while (iterator.next()) |entry| {
         var mapped = Zval.raw.undef;

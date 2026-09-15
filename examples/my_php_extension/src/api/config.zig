@@ -4,22 +4,22 @@ const ini = @import("../ini.zig");
 
 /// PHP: MyPHPExt\Config::greeting(): string
 pub fn greeting(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.string, try ini.greeting.get());
+    ctx.retval.set(.string, try ini.greeting.get());
 }
 
 /// PHP: MyPHPExt\Config::maxUsers(): int
 pub fn maxUsers(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.int, try ini.max_users.get());
+    ctx.retval.set(.int, try ini.max_users.get());
 }
 
 /// PHP: MyPHPExt\Config::debugEnabled(): bool
 pub fn debugEnabled(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.bool, try ini.debug.get());
+    ctx.retval.set(.bool, try ini.debug.get());
 }
 
 /// PHP: MyPHPExt\Config::mode(): string
 pub fn mode(ctx: phpz.Ctx) !void {
-    ctx.ret.set(.string, @tagName(try ini.mode.get()));
+    ctx.retval.set(.string, @tagName(try ini.mode.get()));
 }
 
 pub const Class = phpz.Class("MyPHPExt\\Config", @This(), .{});

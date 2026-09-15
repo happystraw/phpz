@@ -181,7 +181,7 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 ///         .{ .int = .{} },
 ///         .{ .int = .{} },
 ///     }, {});
-///     ctx.ret.set(.int, args[0] + args[1]);
+///     ctx.retval.set(.int, args[0] + args[1]);
 /// }
 ///
 /// fn greet(ctx: Ctx) !void {
@@ -190,7 +190,7 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 ///     }, {});
 ///     var buffer: [256]u8 = undefined;
 ///     const greeting = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{args[0]});
-///     ctx.ret.set(.string, greeting);
+///     ctx.retval.set(.string, greeting);
 /// }
 ///
 /// // For bindings distributed across multiple Zig modules:
@@ -239,14 +239,14 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime invoke: anytype)
                     defer scope.deinit();
                     break :blk zend.bailout.run(invoke, .{GuardCtx{
                         .call = .from(execute_data.?),
-                        .ret = .from(return_value.?),
+                        .retval = .from(return_value.?),
                         .guard_scope = &scope,
                     }});
                 } else if (comptime params.len == 0) blk: {
-                    const ctx: Ctx = .{ .call = .from(execute_data.?), .ret = .from(return_value.?) };
+                    const ctx: Ctx = .{ .call = .from(execute_data.?), .retval = .from(return_value.?) };
                     ctx.call.expectNoArgs() catch |err| break :blk err;
                     break :blk invoke();
-                } else invoke(.{ .call = .from(execute_data.?), .ret = .from(return_value.?) }),
+                } else invoke(.{ .call = .from(execute_data.?), .retval = .from(return_value.?) }),
             ) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {

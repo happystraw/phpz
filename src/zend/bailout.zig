@@ -2,7 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig").c;
 
 pub const Error = error{ZendBailout};
-pub const RawCallback = *const fn (?*anyopaque) callconv(.c) void;
+const RawCallback = *const fn (?*anyopaque) callconv(.c) void;
 
 fn Result(comptime Callback: type) type {
     const R = @typeInfo(Callback).@"fn".return_type.?;
@@ -17,11 +17,11 @@ pub inline fn raise() noreturn {
     unreachable;
 }
 
-pub inline fn runRaw(callback: RawCallback, context: ?*anyopaque) Error!void {
+inline fn runRaw(callback: RawCallback, context: ?*anyopaque) Error!void {
     if (c.phpz_zend_try_catch(callback, context)) return error.ZendBailout;
 }
 
-pub inline fn runFirstRaw(callback: RawCallback, context: ?*anyopaque) Error!void {
+inline fn runFirstRaw(callback: RawCallback, context: ?*anyopaque) Error!void {
     if (c.phpz_zend_first_try_catch(callback, context)) return error.ZendBailout;
 }
 
