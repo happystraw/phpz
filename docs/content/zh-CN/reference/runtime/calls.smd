@@ -1,0 +1,47 @@
+---
+.title = "调用 PHP 函数与方法",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/calls",
+.custom = { "section": "运行时接口" },
+---
+
+# [从参数解析 Callable]($heading.id('parse-callable-argument'))
+
+```zig
+pub fn invoke(ctx: phpz.Ctx) !void {
+    var callback: phpz.zend.Callable = .nil;
+    _ = try ctx.call.expectArgs(
+        &.{.{ .callable = .{ .resolve = true } }},
+        .{.{ .target = &callback }},
+    );
+    try callback.call(ctx.retval.ptr(), .{}, null);
+}
+```
+
+对应 Stub 为 `function invoke(callable $callback): mixed`。解析结果借用实参，当前调用内不需要额外缓存清理。跨调用保存时使用 `addref()`，结束时用 `delref()` 平衡，且不要保存指向栈上 `Callable` 的指针。
+
+# [参数和返回值]($heading.id('arguments-and-return-values'))
+
+`call` 的位置参数是 `c.zval` tuple，例如 `.{arg1, arg2}`；最后一个参数是可选的 `*zend.Array` 命名参数表。
+
+```zig
+const number = phpz.Zval.raw.init(.int, 42);
+try callback.call(ctx.retval.ptr(), .{number}, null);
+```
+
+这是接收一个整数的回调调用片段。借用参数必须在整个调用期间有效。返回槽由调用者拥有，接口不会先释放槽位中的旧值。传 null 作为返回槽会丢弃返回值，丢弃过程也可能运行析构器。
+
+命名参数表的字符串键对应参数名；整数键追加位置参数，并且在迭代顺序中必须先于字符串键。重复、未知参数和引用规则交给 Zend 处理。
+
+# [已知函数与方法]($heading.id('known-functions-and-methods'))
+
+`zend.Function.find` / `fetch` 查找函数，`findMethod` 查找类方法。根据调用对象使用 `call`、`callStatic` 或 `callMethod`。对象也提供 `call` 和 `callIfExists`。
+
+`call` 返回 PHP 异常标记，但原生 bailout 会跨过 Zig 栈；需要捕获以完成原生清理时使用 `tryCall` 或 `GuardCtx`。捕获 bailout 后应传播并终止请求，不继续执行 PHP 逻辑。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/callable.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/callable.zig)
+- [src/zend/function.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/function.zig)
+- [src/zend/object.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/object.zig)

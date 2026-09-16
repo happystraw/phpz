@@ -1,0 +1,62 @@
+---
+.title = "所有权与引用计数",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/ownership",
+.custom = { "section": "类型与值" },
+---
+
+“拥有”表示负责释放一份引用，“借用”表示只能在原所有者存活期间使用。Zig 变量离开作用域不会自动释放 PHP 值，普通结构体赋值也不会自动增加 PHP 引用计数。
+
+# [常见接口的差异]($heading.id('interface-differences'))
+
+| 接口 | 对输入或结果的处理 |
+| --- | --- |
+| `Zval.from`、`ptr`、`as` | 借用，不增加引用 |
+| `Zval.raw.copy(dst, src)` | 复制并按需增加引用，保留引用包装 |
+| `Zval.set(.mixed, src)` | 复制解引用后的值，源槽仍然拥有原值 |
+| `Zval.set(.string, bytes)` | 复制字节 |
+| `Zval.set(.array/.object/..., ptr)` | 接收一份引用，不自动 `addref` |
+| `Zval.Array.set(.mixed, key, src)` | 转移一份值，源槽不自动清空 |
+| `String.copy()` | 增加引用，结果需要释放 |
+| `cast(.string/.array/.object)` | 返回拥有的结果 |
+
+释放和计数相关操作：
+
+| 操作 | 含义 |
+| --- | --- |
+| `release()` | 释放当前值拥有的一份引用 |
+| `addref()` / `tryAddref()` | 增加引用计数，调用者拥有新增引用 |
+| `tryDelref()` | 仅在值可计数时减少引用计数 |
+| `Zval.raw.tryRelease(zv)` | 仅释放已初始化的临时 zval |
+
+# [借用数组放入返回值]($heading.id('return-borrowed-array'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+args[0].addref();
+ctx.ret(.array, args[0]);
+```
+
+参数仍由调用帧持有，新增引用交给返回槽。也可以把规格改为 `.array = .{ .zval = true }`，再通过 `ctx.ret(.mixed, args[0].ptr())` 复制值。
+
+# [转移临时值]($heading.id('transfer-temporary-value'))
+
+临时 zval 插入数组成功后，数组成为所有者。由于源槽还保留旧位模式，如需统一清理，应在成功转移后把临时槽重新赋为 `Zval.raw.undef`。有可能失败的写入必须在失败分支释放尚未转移的值。
+
+# [生命周期边界]($heading.id('lifetime-boundaries'))
+
+- 不保留指向调用参数、临时字符串和可变数组元素的裸指针。
+- 数组、对象、字符串和引用包装通常是借用值；需要跨调用帧保留时先 `addref` 或 `copy`。
+- Zig backing 中持有 PHP 值时，复制引用、在 `.deinit` 释放，并通过 `.gc` 报告可能形成环的引用。
+- `addref` 只能延长值的寿命，不能延长栈上 zval 槽位的寿命。
+- `defer` 适用于正常返回和 Zig 错误展开；Zend `longjmp` 会跳过被跨越栈帧中的清理。
+
+更多细节见 [Zval]($link.page('reference/types/zval')) 和 [类型转换]($link.page('reference/types/conversions'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)
+- [src/zval/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zval/array.zig)
+- [src/zend/string.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/string.zig)
+- [src/guard.zig](https://github.com/happystraw/phpz/blob/dev/src/guard.zig)

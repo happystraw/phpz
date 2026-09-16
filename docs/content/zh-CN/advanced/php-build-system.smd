@@ -1,0 +1,37 @@
+---
+.title = "PHP 构建系统",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/php-build-system",
+.custom = { "section": "进阶主题" },
+---
+
+项目可以接入 PHP 的构建流程，由集成文件调用 Zig 编译扩展。
+
+# [生成集成文件]($heading.id('generate-integration-files'))
+
+生成骨架时传 `--with-php-build-system`，得到 `config.m4`、`config.w32`、`Makefile.frag` 和模块头文件。
+
+# [Unix 共享扩展]($heading.id('unix-shared-extensions'))
+
+在生成的扩展目录执行：
+
+```sh
+phpize
+./configure --enable-my_extension
+make
+```
+
+示例扩展名为 `my_extension`。集成文件默认使用 `ReleaseSafe`，可通过 `MY_EXTENSION_ZIG_FLAGS` 调整。
+
+# [内置扩展]($heading.id('built-in-extensions'))
+
+将项目放入 PHP 源码的 `ext/` 后，可在 PHP 构建中启用内置扩展。
+
+直接 `zig build -Dshared=false` 只生成静态产物；必须继续把它链接进 PHP 并启用模块，才算完成内置集成，不能通过 `extension=` 加载静态库。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/config.m4](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/config.m4)
+- [examples/skeleton/config.w32](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/config.w32)
+- [examples/skeleton/Makefile.frag](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/Makefile.frag)

@@ -1,0 +1,38 @@
+---
+.title = "常量",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/constants",
+.custom = { "section": "声明与注册" },
+---
+
+# [声明常量]($heading.id('declare-constants'))
+
+在 Stub 中声明模块或类常量：
+
+```php
+<?php
+namespace Vendor;
+
+/** @var string */
+const VERSION = "1.0.0";
+
+class Counter {
+    /** @var int */
+    public const DEFAULT_STEP = 1;
+
+    /** @var string */
+    public const LABEL = "counter";
+}
+```
+
+生成器输出相应符号注册代码，phpz 在 MINIT 自动调用存在的 `register_<name>_symbols`。类常量随类注册，不需要再手工声明一份同名常量。
+
+公开类型、值及 PHP 版本兼容信息以生成代码为准。类常量随类注册，可通过 PHP 常量访问或反射验证。
+
+修改常量声明后重新生成 arginfo，并通过 PHP 常量访问验证结果。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/module.zig](https://github.com/happystraw/phpz/blob/dev/src/module.zig)
+- [src/stub.zig](https://github.com/happystraw/phpz/blob/dev/src/stub.zig)

@@ -1,0 +1,46 @@
+---
+.title = "数字与布尔值",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/scalars",
+.custom = { "section": "类型与值" },
+---
+
+PHP 标量在这里指 `int`、`float` 和 `bool`，分别映射为 Zig 的 `i64`、`f64` 和 `bool`。读取参数使用 `expectArgs`，写入返回槽使用 `ctx.ret`。
+
+# [读取和返回]($heading.id('read-and-return'))
+
+```zig
+/// PHP: function scale(int $value, float $factor, bool $enabled): float
+pub fn scale(ctx: phpz.Ctx) !void {
+    // args = .{i64, f64, bool}
+    const args = try ctx.call.expectArgs(&.{
+        .{ .int = .{} },
+        .{ .float = .{} },
+        .{ .bool = .{} },
+    }, {});
+    const base: f64 = @floatFromInt(args[0]);
+    const scaled = if (args[2]) base * args[1] else base;
+    ctx.ret(.float, scaled); // return f64
+}
+```
+
+该函数对应 `function scale(int $value, float $factor, bool $enabled): float`，参数分别覆盖 `int`、`float` 和 `bool`。`expectArgs` 按 Stub 声明的类型读取参数；类型不匹配时由 PHP 参数解析报告错误。
+
+# [返回标量]($heading.id('return-scalars'))
+
+以下各行代表不同的返回方式，每次调用只选择需要的一种：
+
+```zig
+ctx.ret(.int, 42);
+ctx.ret(.float, 3.5);
+ctx.ret(.bool, true);
+```
+
+标量直接存入 zval，不需要增加引用计数或单独释放。PHP Stub 的返回类型应与实际写入的类型一致。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/ctx.zig](https://github.com/happystraw/phpz/blob/dev/src/ctx.zig)
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)

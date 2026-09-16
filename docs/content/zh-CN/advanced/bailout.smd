@@ -1,0 +1,71 @@
+---
+.title = "Bailout 与清理边界",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/bailout",
+.custom = { "section": "进阶主题" },
+---
+
+Zend bailout 使用 `longjmp` 跳回引擎保存的边界。被跨过的 Zig 栈帧不会执行 `defer` / `errdefer`。PHP 异常、Zig error union 和 bailout 必须分开处理。
+
+# [捕获边界]($heading.id('catch-boundary'))
+
+`phpz.zend.bailout.run(callback, args)` 在 C `zend_try` / `zend_catch` 中调用已知 Zig 函数，参数是 `std.meta.ArgsTuple` 对应的 tuple。它保留正常返回值，并合并回调错误与 `error.ZendBailout`。
+
+```zig
+fn double(value: u32) u32 {
+    return value * 2;
+}
+```
+
+在函数中调用：
+
+```zig
+const result = try phpz.zend.bailout.run(double, .{@as(u32, 21)});
+ctx.ret(.int, result);
+```
+
+`runFirst` 清除原先的 bailout 目标，只适合最外层边界；普通扩展代码不要随意使用。`runRaw` / `runFirstRaw` 和 `RawCallback` 仅供内部实现使用，不是公开 API。
+
+捕获之后，跳过的局部变量所在栈空间会被复用，不能保存指向这些局部变量的指针。捕获不会补跑已经跳过的清理。
+
+# [GuardCtx 管理原生资源]($heading.id('guardctx-native-resources'))
+
+使用 `fn (phpz.GuardCtx) !void` 函数，包装器会在捕获边界外持有清理作用域：
+
+```zig
+const std = @import("std");
+
+fn freeBytes(bytes: []u8) void {
+    std.heap.c_allocator.free(bytes);
+}
+
+pub fn nativeWork(ctx: phpz.GuardCtx) !void {
+    const bytes = try std.heap.c_allocator.dupe(u8, "work");
+    _ = ctx.guard(bytes, freeBytes) catch |err| {
+        std.heap.c_allocator.free(bytes);
+        return err;
+    };
+    // 后续即使遇到 bailout，作用域也会释放注册的原生缓冲区。
+    ctx.ret(.string, bytes);
+}
+```
+
+注册成功后作用域拥有资源；`get()` 借用，`release()` 立即清理，`take()` 注销并转移所有权。剩余资源按注册逆序清理，避免为同一份资源保留两条释放路径。
+
+# [清理规则]($heading.id('cleanup-rules'))
+
+- 注册失败时调用者仍拥有值；可用 `catch` 在失败分支释放后返回错误。
+- 注册成功后不要再让原始资源的 `errdefer` 在后续错误路径中执行；应把分配和注册封装在辅助函数内，或用明确的失败分支。
+- 清理函数不能调用 PHP、触发 bailout 或继续注册资源。
+- 保存的指针不能指向可能被 `longjmp` 跳过的栈上局部对象。
+- Guard 句柄不能复制，也不能在所属函数结束后继续使用。
+
+`tryCall` / `tryNew` 等接口可以把对应边界的 bailout 返回为错误，用于完成安全的原生清理。之后传播 `ZendBailout`，由包装器重新触发终止；不要继续 PHP 请求、重试被打断的析构，或访问不完整的返回值。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/bailout.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/bailout.zig)
+- [build/phpz_wrapper.c](https://github.com/happystraw/phpz/blob/dev/build/phpz_wrapper.c)
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)
+- [src/guard.zig](https://github.com/happystraw/phpz/blob/dev/src/guard.zig)

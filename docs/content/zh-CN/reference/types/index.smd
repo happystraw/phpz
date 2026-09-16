@@ -1,0 +1,41 @@
+---
+.title = "类型与值",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/index",
+.custom = { "section": "类型与值" },
+---
+
+PHP 参数和返回值以 zval 表示。phpz 用 `Zval` 包装单个 zval，并根据 `Zval.Kind` 将值读取为 Zig 标量、借用切片或 Zend 结构指针。
+
+# [常用对应关系]($heading.id('type-mapping'))
+
+| PHP 值 | PHP C 类型 | `Zval.Kind` | Zig 类型 |
+| --- | --- | --- | --- |
+| `int $a` | `zend_long` | `.int` | `i64` |
+| `float $f` | `double` | `.float` | `f64` |
+| `bool $b` | `zend_bool` | `.bool` | `bool` |
+| `string $s` | `zend_string *` | `.string` | `[]const u8` |
+| `null $n` | — | `.null` | `void` |
+| `array $arr` | `zend_array *` | `.array` | `*phpz.zend.Array` |
+| `object $obj` | `zend_object *` | `.object` | `*phpz.zend.Object` |
+| `resource $res` | `zend_resource *` | `.resource` | `*phpz.zend.Resource` |
+| `&$ref` | `zend_reference *` | `.reference` | `*phpz.zend.Reference` |
+
+表中的 PHP C 类型对应 zval 中的值或 Zend 结构指针，以 phpz 当前支持的 64 位目标为准。
+
+- `int`、`float` 分别按 `zend_long`、`double` 存储。
+- `bool` 不单独存储值，由 zval 类型位 `IS_TRUE` / `IS_FALSE` 表示。
+- `null`、`undef` 没有可读取的值，只能用于类型判断。
+- `string` 按字节处理，不保证 UTF-8；`asUnchecked(.string)` 返回借用字节切片。
+- `array` 是 PHP 的有序键值表，不是 Zig slice；`zend.Array` 提供 Zend 数组视图。
+- `object`、`resource`、`reference` 通过指针访问，生命周期仍由 PHP/Zend 管理。
+
+`Zval.Kind` 是 zval 的类型标签，`Zval.Type(kind)` 给出对应的 Zig 读取类型。读取前先用 `is` 或 `kind` 判断；需要安全读取时用 `as`。`asUnchecked` 只应在类型已确认后使用，返回的切片和 Zend 包装都是借用值，超出原 zval 生命周期前需要复制或增加引用。类型转换使用 `cast` / `convert`，并遵守 PHP 的转换规则，相关细节见 [类型转换]($link.page('reference/types/conversions')) 和 [所有权与引用计数]($link.page('reference/types/ownership'))。
+
+参数解析中的 `.mixed`（无 union）返回借用的 `*Zval`；`Zval.Type(.mixed)` 则返回原始 `*c.zval`。不同接口可能返回裸指针或包装类型，并可能有不同的借用与所有权约定，应以具体签名和所有权说明为准。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)
+- [src/ctx.zig](https://github.com/happystraw/phpz/blob/dev/src/ctx.zig)

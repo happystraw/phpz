@@ -1,0 +1,53 @@
+---
+.title = "运算符与比较",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/operators",
+.custom = { "section": "进阶主题" },
+---
+
+phpz 为有 backing 的类提供 `.operate` 和 `.compare`。示例 `BigInteger` 使用 Zig 大整数实现这些回调。
+
+# [运算回调]($heading.id('operator-callbacks'))
+
+```zig
+fn operate(
+    op: phpz.Operator,
+    lhs: *phpz.Zval,
+    rhs: ?*phpz.Zval,
+    result: *phpz.Zval,
+) !void {
+    _ = op;
+    _ = lhs;
+    _ = rhs;
+    _ = result;
+    return error.Unsupported;
+}
+```
+
+这是一个默认拒绝运算的有效回调骨架。按 `op` 分派，校验操作数类型，并把拥有的结果写入 `result`。一元运算的右操作数可能为空，不要无条件解包。
+
+`error.Unsupported` 转成不支持操作或操作数的 PHP `TypeError`。需要处理交换操作数、赋值形式和结果与输入可能别名的情况。先计算新结果，成功后再交付，避免失败时破坏原对象。
+
+# [比较]($heading.id('comparison'))
+
+比较回调返回 `phpz.Comparison` 或其 error union。返回 `error.Uncomparable` 表示类型不兼容并生成 `TypeError`。数值比较应比较数学值，不能使用字符串字典序来比较大整数。
+
+PHP 不会把所有语法运算都交给 `do_operation`，例如逻辑非 `!` 有自己的引擎路径。不能因为枚举里存在某个操作码就承诺所有 PHP 表达式都可重载。
+
+# [参考用法]($heading.id('usage-examples'))
+
+在综合示例中：
+
+```php
+<?php
+$a = new Vendor\BigInteger("12345678901234567890");
+$b = new Vendor\BigInteger(10);
+echo ($a + $b)->value(), PHP_EOL;
+```
+
+除法、负数位运算、溢出和输入解析的业务语义应在类文档和测试中明确。不要把示例的大整数策略视为所有类的默认行为。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)

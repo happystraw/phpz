@@ -1,0 +1,85 @@
+---
+.title = "环境要求与安装",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/installation",
+.custom = { "section": "开始" },
+---
+
+开发 phpz 扩展需要 Zig 工具链和 PHP 开发环境，支持范围如下：
+
+| 项目 | 支持范围 |
+| --- | --- |
+| Zig | **0.17.0** |
+| PHP | **8.2–8.5**，支持 NTS / ZTS |
+| Linux | x86_64、aarch64 |
+| macOS | x86_64（Intel）、aarch64（Apple Silicon） |
+| Windows | x64，MSVC ABI |
+
+# [Zig]($heading.id('zig-toolchain'))
+
+使用系统包管理器安装 Zig，或从 [Zig 官网](https://ziglang.org/download/) 下载适合系统和架构的工具链，解压后将其目录加入系统 `PATH`。安装版本应符合上方的版本要求。
+
+# [PHP 开发环境]($heading.id('php-development-environment'))
+
+可以使用系统包管理器安装 PHP，也可以从源码构建。扩展开发需要 PHP CLI、tokenizer 扩展和匹配的开发头文件；运行时与开发文件的版本、架构、NTS/ZTS 和 Debug 配置应一致。
+
+## [使用包管理器安装]($heading.id('install-using-a-package-manager'))
+
+根据系统选择对应的安装命令：
+
+```sh
+# Arch Linux
+pacman -S php
+# Debian / Ubuntu
+apt install php-cli php-dev
+# Fedora
+dnf install php-cli php-devel
+# macOS（Homebrew）
+brew install php
+```
+
+Linux / macOS 安装后应能运行 `php` 和 `php-config`，可通过 `php-config --include-dir` 获取开发头文件目录。
+
+## [Windows]($heading.id('windows'))
+
+Windows 下请从 [PHP 官方下载页](https://www.php.net/downloads.php?os=windows)下载与 PHP 运行时匹配的 **Development package**，其中包含扩展开发所需的头文件和导入库。
+
+更多开发包配置和构建说明，参见 [Windows]($link.page('advanced/windows'))。
+
+## [从源码构建]($heading.id('build-php-from-source'))
+
+开发扩展时，推荐从源码构建 **Debug PHP**。`--enable-debug` 会生成调试符号、启用 Zend 内部断言和内存泄漏报告，便于调试和发现扩展中的问题。Debug 构建适合开发与测试，性能测试应使用 Release 构建。
+
+Linux / macOS 的构建流程参见 [PHP Internals Book：Building PHP](https://www.phpinternalsbook.com/php7/build_system/building_php.html)，选择符合上方版本要求的 PHP 源码。
+
+安装编译工具和所需开发依赖后，以下示例从 PHP 8.5 分支构建 Debug PHP，并安装到用户目录：
+
+```sh
+# 克隆源码并切换到稳定分支
+git clone https://github.com/php/php-src.git
+cd php-src
+git checkout PHP-8.5
+./buildconf
+
+PHP_PREFIX="${HOME}/build/php"
+./configure --prefix="${PHP_PREFIX}" \
+    --disable-all \
+    --enable-debug
+make -j
+make install
+export PATH="${PHP_PREFIX}/bin:$PATH"
+php -v
+php-config --include-dir
+```
+
+可按需在 `./configure` 参数中添加：
+
+- `--enable-tokenizer`：启用 tokenizer 扩展；使用此 PHP 运行 Stub 生成工具时必需。
+- `--enable-zts`：启用线程安全支持（ZTS）。
+
+`PATH` 设置仅对当前终端生效。
+
+# [下一步]($heading.id('next-steps'))
+
+环境准备完成后，参照 [Hello World]($link.page('getting-started/hello-world')) 创建自己的第一个 PHP 扩展。

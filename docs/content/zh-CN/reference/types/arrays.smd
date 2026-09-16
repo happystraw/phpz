@@ -1,0 +1,79 @@
+---
+.title = "数组",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/arrays",
+.custom = { "section": "类型与值" },
+---
+
+phpz 提供两层数组包装：
+
+- `phpz.zend.Array` 包装底层 Zend HashTable，适合创建、查找、遍历和修改已有 `zend_array`。
+- `phpz.Zval.Array` 包装持有数组的 zval，适合需要写时复制、或数组必须附着在 zval 槽位的场景。
+
+`Zval.Array.empty()` / `init()` 要求调用者提供 zval 存储。向 PHP 返回数组时，通常直接使用 `ctx.retval.ptr()`。
+
+# [创建返回数组]($heading.id('create-return-array'))
+
+```zig
+/// PHP: function buildArray(): array
+pub fn buildArray(ctx: phpz.Ctx) !void {
+    const result = phpz.Zval.Array.empty(ctx.retval.ptr());
+    result.set(.string, "name", "phpz");
+    result.set(.int, "version", 1);
+    try result.append(.bool, true);
+    // return ["name" => "phpz", "version" => 1, 0 => true]
+}
+```
+
+返回槽拥有该数组，成功返回时不再释放它。`set` 接受字符串键，`setAt` 接受整数键，`append` 使用下一个整数索引。`set` 不返回错误；`setAt` / `append` 失败时由调用者保留并清理传入值。
+
+# [修改输入的副本]($heading.id('modify-input-copy'))
+
+```zig
+/// PHP: function addCount(array $values): array
+pub fn addCount(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .array = .{ .zval = true } },
+    }, {});
+    ctx.ret(.mixed, args[0].ptr());
+
+    const result = try ctx.retval.array();
+    result.separate();
+    result.set(.int, "count", 1);
+    try result.setAt(.int, 0, 2);
+    try result.append(.int, 3);
+}
+```
+
+先把输入复制到返回槽，再 `separate()` 分离共享或不可变数组，最后修改。写入方法不会自动执行分离。分离后必须重新获取元素指针；分离是浅复制，元素中的 PHP 引用仍可能共享。
+
+# [遍历]($heading.id('iteration'))
+
+从参数取得的 `*zend.Array` 是借用值，可用 `iterator()`、`fastIterator()` 或各自的 key/value 变体遍历。
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+var iterator = args[0].fastIterator();
+while (iterator.next()) |entry| {
+    switch (entry.key) {
+        .int => |index| _ = index,
+        .string => |key| _ = key,
+    }
+    // entry.value 是借用 zval，需要延长生命周期时先 copy/addref。
+}
+```
+
+遍历期间不要插入或删除元素，否则表或元素指针可能失效。
+# [写入与所有权]($heading.id('iteration-and-ownership'))
+
+数组 `set(.mixed, key, &value)` 会转移一个 zval 值的所有权，保留引用包装，且不清空源槽。成功后不能再释放这份引用。借用值先 `copy` 或增加引用；失败的 `append` / `setAt` 仍由调用者清理。
+
+从数组取出的值同样是借用值；在数组被修改或释放后不得继续使用。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zval/array.zig)
+- [src/zend/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/array.zig)
+- [examples/my_php_extension/src/testing/arrays.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/testing/arrays.zig)
+- [examples/my_php_extension/src/functions.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/functions.zig)

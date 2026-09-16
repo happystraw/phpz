@@ -1,0 +1,75 @@
+---
+.title = "对象",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/objects",
+.custom = { "section": "类型与值" },
+---
+
+phpz 提供两层对象包装：
+
+- `phpz.zend.Object` 包装底层 `zend_object *`，用于属性访问、方法调用和对象判断。
+- `phpz.Zval.Object` 包装持有对象的 zval，可通过 `zval.object()` 获取，再调用 `.zendObject()` 取得底层对象指针。
+
+`ctx.call.this()` 返回当前 `*zend.Object`；`ctx.call.thisValue()` 返回当前 `*Zval.Object`。函数参数和属性读取结果通常是借用值。
+
+# [读取属性]($heading.id('read-properties'))
+
+```zig
+const object = ctx.call.this() orelse return;
+
+var scratch = phpz.Zval.raw.undef;
+defer phpz.Zval.raw.tryRelease(&scratch);
+
+const name = try object.property("name", false, &scratch);
+ctx.ret(.string, try name.as(.string));
+```
+
+`property()` 返回的指针可能借用对象自身，也可能指向调用者提供的 `scratch`。属性读取可能触发 `__get`、可见性检查和 PHP 异常；如果结果需要长期保存，先复制或增加引用，并在释放对象和临时槽之前完成。
+
+# [写入与检查属性]($heading.id('write-and-check-properties'))
+
+```zig
+try object.setProperty(.string, "name", "phpz");
+try object.unsetProperty("name");
+const exists = try object.hasProperty("name", .exists);
+```
+
+| 操作 | 含义 |
+| --- | --- |
+| `property(name, silent, scratch)` | 通过对象处理器读取属性 |
+| `readStdProperty(...)` | 绕过自定义处理器，使用标准属性读取 |
+| `setProperty(kind, name, value)` | 通过对象处理器写入属性 |
+| `hasProperty(name, check)` / `hasStdProperty(...)` | 检查 `isset` / `empty` / `property_exists` |
+| `unsetProperty(name)` / `unsetStdProperty(name)` | 删除属性 |
+
+`.mixed` 属性值必须已经解引用且不能是 `.reference`；引用属性应传 `reference.val()`。`.array`、`.object`、`.resource` 等原生写入辅助函数可能在调用返回后释放传入引用，借用值应先 `addref` 或 `copy`。写入可能触发用户代码、类型检查和异常，失败时返回 `error.PhpException`。
+
+# [创建与构造]($heading.id('creation-and-construction'))
+
+- `zend.Object.init(ce)`：通过 `object_init_ex` 创建实例，不调用 PHP 构造器。
+- `zend.Object.new(ce, params, named_params)`：创建实例并调用构造器。
+- `zend.Object.tryNew(...)`：与 `new` 相同，但把 Zend bailout 转为 `error.ZendBailout`。
+- `zend.Object.std()`：创建 `stdClass`。
+- `clone()`：遵循对象的克隆处理器。
+
+这些操作成功后返回拥有的对象引用。可以 `release()`，或通过 `ctx.ret(.object, object)` 转移给返回槽。创建和构造可能触发 Zend bailout，相关边界见 [Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+# [对象操作]($heading.id('object-operations'))
+
+```zig
+const class = object.class();
+const is_user = object.instanceof(user_class);
+
+try object.call("methodname", null, .{arg1, arg2}, null);
+try object.tryCall("methodName", null, .{}, null);
+```
+
+`call` / `tryCall` 的方法名必须使用 PHP 存储的小写形式。`class()` 和 `instanceof()` 返回/使用借用指针；对象方法调用可能抛出 `error.PhpException`。
+
+类注册与 Zig backing 是另一层职责，见[类、属性与方法]($link.page('reference/registration/classes'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/object.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/object.zig)
+- [src/zval/object.zig](https://github.com/happystraw/phpz/blob/dev/src/zval/object.zig)

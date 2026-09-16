@@ -1,0 +1,88 @@
+---
+.title = "Zval",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/zval",
+.custom = { "section": "类型与值" },
+---
+
+`phpz.Zval` 是对 `*c.zval` 的零开销包装，不会自动分配存储，也不会自动增加引用计数或释放值。Zig 函数的 `ctx.retval` 是 PHP 提供的返回槽，`ctx.ret(kind, value)` 等价于 `ctx.retval.set(kind, value)`。
+
+# [本地临时值]($heading.id('local-temporary-values'))
+
+```zig
+var temporary = phpz.Zval.raw.undef;
+defer phpz.Zval.raw.tryRelease(&temporary);
+
+const value = phpz.Zval.from(&temporary);
+value.set(.string, "phpz");
+ctx.ret(.mixed, value.ptr());
+```
+
+临时 zval 从 `undef` 开始，`set(.string, ...)` 让临时值拥有一个新字符串。`ctx.ret(.mixed, ...)` 把解引用后的值复制到返回槽并按需增加引用，因此临时值仍需在离开作用域前释放。`tryRelease` 只释放已初始化的值，适合清理可能保持 `undef` 的临时槽。
+
+这里的 Zig `defer` 不会被原生 Zend bailout 覆盖。需要处理 bailout 边界时，见 [Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+# [设置值]($heading.id('set-values'))
+
+`set(kind, value)` 负责写入 zval 的类型和值。它不会先析构槽位中的旧值；覆盖已经拥有内容的 zval 前，必须先释放旧内容。
+
+| `kind` | Zig 参数类型 | 行为 |
+| --- | --- | --- |
+| `.undef` | `{}` | 写入 Zend 内部未定义状态，不适合公开返回 |
+| `.null` | `{}` | 写入 PHP `null` |
+| `.int` | `i64` | 直接存储整数 |
+| `.float` | `f64` | 直接存储浮点数 |
+| `.bool` | `bool` | 通过类型位表示 `true` / `false` |
+| `.string` | `[]const u8` | 按长度复制字节数据，新 zval 拥有字符串 |
+| `.array` | `*phpz.zend.Array` | 保存指针，不自动 `addref` |
+| `.object` | `*phpz.zend.Object` | 保存指针，不自动 `addref` |
+| `.resource` | `*phpz.zend.Resource` | 保存指针，不自动 `addref` |
+| `.reference` | `*phpz.zend.Reference` | 保存指针，不自动 `addref` |
+| `.mixed` | `*c.zval` | 复制解引用后的值，并按需增加引用 |
+
+`.indirect` 和 `.ptr` 是 Zend 内部状态，不能通过 `set` 直接写入。向公开返回槽写入时，优先使用 `ctx.ret(kind, value)`。
+
+# [读取与类型检查]($heading.id('read-and-type-check'))
+
+| 操作 | 含义 |
+| --- | --- |
+| `kind()` | 返回 `Zval.Kind` |
+| `is(kind)` | 判断 zval 是否为指定类型 |
+| `as(kind)` | 检查类型并读取；不匹配返回 `error.TypeMismatch` |
+| `asOrDefault(kind, default)` | `as` 失败时返回默认值 |
+| `asUnchecked(kind)` | 不检查类型读取，只应在类型已确认后使用 |
+| `ptr()` | 借用底层 `*c.zval` |
+
+```zig
+if (value.is(.int)) {
+    const n = value.asUnchecked(.int);
+    _ = n;
+}
+
+const count = value.asOrDefault(.int, 0);
+```
+
+需要 PHP 显式转换语义时使用 `cast(kind)`；需要原地替换当前 zval 时使用 `convert(kind)`。转换与源槽、引用计数的关系见[类型转换]($link.page('reference/types/conversions'))。
+
+# [所有权与释放]($heading.id('ownership-and-release'))
+
+读取得到的数组、对象、资源和引用包装通常是借用值；需要延长生命周期时显式 `addref` 或 `copy`。释放操作如下：
+
+| 操作 | 含义 |
+| --- | --- |
+| `release()` | 释放当前 zval 拥有的一份引用 |
+| `addref()` / `tryAddref()` | 增加引用计数，结果由调用者拥有 |
+| `tryDelref()` | 仅在值使用引用计数时减少引用计数 |
+| `Zval.raw.copy(dst, src)` | 复制 zval 并按需增加引用，保留引用包装 |
+| `Zval.raw.copyDeref(dst, src)` | 解引用源后复制，并按需增加引用 |
+| `Zval.raw.copyValue(dst, src)` | 只复制类型和值，不增加引用 |
+| `Zval.raw.tryRelease(zv)` | 仅释放已初始化的临时 zval |
+
+释放后不要再把原位内容当作有效值使用。
+
+`undef` 是 Zend 内部的未定义状态，不等同于 PHP `null`。公开返回空值时使用 `set(.null, {})`。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)

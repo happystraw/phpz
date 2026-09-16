@@ -1,0 +1,40 @@
+---
+.title = "How it works",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/how-it-works",
+.custom = { "section": "Getting started" },
+---
+
+# [File responsibilities]($heading.id('file-responsibilities'))
+
+| File | Purpose |
+| --- | --- |
+| `build.zig.zon` | Package name, version, and pinned dependencies |
+| `build.zig` | Translate PHP C headers, compile and link the extension, and provide tool steps |
+| `my_php_extension.stub.php` | Public PHP API, types, default values, and metadata |
+| `my_php_extension_arginfo.h` | Generated arginfo, function tables, and registration functions |
+| `my_php_extension.h` | Include `phpz.h` and the generated headers |
+| `src/root.zig` | Implement functions and classes, and declare the module |
+| `tests/*.phpt` | Verify extension behavior in real PHP processes |
+| `modules/` | Build output for loading into local PHP |
+
+# [Three stages]($heading.id('three-stages'))
+
+1. **Generation**: `gen_stub.php` turns the Stub into arginfo and registration functions. Run it explicitly after changing signatures.
+2. **Compilation**: `Phpz.init` translates C headers; `phpz.functions` and `phpz.Class` bind implementations; `phpz.module` creates the module entry point.
+3. **Runtime**: PHP loads the module. During MINIT, it registers symbols, INI entries, and classes from `module.classes`, then runs the custom startup hook.
+
+A normal `zig build` uses existing arginfo and does not run `gen-stub` automatically. Update the Stub instead of editing generated headers to change signatures.
+
+# [Example projects]($heading.id('example-projects'))
+
+- `examples/skeleton`: a minimal structure to copy and understand.
+- `examples/my_php_extension`: broader examples covering properties, inheritance, closures, GC, operators, and test tools.
+
+The PHP build system files `config.m4`, `config.w32`, `Makefile.frag`, and `php_my_php_extension.h` are optional. Enable them with `--with-php-build-system` when generating the project.
+
+# [Source and examples]($heading.id('source-and-examples'))
+
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [src/module.zig](https://github.com/happystraw/phpz/blob/dev/src/module.zig)

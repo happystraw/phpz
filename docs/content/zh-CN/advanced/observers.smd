@@ -1,0 +1,44 @@
+---
+.title = "观察器",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/observers",
+.custom = { "section": "进阶主题" },
+---
+
+观察器用于收集函数调用、错误和异常信息。通过模块的 `.observer` 在启动阶段注册。
+
+# [函数调用]($heading.id('function-calls'))
+
+```zig
+fn begin(call: *phpz.CallFrame) void {
+    _ = call;
+    Globals.get().calls += 1;
+}
+
+const observer: phpz.observer.Config = .{
+    .fcall = .{ .begin = begin },
+};
+```
+
+这里的 `Globals` 使用[模块全局变量]($link.page('advanced/globals'))章节中的定义。可以再提供 `end(call, retval)`，返回值指针可能为空。
+
+`filter(function)` 在 Zend 首次安装该函数的观察处理器时执行，结果会缓存。它不能依赖每次调用或不断变化的请求状态；按请求是否采样的判断应放在实际回调中。
+
+# [错误与异常]($heading.id('errors-and-exceptions'))
+
+- `.errors.observe` 接收 `phpz.observer.Error.Info`，包含级别、文件、行号和消息。
+- `.exception.observe` 接收借用的异常对象。
+- 错误可通过 `.errors.filter` 按级别过滤。
+
+消息、文件名和回调参数都是借用数据。保留文本需要复制；保留对象需要持有引用并安排释放。
+
+# [控制开销与重入]($heading.id('overhead-and-reentrancy'))
+
+回调运行在引擎执行路径中。保持操作短小，使用有界存储，避免在观察回调中调用 PHP 导致递归观察。耗时统计还需处理嵌套调用与异常结束，不应简单把 begin/end 当作所有场景下完全对称的业务事件。
+
+综合示例通过模块全局变量收集计数和采样耗时，在 RINIT 清空统计，并排除自己的指标查询接口。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/observer.zig](https://github.com/happystraw/phpz/blob/dev/src/observer.zig)

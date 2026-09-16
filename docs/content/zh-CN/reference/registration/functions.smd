@@ -1,0 +1,273 @@
+---
+.title = "函数、参数与返回值",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/functions",
+.custom = { "section": "声明与注册" },
+---
+
+# [绑定函数]($heading.id('bind-functions'))
+
+简单工程使用 `phpz.functions(Api, .{})` 导出容器中的全部公开函数。这些函数位于 PHP 命名空间时，用 `.namespace` 指定前缀：
+
+```zig
+comptime {
+    phpz.functions(Api, .{ .namespace = "Vendor" });
+}
+```
+
+对应的 Stub 可以是：
+
+```php
+<?php
+namespace Vendor;
+function greet(string $name): string {}
+```
+
+需要逐个映射、跨多个 Zig 容器或 PHP 名称与 Zig 名称不一致时，使用 `namedFunctions`：
+
+```zig
+comptime {
+    phpz.namedFunctions(.{
+        .hello = hello,
+        .@"Vendor\\greet" = greet,
+    });
+}
+```
+
+Zig 字符串里的反斜杠需要转义。映射必须覆盖 Stub 中全部需要具体实现的函数，键名要与 Stub 中的完整 PHP 名称精确匹配。辅助函数保持私有，避免自动导出。
+
+# [参数与返回值]($heading.id('arguments-and-return-values'))
+
+支持 `fn () void/!void`、`fn (phpz.Ctx) void/!void` 以及带清理保护的 `GuardCtx`。无上下文的函数自动检查不接受参数。
+
+```zig
+pub fn greet(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+    }, {});
+    ctx.ret(.string, args[0]);
+}
+```
+
+`expectArgs` 根据规格计算参数数量，返回带类型的 tuple。常规标量规格检查当前 zval 类型，不应假定它会接受字符串数字并自动转换；需要显式转换时在 API 中说明并使用 `cast`。可选值与可空值见[对应章节]($link.page('reference/types/nullable'))。
+
+`ctx.call.arg(1)` 使用从 1 开始的参数位置，属于底层借用接口，应先检查数量和类型。
+
+`Ctx` 和 `GuardCtx` 都提供 `ctx.ret(kind, value)`，等价于 `ctx.retval.set(kind, value)`，参数类型和所有权规则相同。`ctx.retval` 是 `*phpz.Zval` 返回槽，调用底层接口时可使用 `ctx.retval.ptr()`。
+
+`ret` 只写入 PHP 返回值，不会结束 Zig 函数；需要立即结束时使用 `return ctx.ret(.int, 42);`。
+
+# [参数解析类型]($heading.id('argument-parsing-types'))
+
+`expectArgs` 的第一个参数是 `ExpectArgKind.Spec` 数组，第二个参数提供 `callable`、`object instanceof` 等运行时扩展。规格里的通用选项：
+
+| 选项 | 适用类型 | 含义 |
+| --- | --- | --- |
+| `optional = true` | 除 `.null` 外 | 参数可以缺省；结果外层为 `?T` |
+| `nullable = true` | 除 `.reference`、`.mixed` 外 | 显式传入 `null` 时返回 `CallFrame.Nullable(T)` |
+| `zval = true` | `.int`、`.float`、`.bool`、`.string`、`.array`、`.object`、`.resource` | 返回借用的 `*Zval`，而不是解析后的 Zig 值 |
+
+可选参数必须排在必选参数之后。`.null` 不能单独作为参数类型；需要区分缺省、显式 `null` 和具体值时，使用 `optional + nullable` 或 `.mixed`。
+
+## [.int]($heading.id('expect-int'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`i64`
+- `nullable`：`CallFrame.Nullable(i64)`
+- `optional + nullable`：`?CallFrame.Nullable(i64)`
+
+```zig
+.{ .int = .{} } // i64
+.{ .int = .{ .optional = true } } // ?i64
+.{ .int = .{ .nullable = true } } // CallFrame.Nullable(i64)
+.{ .int = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(i64)
+.{ .int = .{ .zval = true } } // *Zval
+```
+
+## [.float]($heading.id('expect-float'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`f64`
+- `nullable`：`CallFrame.Nullable(f64)`
+- `optional + nullable`：`?CallFrame.Nullable(f64)`
+
+```zig
+.{ .float = .{} } // f64
+.{ .float = .{ .optional = true } } // ?f64
+.{ .float = .{ .nullable = true } } // CallFrame.Nullable(f64)
+.{ .float = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(f64)
+.{ .float = .{ .zval = true } } // *Zval
+```
+
+## [.bool]($heading.id('expect-bool'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`bool`
+- `nullable`：`CallFrame.Nullable(bool)`
+- `optional + nullable`：`?CallFrame.Nullable(bool)`
+
+```zig
+.{ .bool = .{} } // bool
+.{ .bool = .{ .optional = true } } // ?bool
+.{ .bool = .{ .nullable = true } } // CallFrame.Nullable(bool)
+.{ .bool = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(bool)
+.{ .bool = .{ .zval = true } } // *Zval
+```
+
+## [.string]($heading.id('expect-string'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`[]const u8`，借用 PHP 字符串
+- `nullable`：`CallFrame.Nullable([]const u8)`
+- `optional + nullable`：`?CallFrame.Nullable([]const u8)`
+- `zval = true`：`*Zval`
+
+```zig
+.{ .string = .{} } // []const u8
+.{ .string = .{ .optional = true } } // ?[]const u8
+.{ .string = .{ .nullable = true } } // CallFrame.Nullable([]const u8)
+.{ .string = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable([]const u8)
+.{ .string = .{ .zval = true } } // *Zval
+```
+
+## [.array]($heading.id('expect-array'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`*zend.Array`，借用
+- `nullable`：`CallFrame.Nullable(*zend.Array)`
+- `optional + nullable`：`?CallFrame.Nullable(*zend.Array)`
+- `zval = true`：`*Zval`
+
+```zig
+.{ .array = .{} } // *zend.Array
+.{ .array = .{ .optional = true } } // ?*zend.Array
+.{ .array = .{ .nullable = true } } // CallFrame.Nullable(*zend.Array)
+.{ .array = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(*zend.Array)
+.{ .array = .{ .zval = true } } // *Zval
+```
+
+## [.object]($heading.id('expect-object'))
+
+- 选项：`optional`、`nullable`、`zval`、`instanceof`
+- 基础返回类型：`*zend.Object`，借用
+- `instanceof = true`：需要 runtime `.{ .type = class_entry }`，校验对象是否属于指定类/接口
+- `nullable`：`CallFrame.Nullable(*zend.Object)`
+- `optional + nullable`：`?CallFrame.Nullable(*zend.Object)`
+- `zval = true`：`*Zval`
+
+```zig
+.{ .object = .{} } // *zend.Object
+.{ .object = .{ .optional = true } } // ?*zend.Object
+.{ .object = .{ .nullable = true } } // CallFrame.Nullable(*zend.Object)
+.{ .object = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(*zend.Object)
+.{ .object = .{ .zval = true } } // *Zval
+.{ .object = .{ .instanceof = true } } // *zend.Object；需要 runtime .type
+```
+
+`instanceof` 需要把对应 class entry 放入与 spec 位置一致的 runtime tuple：
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .object = .{ .instanceof = true } },
+}, .{
+    .{ .type = UserClass.entry },
+});
+
+const user: *phpz.zend.Object = args[0];
+```
+
+## [.resource]($heading.id('expect-resource'))
+
+- 选项：`optional`、`nullable`、`zval`
+- 基础返回类型：`*zend.Resource`，借用
+- `nullable`：`CallFrame.Nullable(*zend.Resource)`
+- `optional + nullable`：`?CallFrame.Nullable(*zend.Resource)`
+- `zval = true`：`*Zval`
+
+```zig
+.{ .resource = .{} } // *zend.Resource
+.{ .resource = .{ .optional = true } } // ?*zend.Resource
+.{ .resource = .{ .nullable = true } } // CallFrame.Nullable(*zend.Resource)
+.{ .resource = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(*zend.Resource)
+.{ .resource = .{ .zval = true } } // *Zval
+```
+
+## [.reference]($heading.id('expect-reference'))
+
+- 选项：`optional`、`type`、`result`
+- `type = .int` 等：校验被引用值的类型
+- `result = .reference`：返回 `*zend.Reference`
+- `result = .zval`：返回外层引用 `*Zval`
+- `result = .value`：返回被引用值槽 `*Zval`
+- `optional = true`：外层为 `?T`
+
+```zig
+.{ .reference = .{} } // *zend.Reference
+.{ .reference = .{ .optional = true } } // ?*zend.Reference
+.{ .reference = .{ .type = .int, .result = .value } } // *Zval；被引用值
+.{ .reference = .{ .result = .zval } } // *Zval；外层引用
+```
+
+## [.mixed]($heading.id('expect-mixed'))
+
+- 选项：`optional`、`unions`
+- 无 `unions`：返回借用的 `*Zval`；`optional` 时为 `?*Zval`
+- `unions = &.{ .int, .string }`：返回带 `.int` / `.string` 标签的 Zig union
+- `optional = true`：`?Union`
+- `.mixed` 不能出现在 `unions` 中，也不能与 `.reference` 或 `.callable` 组成 union
+
+```zig
+.{ .mixed = .{} } // *Zval
+.{ .mixed = .{ .optional = true } } // ?*Zval
+.{ .mixed = .{ .unions = &.{ .int, .string } } } // union { int: i64, string: []const u8 }
+.{ .mixed = .{ .optional = true, .unions = &.{ .int, .string } } } // ?Union
+```
+
+## [.callable]($heading.id('expect-callable'))
+
+- 选项：`optional`、`nullable`、`resolve`
+- 基础返回类型：借用的 `*Zval`
+- `nullable`：`CallFrame.Nullable(*Zval)`
+- `optional`：`?*Zval` 或 `?CallFrame.Nullable(*Zval)`
+- `resolve = true`：需要 runtime `.{ .target = &callable }`，解析为 `zend.Callable`
+
+```zig
+.{ .callable = .{} } // *Zval
+.{ .callable = .{ .optional = true } } // ?*Zval
+.{ .callable = .{ .nullable = true } } // CallFrame.Nullable(*Zval)
+.{ .callable = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(*Zval)
+.{ .callable = .{ .resolve = true } } // *Zval；需要 runtime .target
+```
+
+`resolve` 需要提供可写的 `zend.Callable` 目标：
+
+```zig
+var target: phpz.zend.Callable = .nil;
+const args = try ctx.call.expectArgs(&.{
+    .{ .callable = .{ .resolve = true } },
+}, .{
+    .{ .target = &target },
+});
+
+// args[0] 是借用的 *Zval；target 已解析为可调用对象。
+```
+
+# [命名参数与可变参数]($heading.id('named-and-variadic-arguments'))
+
+普通命名参数由 Zend 根据 Stub 参数名放入对应槽位。额外的命名可变参数在单独的表中：
+
+- `expectArgs` 默认拒绝额外命名参数。
+- `expectArgsAllowExtraNamed` 允许它们存在，但不校验表内值，也不允许超出规格长度的位置参数。
+- `extraNamedArgs()` 获取该表；`args()` 读取位置槽位。
+
+真正的 `...$args` 函数需要自行检查位置参数和额外命名参数，不能只遍历 `args()` 就认为收集了全部实参。
+
+# [错误传播]($heading.id('error-propagation'))
+
+`try` 把解析和调用错误交给包装器。已有 PHP 异常被保留；普通 Zig 错误会转成 PHP `Error`；`ZendBailout` 和 `OutOfMemory` 重新触发 bailout。不要在错误后继续构造正常返回值。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)
+- [src/ctx.zig](https://github.com/happystraw/phpz/blob/dev/src/ctx.zig)

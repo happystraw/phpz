@@ -1,0 +1,41 @@
+---
+.title = "模块全局变量",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/globals",
+.custom = { "section": "进阶主题" },
+---
+
+# [声明状态]($heading.id('declare-state'))
+
+```zig
+const State = struct {
+    calls: u64 = 0,
+};
+const Globals = phpz.ModuleGlobals(State);
+
+fn requestStartup() !void {
+    Globals.get().calls = 0;
+}
+```
+
+模块配置中加入 `.globals = Globals` 和 `.request_startup_fn = requestStartup`。通过 `Globals.get()` 访问当前实例，不使用全局裸指针缓存其地址。
+
+# [线程与请求]($heading.id('threads-and-requests'))
+
+NTS 使用模块的直接存储；ZTS 通过 TSRM 获取当前线程的实例。`ModuleGlobals` 管理的是扩展生命周期的状态，字段不会天然在每次请求开始时全部重置。请求统计应在 RINIT 显式归零，请求资源在对应结束路径释放。
+
+线程隔离不等于任意对象可以跨线程使用。PHP 值、对象、超全局变量和调用帧仍受引擎线程及请求生命周期约束。ZTS 不允许把这些借用值交给任意 Zig 工作线程执行 PHP 操作。
+
+# [INI 绑定]($heading.id('ini-bindings'))
+
+`Globals.iniField("field")` 可作为类型化 INI 的 `.bind`，配置读取和更新作用于当前全局变量实例。请求初始化时不要粗暴覆盖整个状态而意外丢失已设置的 INI 值；综合示例分别重置统计字段并保留 `mode`。
+
+# [验证范围]($heading.id('validation-scope'))
+
+使用相同的 PHP 头文件、运行时和 NTS/ZTS 配置构建。NTS CLI 上通过的测试不能证明 ZTS 的线程行为；需要对应 ZTS PHP 实际加载和运行验证。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/module.zig](https://github.com/happystraw/phpz/blob/dev/src/module.zig)
+- [src/globals.zig](https://github.com/happystraw/phpz/blob/dev/src/globals.zig)

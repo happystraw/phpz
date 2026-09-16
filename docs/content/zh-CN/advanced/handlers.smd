@@ -1,0 +1,38 @@
+---
+.title = "自定义对象处理器",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/handlers",
+.custom = { "section": "进阶主题" },
+---
+
+多数扩展可以用普通 PHP 方法和属性实现。需要改变 Zend 对对象的底层操作时，通过 `phpz.Class` 的 `.handlers` 提供 `phpz.ObjectHandlers` 覆盖。
+
+# [选择入口]($heading.id('choose-entry-point'))
+
+| 需求 | 优先入口 |
+| --- | --- |
+| backing 初始化、析构、克隆 | `.init`、`.deinit`、`.clone` |
+| 向 GC 报告引用 | `.gc` |
+| 算术或位运算 | `.operate` |
+| 比较 | `.compare` |
+| 其他原生对象语义 | `.handlers` 中对应 Zend 回调 |
+
+这些 backing 选项要求非空 Zig struct。回调签名必须与当前 PHP 头文件匹配；直接照抄其他 PHP 版本的函数指针可能导致 ABI 错误。
+
+# [冲突规则]($heading.id('conflict-rules'))
+
+高层 `.gc` 与 `.handlers.get_gc` 不能同时设置；`.operate` 与 `.handlers.do_operation`、`.compare` 与 `.handlers.compare` 也分别冲突。选择一个负责该行为的入口。
+
+# [属性处理器边界]($heading.id('property-handler-boundaries'))
+
+通过 `Object.property`、`setProperty`、`properties` 等操作对象时，可能进入自定义处理器或 PHP 用户代码。借用属性表不能直接释放；处理器返回的临时属性需要保持 scratch 存活。不要通过读写裸属性表绕过可见性、类型或 lazy 初始化语义。
+
+实现回调前检查 `src/class.zig` 的字段签名和安装方式，再检查目标 PHP 的 `Zend/zend_object_handlers.h`。验证应包含正常读写、异常、析构重入和对象生命周期结束等实际调用路径。
+
+相关 PHPT 已覆盖属性处理器、lazy 初始化、克隆及 bailout 边界，可作为自定义行为的测试参考。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)
+- [src/zend/object.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/object.zig)

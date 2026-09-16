@@ -1,0 +1,56 @@
+---
+.title = "字符串",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/strings",
+.custom = { "section": "类型与值" },
+---
+
+PHP 字符串是二进制安全的字节序列，包含显式长度，可以保存任意字节，包括内嵌 `\0`。参数解析得到的 `[]const u8` 借用当前 zval；需要跨调用帧保留时，应先复制。
+
+# [读取和返回]($heading.id('read-and-return'))
+
+```zig
+/// PHP: function echoBytes(string $value): string
+pub fn echoBytes(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+    }, {});
+    ctx.ret(.string, args[0]);
+}
+```
+
+`expectArgs` 返回的 `[]const u8` 只在当前调用帧有效。`ctx.ret(.string, slice)` 会按长度复制数据，因此可以安全返回局部缓冲区或借用切片，也不会在第一个 `\0` 处截断。
+
+# [Zend 字符串]($heading.id('zend-strings'))
+
+```zig
+const value = phpz.zend.String.init("hello", false);
+defer value.release();
+
+ctx.ret(.string, value.slice());
+```
+
+`String.init` 返回一个新的 `*zend.String`；`persistent = false` 表示请求内分配，完成后需要调用 `release()`。`slice()` 返回借用视图，`copy()` 会增加引用并返回需要释放的字符串，`String.from` 只包装已有指针且不增加引用。
+
+# [常用操作]($heading.id('common-operations'))
+
+| 方法 | 作用 |
+| --- | --- |
+| `toLower` / `toUpper` | 返回新的 Zend 字符串，调用者负责释放 |
+| `concat` / `concat3` | 按字节拼接并返回新字符串 |
+| `equals` / `startsWith` | 按字节比较 |
+| `hash` | 获取 Zend 字符串哈希 |
+
+这些方法不改变原字符串。返回 `*zend.String` 的操作都需要在不再使用时 `release()`，除非把所有权转移给其他 Zend 接口。
+
+# [字节与文本]($heading.id('bytes-and-text'))
+
+- 字符长度、大小写和编码转换需要按具体协议确定语义；Zend 字符串本身不保证 UTF-8。
+- `cstr()` 返回零终止指针，适合 C 字符串接口；遇到内嵌 `\0` 时会提前截断，完整数据应使用 `len()` 或 `slice()`。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/string.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/string.zig)
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)

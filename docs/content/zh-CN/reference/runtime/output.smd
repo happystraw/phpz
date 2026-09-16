@@ -1,0 +1,49 @@
+---
+.title = "输出与 phpinfo",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/output",
+.custom = { "section": "运行时接口" },
+---
+
+# [PHP 输出]($heading.id('php-output'))
+
+```zig
+pub fn hello() void {
+    _ = phpz.printf("Hello from Zig!\n", .{});
+}
+```
+
+`phpz.printf` 调用 `php_printf`，进入 PHP 的输出路径。日志调试使用的 `std.debug.print` 与它不同，不能用来替代 PHP 返回值或面向调用者的输出。
+
+格式参数使用 C printf 约定。不要直接把非零终止的任意 slice 指针交给 `%s`。二进制内容优先通过 `ctx.ret(.string, bytes)` 返回。
+
+# [扩展信息]($heading.id('extension-information'))
+
+在模块配置中指定 `.info_fn = info`：
+
+```zig
+fn info(module: *phpz.ModuleEntry) void {
+    phpz.info.table.start();
+    phpz.info.table.header(.{ "extension support", "enabled" });
+    phpz.info.table.row(.{ "version", module.version });
+    phpz.info.table.end();
+}
+```
+
+该钩子在 `phpinfo()` 或相关 CLI 信息查询时调用。表格辅助函数负责 PHP 信息输出形式。展示版本、启用状态等信息即可，避免输出密码或连接令牌。
+
+# [检查输出]($heading.id('check-output'))
+
+构建示例后可以执行：
+
+```sh
+php -n -dextension=./modules/my_extension.so --ri my_extension
+```
+
+命令应在生成的扩展目录中运行。普通业务函数优先通过返回值传递结果，调用者更容易组合和测试。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/root.zig](https://github.com/happystraw/phpz/blob/dev/src/root.zig)
+- [src/info.zig](https://github.com/happystraw/phpz/blob/dev/src/info.zig)

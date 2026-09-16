@@ -1,0 +1,26 @@
+---
+.title = "Unix",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/unix",
+.custom = { "section": "进阶主题" },
+---
+
+本章介绍 Linux 与 macOS 上的构建、测试和共享扩展加载。
+
+# [构建与测试]($heading.id('build-and-test'))
+
+在扩展工程目录执行：
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+骨架将共享扩展复制到 `modules/my_extension.so`。先用 CLI 单次加载验证，再把配置接入目标 SAPI。部署时需要与目标 PHP 的版本、架构、线程安全和 debug 配置匹配。
+
+使用 `phpize` 或集成到 PHP 源码构建时，参见 [PHP 构建系统]($link.page('advanced/php-build-system'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)

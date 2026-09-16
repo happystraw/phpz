@@ -1,0 +1,73 @@
+<extend template="base.shtml">
+<nav id="chapters">
+    <details class="nav-group" open>
+        <summary :text="$i18n.get('start')"></summary>
+        <ul>
+            <li><a href="$site.page('').link()" aria-current="$site.page('').isCurrent().then('page')" :text="$i18n.get('home')"></a></li>
+            <li><a href="$site.page('getting-started/installation').link()" aria-current="$site.page('getting-started/installation').isCurrent().then('page')" :text="$site.page('getting-started/installation').title"></a></li>
+            <li><a href="$site.page('getting-started/hello-world').link()" aria-current="$site.page('getting-started/hello-world').isCurrent().then('page')" :text="$site.page('getting-started/hello-world').title"></a></li>
+            <li><a href="$site.page('getting-started/how-it-works').link()" aria-current="$site.page('getting-started/how-it-works').isCurrent().then('page')" :text="$site.page('getting-started/how-it-works').title"></a></li>
+            <li><a href="$site.page('getting-started/tools').link()" aria-current="$site.page('getting-started/tools').isCurrent().then('page')" :text="$site.page('getting-started/tools').title"></a></li>
+        </ul>
+    </details>
+    <ctx :if="$site.localeCode().eql('zh-CN')">
+    <details class="nav-group" open>
+        <summary :text="$i18n.get('types')"></summary>
+        <ul>
+            <li><a href="$site.page('reference/types').link()" aria-current="$site.page('reference/types').isCurrent().then('page')" :text="$site.page('reference/types').title"></a></li>
+            <li><a href="$site.page('reference/types/scalars').link()" aria-current="$site.page('reference/types/scalars').isCurrent().then('page')" :text="$site.page('reference/types/scalars').title"></a></li>
+            <li><a href="$site.page('reference/types/strings').link()" aria-current="$site.page('reference/types/strings').isCurrent().then('page')" :text="$site.page('reference/types/strings').title"></a></li>
+            <li><a href="$site.page('reference/types/nullable').link()" aria-current="$site.page('reference/types/nullable').isCurrent().then('page')" :text="$site.page('reference/types/nullable').title"></a></li>
+            <li><a href="$site.page('reference/types/zval').link()" aria-current="$site.page('reference/types/zval').isCurrent().then('page')" :text="$site.page('reference/types/zval').title"></a></li>
+            <li><a href="$site.page('reference/types/arrays').link()" aria-current="$site.page('reference/types/arrays').isCurrent().then('page')" :text="$site.page('reference/types/arrays').title"></a></li>
+            <li><a href="$site.page('reference/types/objects').link()" aria-current="$site.page('reference/types/objects').isCurrent().then('page')" :text="$site.page('reference/types/objects').title"></a></li>
+            <li><a href="$site.page('reference/types/references').link()" aria-current="$site.page('reference/types/references').isCurrent().then('page')" :text="$site.page('reference/types/references').title"></a></li>
+            <li><a href="$site.page('reference/types/conversions').link()" aria-current="$site.page('reference/types/conversions').isCurrent().then('page')" :text="$site.page('reference/types/conversions').title"></a></li>
+            <li><a href="$site.page('reference/types/ownership').link()" aria-current="$site.page('reference/types/ownership').isCurrent().then('page')" :text="$site.page('reference/types/ownership').title"></a></li>
+        </ul>
+    </details>
+    <details class="nav-group" open>
+        <summary :text="$i18n.get('registration')"></summary>
+        <ul>
+            <li><a href="$site.page('reference/registration/stub').link()" aria-current="$site.page('reference/registration/stub').isCurrent().then('page')" :text="$site.page('reference/registration/stub').title"></a></li>
+            <li><a href="$site.page('reference/registration/module').link()" aria-current="$site.page('reference/registration/module').isCurrent().then('page')" :text="$site.page('reference/registration/module').title"></a></li>
+            <li><a href="$site.page('reference/registration/functions').link()" aria-current="$site.page('reference/registration/functions').isCurrent().then('page')" :text="$site.page('reference/registration/functions').title"></a></li>
+            <li><a href="$site.page('reference/registration/classes').link()" aria-current="$site.page('reference/registration/classes').isCurrent().then('page')" :text="$site.page('reference/registration/classes').title"></a></li>
+            <li><a href="$site.page('reference/registration/declarations').link()" aria-current="$site.page('reference/registration/declarations').isCurrent().then('page')" :text="$site.page('reference/registration/declarations').title"></a></li>
+            <li><a href="$site.page('reference/registration/constants').link()" aria-current="$site.page('reference/registration/constants').isCurrent().then('page')" :text="$site.page('reference/registration/constants').title"></a></li>
+        </ul>
+    </details>
+    <details class="nav-group" open>
+        <summary :text="$i18n.get('runtime')"></summary>
+        <ul>
+            <li><a href="$site.page('reference/runtime/calls').link()" aria-current="$site.page('reference/runtime/calls').isCurrent().then('page')" :text="$site.page('reference/runtime/calls').title"></a></li>
+            <li><a href="$site.page('reference/runtime/closures').link()" aria-current="$site.page('reference/runtime/closures').isCurrent().then('page')" :text="$site.page('reference/runtime/closures').title"></a></li>
+            <li><a href="$site.page('reference/runtime/errors').link()" aria-current="$site.page('reference/runtime/errors').isCurrent().then('page')" :text="$site.page('reference/runtime/errors').title"></a></li>
+            <li><a href="$site.page('reference/runtime/output').link()" aria-current="$site.page('reference/runtime/output').isCurrent().then('page')" :text="$site.page('reference/runtime/output').title"></a></li>
+            <li><a href="$site.page('reference/runtime/ini').link()" aria-current="$site.page('reference/runtime/ini').isCurrent().then('page')" :text="$site.page('reference/runtime/ini').title"></a></li>
+            <li><a href="$site.page('reference/runtime/superglobals').link()" aria-current="$site.page('reference/runtime/superglobals').isCurrent().then('page')" :text="$site.page('reference/runtime/superglobals').title"></a></li>
+        </ul>
+    </details>
+    <details class="nav-group" open>
+        <summary :text="$i18n.get('advanced')"></summary>
+        <ul>
+            <li><a href="$site.page('advanced/globals').link()" aria-current="$site.page('advanced/globals').isCurrent().then('page')" :text="$site.page('advanced/globals').title"></a></li>
+            <li><a href="$site.page('advanced/memory').link()" aria-current="$site.page('advanced/memory').isCurrent().then('page')" :text="$site.page('advanced/memory').title"></a></li>
+            <li><a href="$site.page('advanced/objects').link()" aria-current="$site.page('advanced/objects').isCurrent().then('page')" :text="$site.page('advanced/objects').title"></a></li>
+            <li><a href="$site.page('advanced/bailout').link()" aria-current="$site.page('advanced/bailout').isCurrent().then('page')" :text="$site.page('advanced/bailout').title"></a></li>
+            <li><a href="$site.page('advanced/observers').link()" aria-current="$site.page('advanced/observers').isCurrent().then('page')" :text="$site.page('advanced/observers').title"></a></li>
+            <li><a href="$site.page('advanced/operators').link()" aria-current="$site.page('advanced/operators').isCurrent().then('page')" :text="$site.page('advanced/operators').title"></a></li>
+            <li><a href="$site.page('advanced/handlers').link()" aria-current="$site.page('advanced/handlers').isCurrent().then('page')" :text="$site.page('advanced/handlers').title"></a></li>
+            <li><a href="$site.page('advanced/zend').link()" aria-current="$site.page('advanced/zend').isCurrent().then('page')" :text="$site.page('advanced/zend').title"></a></li>
+            <li><a href="$site.page('advanced/unix').link()" aria-current="$site.page('advanced/unix').isCurrent().then('page')" :text="$site.page('advanced/unix').title"></a></li>
+            <li><a href="$site.page('advanced/windows').link()" aria-current="$site.page('advanced/windows').isCurrent().then('page')" :text="$site.page('advanced/windows').title"></a></li>
+            <li><a href="$site.page('advanced/php-build-system').link()" aria-current="$site.page('advanced/php-build-system').isCurrent().then('page')" :text="$site.page('advanced/php-build-system').title"></a></li>
+        </ul>
+    </details>
+    </ctx>
+</nav>
+<main id="content" tabindex="-1">
+    <p class="eyebrow" :text="$page.custom.get('section')"></p>
+    <h1 :text="$page.title"></h1>
+    <div class="prose" :html="$page.content()"></div>
+</main>

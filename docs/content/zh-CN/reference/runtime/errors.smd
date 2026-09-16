@@ -1,0 +1,53 @@
+---
+.title = "错误与异常",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/errors",
+.custom = { "section": "运行时接口" },
+---
+
+PHP 异常是引擎中的待处理状态；Zig error union 是本地控制流。phpz 错误辅助函数把两者连接起来。
+
+# [参数错误]($heading.id('argument-errors'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+if (args[0] < 0) {
+    return phpz.errors.argumentValueError(1, "must be non-negative", .{});
+}
+ctx.ret(.int, args[0]);
+```
+
+参数索引从 1 开始。`argumentTypeError`、`argumentValueError` 等函数设置 PHP 异常并返回 Zig 错误标记。应 `return` 或 `try` 传播，避免异常挂起时继续执行。
+
+# [普通错误与异常]($heading.id('errors-and-exceptions'))
+
+```zig
+return phpz.errors.throwError(null, "Operation is unavailable", .{});
+```
+
+`throwException(ce, message, code)` 使用指定异常 class entry；`throwExceptionEx` 接受格式化文本：
+
+```zig
+return phpz.errors.throwExceptionEx(
+    exception_class,
+    0,
+    "invalid value: %d",
+    .{value},
+);
+```
+
+格式化函数使用 PHP C API 的 `%s`、`%d` 等规则，不是 `std.fmt` 的 `{s}` 语法。
+
+包装器保留已存在的 PHP 异常；没有待处理异常时，将未处理的普通 Zig 错误转为 PHP `Error`。`hasException()` 可以检查状态；`clearException` 会清除异常，只应在明确负责处理该异常的路径中使用。
+
+# [警告与致命错误]($heading.id('warnings-and-fatal-errors'))
+
+`errors.warning`、`notice`、`deprecated` 等输出对应级别的 PHP 错误。用户错误处理器可能改变后续控制流。
+
+`ZendBailout` 和 `OutOfMemory` 是特殊终止路径，不应包装成成功返回。它们与 PHP 可捕获异常的区别，以及原生资源清理方式，见[Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/errors.zig](https://github.com/happystraw/phpz/blob/dev/src/errors.zig)
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)

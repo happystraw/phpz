@@ -1,0 +1,39 @@
+---
+.title = "Windows",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/windows",
+.custom = { "section": "进阶主题" },
+---
+
+# [Windows MSVC]($heading.id('windows-msvc'))
+
+准备匹配运行时的 PHP 开发包，用 PowerShell 执行：
+
+```powershell
+zig build run-tests `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib
+```
+
+ZTS 包增加 `-Dwindows-zts=true`，debug 包增加 `-Dwindows-debug=true`。头文件根目录包含 `main`、`Zend`、`TSRM`、`ext`；库目录包含匹配的 `php8*.lib`。
+
+输出为 `modules/php_my_extension.dll`。PHP for Windows 使用 MSVC ABI，不应使用 MinGW ABI 替代。
+
+# [从 Linux 交叉编译 Windows]($heading.id('cross-compile-windows-from-linux'))
+
+从扩展工程目录调用仓库提供的脚本：
+
+```sh
+/path/to/phpz/scripts/build-windows.sh --php-version 8.5.10 --nts
+```
+
+脚本准备 SDK 和 PHP 开发包，临时文件位于当前工程的 `build/windows/`。依赖 `zig`、`curl`、`tar`、`unzip` 等工具；通过 xwin 准备 Windows SDK 的过程包含接受 Microsoft 许可。
+
+成功交叉编译只能证明构建通过。DLL 仍需在对应 Windows PHP 上实际加载并运行 PHPT。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [scripts/build-windows.sh](https://github.com/happystraw/phpz/blob/dev/scripts/build-windows.sh)

@@ -1,0 +1,78 @@
+---
+.title = "开发工具",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/tools",
+.custom = { "section": "开始" },
+---
+
+# [骨架生成器]($heading.id('skeleton-generator'))
+
+```sh
+php tools/phpz_skel.php --help
+php tools/phpz_skel.php --ext my_php_extension --phpz 0.1.0
+```
+
+第二条命令从 phpz 仓库根目录执行，在当前目录下创建固定使用 phpz `0.1.0` tag 的 `my_php_extension`。
+
+| 参数 | 作用 |
+| --- | --- |
+| `--ext` | 扩展名，必填 |
+| `--dir` | 生成目录的父目录 |
+| `--phpz` | 传给 `zig fetch --save=phpz` 的包地址；裸名称按 phpz tag 解释 |
+| `--zig` | Zig 可执行文件路径 |
+| `--with-php-config` | 查找 PHP 开发头文件的 `php-config` 路径 |
+| `--with-php-build-system` | 生成 [PHP 构建系统]($link.page('advanced/php-build-system'))集成文件 |
+| `--onlyunix` / `--onlywindows` | 只生成对应平台支持 |
+| `--force` | 覆盖目标目录中的生成模板文件 |
+
+# [构建]($heading.id('build'))
+
+在生成的扩展目录中执行：
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+开发时默认 Debug 便于定位错误；`ReleaseSafe` 保留 Zig 运行时安全检查。运行时加载的 PHP 必须与编译头文件匹配。
+
+# [生成 arginfo]($heading.id('generate-arginfo'))
+
+```sh
+zig build gen-stub
+```
+
+`zig build gen-stub` 将 phpz 捆绑包中的、来自 php-src 的 `gen_stub.php` 复制到项目的 `build/gen_stub.php`，然后处理当前扩展 Stub。首次解析可能需要下载 PHP-Parser，因此需要可写的 `build/` 和相应下载工具。
+
+除使用 phpz 捆绑的副本外，也可以直接使用与目标 PHP 版本匹配的 php-src 中的脚本：
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+# [PHPT 测试]($heading.id('phpt-tests'))
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+`zig build run-tests` 先将 phpz 捆绑包中的、来自 php-src 的 `tools/php/run-tests.php` 复制到项目根目录的 `run-tests.php`，然后构建扩展并执行 PHPT 测试。筛选测试时，可以构建后直接调用项目中的工具：
+
+```sh
+php run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/greet.phpt
+```
+
+也可以直接使用与目标 PHP 版本匹配的 php-src 中的脚本：
+
+```sh
+php /path/to/php-src/run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/greet.phpt
+```
+
+PHPT 常用区段包括 `--TEST--`、`--FILE--` 和 `--EXPECT--`。失败时阅读实际输出和差异。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [tools/phpz_skel.php](https://github.com/happystraw/phpz/blob/dev/tools/phpz_skel.php)
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [tools/php/README.md](https://github.com/happystraw/phpz/blob/dev/tools/php/README.md)

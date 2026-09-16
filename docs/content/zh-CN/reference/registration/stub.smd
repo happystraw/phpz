@@ -1,0 +1,47 @@
+---
+.title = "Stub 与 arginfo",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/stub",
+.custom = { "section": "声明与注册" },
+---
+
+[Stub](https://php.github.io/php-src/miscellaneous/stubs.html) 是 PHP API 的声明文件，不承担扩展业务实现。它保存命名空间、参数名、引用、类型、默认值、属性、常量和类元数据。
+
+# [最小声明]($heading.id('minimal-declaration'))
+
+```php
+<?php
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ */
+function hello(): void {}
+function greet(string $name): string {}
+```
+
+`@generate-class-entries` 让生成器输出相应注册代码；legacy 标记用于面向 PHP 8.2 的 arginfo 兼容生成。实际项目保留骨架提供的文件头。
+
+# [更新流程]($heading.id('update-workflow'))
+
+1. 修改 `demo.stub.php`。
+2. 运行 `zig build gen-stub`。
+3. 更新 Zig 函数/方法实现或类绑定。
+4. 运行 `zig build run-tests`。
+
+`zig build gen-stub` 使用 phpz 捆绑包中的、来自 php-src 的 `gen_stub.php`；`zig build run-tests` 使用 phpz 捆绑包中的、来自 php-src 的 `run-tests.php`。
+
+生成头文件通常包含 `ext_functions`、函数 arginfo、`register_class_*`，以及需要时的 `register_<name>_symbols`。扩展头文件包含 `phpz.h` 和该 arginfo 文件，使 Zig 的 C 翻译能看到这些声明。
+
+# [名称与别名]($heading.id('names-and-aliases'))
+
+`phpz.functions` / `namedFunctions` 检查具体函数的实现覆盖情况，名称按声明精确匹配。类的自动方法绑定也要求具体方法有对应实现。需要复用已有实现时，可在 Stub 中使用明确的 `@alias`；不要重复实现生成器已标为别名的方法。
+
+类型与元数据依赖 PHP 版本。引用 PHP 内置 Stub 时，使用生成器可解析的对应路径；例如 Attribute 示例包含 `Zend/zend_attributes.stub.php`。生成器工具更新与文档见[开发工具]($link.page('getting-started/tools'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/skeleton.stub.php](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/skeleton.stub.php)
+- [examples/skeleton/skeleton.h](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/skeleton.h)
+- [src/stub.zig](https://github.com/happystraw/phpz/blob/dev/src/stub.zig)
+- [tools/php/README.md](https://github.com/happystraw/phpz/blob/dev/tools/php/README.md)

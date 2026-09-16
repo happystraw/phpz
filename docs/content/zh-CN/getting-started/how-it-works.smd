@@ -1,0 +1,94 @@
+---
+.title = "工作原理",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/how-it-works",
+.custom = { "section": "开始" },
+---
+
+phpz 沿用 PHP 官方 C 扩展的开发流程：Stub 声明 PHP API，官方工具生成注册代码，Zig 实现逻辑。它们在构建、编译和运行三个阶段连接起来。
+
+整体流程如下：
+
+```
+  构建期                          编译期                     运行期
+  ──────                          ──────                     ──────
+
+  stub.php                        Zig 源码
+     │                               │
+     │ php-src/build/gen_stub.php    │
+     ▼                               │
+  arginfo.h                          │
+  [ext_functions]                    │
+  [register_class_*]                 │
+  [register_{name}_symbols]          │
+     │                               │
+     │ translate-c (zig build)       │
+     ▼                               ▼
+  PHP C 绑定 ───────────────► phpz 编译期：
+  (php_c 模块)                  ├─ phpz.function()/functions() → 导出 zif_*
+                                ├─ phpz.Class() → 包装类型 + 导出 zim_*
+                                └─ phpz.module() → 导出 get_module()
+                                                             │
+                                                             ├─── PHP 加载 .so
+                                                             │
+                                                             ▼
+                                                        module_startup [自动]
+                                                        ├─ register_{name}_symbols (常量)
+                                                        ├─ ini_entries
+                                                        └─ 用户 hook
+                                                             └─ Class.register() (类) [手动]
+```
+
+# [构建：生成 API 元数据]($heading.id('build-api-metadata'))
+
+`gen_stub.php` 读取 `.stub.php`，生成 `_arginfo.h`，其中包含：
+
+| 内容 | 作用 |
+| --- | --- |
+| arginfo | 描述参数名、类型、默认值和返回类型 |
+| `ext_functions` | 将 PHP 函数名关联到对应处理器 |
+| `register_class_*` | 注册类及其方法、属性等元数据 |
+| `register_{name}_symbols` | 注册 Stub 中声明的常量等符号（如有） |
+
+修改 Stub 后运行：
+
+```sh
+zig build gen-stub
+```
+
+`zig build gen-stub` 将 phpz 捆绑包中的、来自 php-src 的 `gen_stub.php` 复制到 `build/gen_stub.php`，然后生成 arginfo。扩展的 `.h` 文件引入 `phpz.h` 和生成的 arginfo。构建时，`Phpz.init()` 通过 `translate-c` 将这些 C 声明转换为 Zig 可访问的绑定。
+
+普通 `zig build` 使用已有 arginfo，不会自动执行 `gen-stub`。API 改动应写入 Stub，再重新生成头文件。
+
+# [编译：连接 Zig 实现]($heading.id('compile-zig-implementation'))
+
+Zig 在编译期读取生成的声明，为扩展导出 PHP 所需的处理器和模块入口：
+
+| Zig 声明 | 编译结果 |
+| --- | --- |
+| `phpz.functions(functions, .{})` | 为公开函数导出 `zif_*` 处理器 |
+| `phpz.Class("Counter", Counter, .{})` | 创建对象包装并导出 `zim_*` 方法处理器 |
+| `phpz.module(...)` | 创建模块信息，并为共享扩展导出 `get_module()` 入口 |
+
+例如，Stub 中的 `greet(string $name): string` 对应函数表中的 `greet` 条目，`phpz.functions()` 为 Zig 的 `functions.greet()` 导出 `zif_greet`。链接时，两者连接成 PHP 可调用的函数。
+
+`phpz.addExtension()` 将这些处理器、模块入口和实现代码编译、链接为扩展库。
+
+# [运行：加载与调用]($heading.id('runtime-loading-and-calls'))
+
+PHP 加载扩展库，通过 `get_module()` 取得模块信息，安装函数表并执行模块启动流程（MINIT）。phpz 按需注册 Stub 符号、INI、`module.classes` 中的类和观察器，然后执行自定义 `module_startup_fn`。
+
+`module.classes` 按列出的顺序注册，因此接口和父类应放在依赖它们的类之前。
+
+当 PHP 执行 `greet("World")` 时，调用过程如下：
+
+```
+PHP 调用 greet("World")
+    → zif_greet 处理器
+    → Zig functions.greet(ctx)
+    → expectArgs() 读取参数
+    → ctx.ret() 设置 PHP 返回值
+```
+
+类方法通过同样的处理器机制调用，框架还会将 PHP 对象关联的 Zig 数据传给方法的 `self` 参数。

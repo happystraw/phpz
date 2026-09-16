@@ -1,0 +1,161 @@
+---
+.title = "类、属性与方法",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/classes",
+.custom = { "section": "声明与注册" },
+---
+
+`phpz.Class("Counter", Counter, .{})` 将 Stub 类与 Zig 实现连接，返回放入 `module.classes` 的包装类型。
+
+# [Zig backing]($heading.id('zig-backing'))
+
+非空 Zig struct 为每个 PHP 对象增加一份可选 backing 数据：
+
+```zig
+const Counter = struct {
+    n: i64 = 0,
+
+    pub fn __construct(ctx: phpz.Ctx) !Counter {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .int = .{ .optional = true } },
+        }, {});
+        return .{ .n = args[0] orelse 0 };
+    }
+
+    pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
+        ctx.ret(.int, self.n);
+    }
+};
+const CounterClass = phpz.Class("Vendor\\Counter", Counter, .{});
+```
+
+Stub 对应声明 `__construct(int $n = 0)` 和 `value(): int`。构造器返回 Zig `Counter`，PHP 看到的构造器返回类型仍为 `void`。
+
+所有字段都有默认值时默认初始化 backing；否则默认保持未初始化，直到构造器等初始化路径完成。在 backing 未初始化时调用需要 `self` 的方法会产生 PHP 错误。
+
+## [方法绑定]($heading.id('method-bindings'))
+
+自动模式下每个 `pub fn` 都要对应一个具体 Stub 方法：
+
+```php
+<?php
+namespace Vendor;
+class Counter {
+    public function __construct(int $n = 0) {}
+    public function add(int $n): void {}
+    public function value(): int {}
+}
+```
+
+```zig
+const Counter = struct {
+    n: i64 = 0,
+
+    pub fn __construct(ctx: phpz.Ctx) !Counter {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .int = .{ .optional = true } },
+        }, {});
+        return .{ .n = args[0] orelse 0 };
+    }
+
+    pub fn add(self: *Counter, ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+        self.n +|= args[0];
+    }
+
+    pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
+        ctx.ret(.int, self.n);
+    }
+};
+
+const CounterClass = phpz.Class("Vendor\\Counter", Counter, .{});
+```
+
+类名必须与 Stub 中的完整 PHP 命名空间一致，Zig 字符串里的反斜杠需要转义。显式 `.methods` 映射允许 PHP 方法名与 Zig 函数名不同；列出映射后，每个需要导出的方法都应在映射中给出。例如可把 PHP 的 `add` 映射到 Zig 的 `increment`：
+
+```zig
+const CounterClass = phpz.Class("Vendor\\Counter", Counter, .{
+    .methods = .{
+        .__construct = Counter.__construct,
+        .add = Counter.add,
+        .value = Counter.value,
+    },
+});
+```
+
+`__construct` 比较特殊：它不接收 backing `self`，可以接收 `Ctx`，并返回 backing 类型 `T` 或 `!T`；PHP 侧看到的构造器返回类型仍是 `void`。它负责初始化 backing，不能按普通实例方法签名绑定。
+
+静态方法同样参与自动绑定，但不接收 backing `self`，可以接收 `Ctx` / `GuardCtx`：
+
+```php
+<?php
+class Counter {
+    public static function fromInt(int $n): int {}
+}
+```
+
+```zig
+pub fn fromInt(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+    ctx.ret(.int, args[0]);
+}
+```
+
+实例方法可接收 `*T` / `*const T`，可再带 `Ctx` 或 `GuardCtx`。`.init`、`.deinit`、`.clone` 和 `.gc` 的辅助函数保持私有，避免进入自动方法绑定。资源和克隆规则见[对象生命周期]($link.page('advanced/objects'))。
+
+# [标准布局]($heading.id('standard-layout'))
+
+`void` 或没有字段的 struct 使用 Zend 标准对象布局。对象状态可以全部保存在 Stub 声明的 PHP 属性中。
+
+## [标准布局方法绑定]($heading.id('standard-method-bindings'))
+
+标准布局的绑定函数不接收 backing `self`，需要时从 `ctx.call.this()` 取得对象，再读写 PHP 属性：
+
+```zig
+const Counter = struct {
+    pub fn __construct(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .int = .{ .optional = true } },
+        }, {});
+        try ctx.call.this().?.setProperty(.int, "n", args[0] orelse 0);
+    }
+
+    pub fn value(ctx: phpz.Ctx) !void {
+        const object = ctx.call.this().?;
+
+        var scratch = phpz.Zval.raw.undef;
+        defer phpz.Zval.raw.tryRelease(&scratch);
+
+        const n = try object.property("n", false, &scratch);
+        ctx.ret(.int, try n.as(.int));
+    }
+};
+
+const CounterClass = phpz.Class("Vendor\\Counter", Counter, .{});
+```
+
+Zig struct 的字段不会自动成为 PHP 公共属性；属性必须在 Stub 中声明。
+
+# [属性]($heading.id('properties'))
+
+PHP 属性在 Stub 中声明：
+
+```php
+<?php
+namespace Vendor;
+class Counter {
+    public int $n = 0;
+    public ?string $name = null;
+
+    public function __construct(int $n = 0) {}
+    public function value(): int {}
+}
+```
+
+在实例方法中通过 `ctx.call.this()` 取得对象，再使用 `property` / `setProperty` 读写。属性访问可能触发用户代码、可见性检查、类型检查和 PHP 异常，不能当作普通内存字段直接访问。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)

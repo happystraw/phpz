@@ -1,0 +1,59 @@
+---
+.title = "INI 配置",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/ini",
+.custom = { "section": "运行时接口" },
+---
+
+# [声明与注册]($heading.id('declaration-and-registration'))
+
+```zig
+const greeting = phpz.ini.string.new(.{
+    .name = "my_extension.greeting",
+    .default = "Hello",
+    .access = .all,
+});
+
+const workers = phpz.ini.int.new(.{
+    .name = "my_extension.workers",
+    .default = 4,
+    .access = .all,
+});
+
+const debug = phpz.ini.boolean.new(.{
+    .name = "my_extension.debug",
+    .default = false,
+    .access = .all,
+});
+```
+
+将定义加入 `phpz.module` 的 `.ini = &.{ greeting, workers, debug }`，phpz 在模块启动时注册、关闭时注销。
+
+# [读取]($heading.id('read-values'))
+
+在处理器中使用：
+
+```zig
+ctx.ret(.string, try greeting.get());
+```
+
+字符串结果借用当前配置数据，不应在配置改变后继续使用该指针。需要长时间保存时复制数据。
+
+| access | 含义 |
+| --- | --- |
+| `.system` | 系统级配置 |
+| `.user` | 用户级可修改配置 |
+| `.all` | 允许各级配置 |
+
+`php -d`、php.ini 与 `ini_set()` 的适用范围由 PHP INI 访问级别控制。
+
+# [自定义类型与绑定]($heading.id('custom-types-and-bindings'))
+
+`phpz.ini.Typed(T).new` 接受 `parse`、`format` 和 `default_text`，可把字符串配置转换为 Zig 枚举。`.bind = Globals.iniField("mode")` 将结果绑定到模块全局变量中的对应字段。
+
+使用 `get()` 读取绑定字段可适配当前线程。配置解析失败时应返回错误，不要保留部分更新的业务状态。完整的 `safe` / `fast` 枚举示例见 `ini.zig`。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/ini.zig](https://github.com/happystraw/phpz/blob/dev/src/ini.zig)

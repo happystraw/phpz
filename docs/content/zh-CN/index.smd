@@ -1,0 +1,42 @@
+---
+.title = "简介",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "index",
+.custom = { "section": "开始" },
+---
+
+phpz 是用于编写 PHP 扩展的 Zig 库，提供 PHP 扩展 API 的绑定和常用 Zend 操作的封装。使用 [PHP Stub](https://php.github.io/php-src/miscellaneous/stubs.html) 声明公开接口，用 Zig 实现功能，再构建为 PHP 可加载的扩展。
+
+它适合将原生计算、现有 C 库或需要直接操作 PHP 值的功能接入 PHP。
+
+# [特点]($heading.id('features'))
+
+- **沿用 PHP 官方 C 扩展开发流程**：通过 [PHP Stub](https://php.github.io/php-src/miscellaneous/stubs.html) 声明函数、类和类型信息，使用官方 `gen_stub.php` 生成 arginfo 与注册代码，由 Zig 编写实现逻辑。
+- **常用操作封装**：通过 `Ctx/GuardCtx`、`Zval` 和 Zend 类型接口处理参数、返回值、字符串、数组、对象与引用。
+- **编译期绑定**：使用 Zig 的编译期能力连接函数、类和模块，集中声明扩展元数据及生命周期钩子。
+- **可访问底层 API**：需要更细粒度的控制时，可以使用 PHP C API，并与已有 C 库集成。
+- **配套开发工具**：提供骨架生成、Stub 生成和 PHPT 测试步骤。
+
+# [目标]($heading.id('goals'))
+
+phpz 的目标是让 PHP 扩展开发更简单，让开发者专注于功能实现。
+
+通过 Zig 的编译期能力和类型检查，配合对 Zend API 的封装，减少参数解析、类型转换、接口注册和错误处理中的重复代码，同时保留对内存、所有权及底层 PHP C API 的直接控制。
+
+沿用 PHP 官方的 Stub 与代码生成流程，降低现有 C 扩展开发者的迁移成本，并尽可能将 PHP 版本差异集中在框架内部，减少扩展代码的适配工作。
+
+# [文档]($heading.id('documentation'))
+
+```=html
+<ul>
+    <li>本文档</li>
+    <li><a href="/phpz/api/">API 参考</a></li>
+</ul>
+```
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [phpz 源码](https://github.com/happystraw/phpz)：接口实现及构建支持。
+- [skeleton](https://github.com/happystraw/phpz/tree/dev/examples/skeleton)：最小示例功能。
+- [my_php_extension](https://github.com/happystraw/phpz/tree/dev/examples/my_php_extension)：更多功能示例及 PHPT 测试。

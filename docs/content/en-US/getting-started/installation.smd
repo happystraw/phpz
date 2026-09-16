@@ -1,0 +1,115 @@
+---
+.title = "Requirements and installation",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/installation",
+.custom = { "section": "Getting started" },
+---
+
+Developing phpz extensions requires a Zig toolchain and a PHP development environment. These docs use Zig **0.17.0** and support PHP **8.2–8.5**. For Windows packages and build steps, switch to 简体中文 and open Windows in the sidebar.
+
+# [Zig toolchain]($heading.id('zig-toolchain'))
+
+Download the toolchain for your system and architecture from the [Zig website](https://ziglang.org/download/) and add the extracted directory to `PATH`. See the [Zig getting started guide](https://ziglang.org/learn/getting-started/) for installation instructions.
+
+```sh
+zig version
+```
+
+# [PHP development environment]($heading.id('php-development-environment'))
+
+On Linux / macOS, you need:
+
+- PHP CLI to run the skeleton generator, Stub generator, and tests.
+- PHP development headers for Zig to translate the PHP C API.
+- `php-config` to locate headers and identify the PHP version.
+- The PHP tokenizer extension for `gen_stub.php` to parse Stubs.
+
+Use the CLI and headers from the same PHP installation, matching the version, architecture, NTS/ZTS mode, and Debug configuration. Packages for running PHP websites alone may not include development headers.
+
+## [Install using a package manager]($heading.id('install-using-a-package-manager'))
+
+Choose the commands for your system and check that your package source provides PHP 8.2–8.5.
+
+Debian / Ubuntu:
+
+```sh
+sudo apt update
+sudo apt install php-cli php-dev curl
+```
+
+macOS (Homebrew):
+
+```sh
+brew install php
+```
+
+See the [PHP Debian installation guide](https://www.php.net/manual/en/install.unix.debian.php) and the [Homebrew PHP formula](https://formulae.brew.sh/formula/php) for package details. Continue with the environment checks below after installation.
+
+## [Build Debug PHP from source]($heading.id('build-php-from-source'))
+
+A separate PHP installation configured with `--enable-debug` helps investigate extension memory and lifecycle issues. This Linux example builds PHP 8.5 into a user directory, separate from the system PHP.
+
+Build dependencies on Debian / Ubuntu:
+
+```sh
+sudo apt install build-essential autoconf bison re2c pkg-config git curl libxml2-dev libsqlite3-dev
+```
+
+For other systems, see the [PHP source build instructions](https://github.com/php/php-src/blob/PHP-8.5/README.md#building-php-source-code). Run these commands in a working directory:
+
+```sh
+git clone --depth 1 --branch PHP-8.5 https://github.com/php/php-src.git php-src-8.5
+cd php-src-8.5
+./buildconf
+phpz_php_prefix="$HOME/phpz-dev/php-8.5-debug"
+./configure --enable-debug \
+  --prefix="$phpz_php_prefix" \
+  --with-config-file-path="$phpz_php_prefix/etc"
+make -j4
+make install
+```
+
+`PHP-8.5` is a maintenance branch; pin a tag or commit when you need a reproducible environment. `-j4` runs four compilation jobs; adjust it for your machine. To test ZTS, add `--enable-zts` during configuration and use a separate installation directory.
+
+Create a development `php.ini` that displays runtime and startup errors:
+
+```sh
+mkdir -p "$phpz_php_prefix/etc"
+cat > "$phpz_php_prefix/etc/php.ini" <<'INI'
+error_reporting = E_ALL
+display_errors = On
+display_startup_errors = On
+log_errors = On
+INI
+export PATH="$phpz_php_prefix/bin:$PATH"
+```
+
+This `PATH` change applies to the current terminal. Select this PHP installation again in a new terminal, and use `php --ini` to check which configuration file it loads. See also [Zend's PHP build environment guide](https://www.zend.com/resources/php-extensions/setting-up-your-php-build-environment).
+
+# [Check the environment]($heading.id('check-the-environment'))
+
+```sh
+php -v
+php-config --version
+php-config --include-dir
+php --ini
+php -r 'var_export(extension_loaded("tokenizer")); echo PHP_EOL;'
+php -i
+```
+
+The tokenizer check should print `true`. In `php -i`, verify `Thread Safety`, `Debug Build`, and the extension build information. The source Debug build should report `Debug Build` as `yes`. The directory from `php-config --include-dir` should contain `main`, `Zend`, `TSRM`, and `ext`.
+
+When multiple PHP installations are available, select matching `php` and `php-config` executables. Pass the chosen configuration tool path through `--with-php-config` when generating the skeleton.
+
+# [Next steps]($heading.id('next-steps'))
+
+Continue to [Hello World]($link.page('getting-started/hello-world')) to generate and run `my_php_extension`.
+
+For an existing Zig extension project, you can also add phpz as a dependency:
+
+```sh
+zig fetch --save git+https://github.com/happystraw/phpz
+```
+
+Keep the URL and hash in `build.zig.zon`. After upgrading dependencies or the toolchain, regenerate arginfo, rebuild, and run the PHPT tests.

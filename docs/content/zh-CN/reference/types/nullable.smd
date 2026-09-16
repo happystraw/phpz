@@ -1,0 +1,44 @@
+---
+.title = "null 与可空类型",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/nullable",
+.custom = { "section": "类型与值" },
+---
+
+参数“没有传入”和“传入 null”是两个状态。`expectArgs` 分别使用 `.optional` 和 `.nullable` 表达。
+
+| PHP | expectArgs | Zig |
+| --- | --- | --- |
+| `int $a` | `.int = .{}` | `i64` |
+| `int $a = 0` | `.int = .{ .optional = true }` | `?i64` |
+| `?int $a` | `.int = .{ .nullable = true }` | `CallFrame.Nullable(i64)` |
+| `?int $a = null` | `.int = .{ .optional = true, .nullable = true }` | `?CallFrame.Nullable(i64)` |
+
+# [区分缺省和 null]($heading.id('missing-and-null'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .int = .{ .optional = true, .nullable = true } },
+}, {});
+if (args[0]) |provided| {
+    switch (provided) {
+        .null => ctx.ret(.null, {}),
+        .value => |value| ctx.ret(.int, value),
+    }
+} else {
+    ctx.ret(.int, 0);
+}
+```
+
+这是一个函数体片段，适用于可选 `?int` 参数。缺省返回 0，显式 null 返回 null，其余返回传入整数。
+
+# [默认值由实现处理]($heading.id('handle-default-values'))
+
+Stub 声明默认值，Zig 实现也要处理参数缺省。例如骨架的 `Counter::__construct(int $n = 0)` 使用 `args[0] orelse 0`。
+
+可选参数必须排在必选参数后。不要用一个普通 `?i64` 同时解释“省略”和“显式 null”，否则会丢失调用者意图。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/ctx.zig](https://github.com/happystraw/phpz/blob/dev/src/ctx.zig)

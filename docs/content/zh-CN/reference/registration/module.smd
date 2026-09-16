@@ -1,0 +1,53 @@
+---
+.title = "模块与生命周期",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/module",
+.custom = { "section": "声明与注册" },
+---
+
+在编译期调用 `phpz.module` 声明扩展入口：
+
+```zig
+const extension = @import("extension_info");
+
+comptime {
+    phpz.functions(functions, .{});
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{CounterClass},
+    });
+}
+```
+
+这里的 `functions` 和 `CounterClass` 由工程定义，名称必须与 Stub 和构建配置一致。骨架从 `extension_info` 读取扩展名和版本，避免重复配置。
+
+# [注册顺序]($heading.id('registration-order'))
+
+PHP 通过模块函数表识别函数。phpz 的 MINIT 包装器依次处理：
+
+1. Stub 生成的模块符号注册函数（如果存在），用于注册模块常量等符号。
+2. `.ini` 配置。
+3. `.classes` 中的类，按数组顺序注册。
+4. `.observer` 配置。
+5. `.module_startup_fn`。
+
+已列入 `.classes` 的类无需在自定义 MINIT 中再次注册。父类和接口放在依赖它们的类之前。
+
+# [生命周期钩子]($heading.id('lifecycle-hooks'))
+
+| 配置 | 阶段 | 用途 |
+| --- | --- | --- |
+| `module_startup_fn` | MINIT | 模块级初始化 |
+| `module_shutdown_fn` | MSHUTDOWN | 模块级资源清理 |
+| `request_startup_fn` | RINIT | 重置本次请求状态 |
+| `request_shutdown_fn` | RSHUTDOWN | 请求结束清理 |
+| `info_fn` | MINFO | 输出扩展信息 |
+
+前四种钩子签名为 `fn () anyerror!void`，`info_fn` 接收 `*phpz.ModuleEntry`。模块持有的状态不等于请求状态：请求内分配的 PHP 值不要跨请求保留。需要独立线程实例时使用[模块全局变量]($link.page('advanced/globals'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/module.zig](https://github.com/happystraw/phpz/blob/dev/src/module.zig)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)

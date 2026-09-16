@@ -1,0 +1,38 @@
+---
+.title = "PHP 内存分配器",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/memory",
+.custom = { "section": "进阶主题" },
+---
+
+`phpz.heap.php_allocator` 实现 Zig 的 `std.mem.Allocator` 接口，使用 PHP 请求内存管理器分配和释放内存。
+
+# [请求内使用]($heading.id('request-scoped-usage'))
+
+```zig
+const allocator = phpz.heap.php_allocator;
+const bytes = try allocator.dupe(u8, "hello");
+defer allocator.free(bytes);
+ctx.ret(.string, bytes);
+```
+
+`set(.string)` 复制数据，正常返回后临时缓冲区可释放。不要将该分配器产生的数据保留到请求结束之后，也不要用另一个分配器释放它。
+
+# [分配失败]($heading.id('allocation-failure'))
+
+PHP 的 `emalloc` / `erealloc` 失败会产生致命错误并 bailout。phpz 在分配器内部设置 C 捕获边界，将该结果转换成 Zig allocator 的失败路径，使 `alloc` 表现为 `error.OutOfMemory`。
+
+这让分配器调用外层的 Zig `defer` / `errdefer` 有机会执行；它不意味着所有 PHP C API 的 bailout 都变成普通错误。函数包装器收到 `OutOfMemory` 后仍会重新触发 bailout，不能将致命内存错误当作可继续请求的业务分支。
+
+# [对齐和调试]($heading.id('alignment-and-debugging'))
+
+分配器仅支持不超过 PHP `ZEND_MM_ALIGNMENT` 的对齐要求，源码有对应断言。不要把它当作适合任意 SIMD 或高对齐类型的通用分配器。
+
+在 `ZEND_DEBUG=1` 时，分配器尝试解析 Zig 调用位置，为 PHP 泄漏报告提供源码线索。是否有完整堆栈取决于调试信息和构建配置。
+
+需要跨请求的原生资源，应选择匹配的持久生命周期和分配器，明确释放责任；bailout 下的原生资源使用 [GuardCtx]($link.page('advanced/bailout')) 管理。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/heap.zig](https://github.com/happystraw/phpz/blob/dev/src/heap.zig)

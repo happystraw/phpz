@@ -1,0 +1,60 @@
+---
+.title = "引用与资源",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/references",
+.custom = { "section": "类型与值" },
+---
+
+PHP 引用不是一种普通值，而是多个 zval 槽位共享同一份值的别名。phpz 用 `zend.Reference` 包装引用结构，用 `zend.Resource` 包装外部资源句柄。
+
+# [引用参数]($heading.id('reference-arguments'))
+
+先在 Stub 中声明引用参数：
+
+```php
+function increment(int &$value, int $by = 1): void {}
+```
+
+然后用 `expectArgs` 的 `.reference` 规格读取：
+
+```zig
+pub fn increment(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .reference = .{ .type = .int, .result = .value } },
+        .{ .int = .{ .optional = true } },
+    }, {});
+    const value = args[0];
+    value.set(.int, value.asUnchecked(.int) +| (args[1] orelse 1));
+}
+```
+
+`.reference.result` 决定返回哪一种借用视图：
+
+| `result` | Zig 类型 | 含义 |
+| --- | --- | --- |
+| `.reference` | `*zend.Reference` | 引用包装本身 |
+| `.zval` | `*Zval` | 外层引用 zval |
+| `.value` | `*Zval` | 被引用的值槽 |
+
+读取 `zend.Reference.val()` 得到被引用值的借用槽位。引用包装和其中的值有不同生命周期；需要保留引用关系时使用 `.result = .zval`，再用 `Zval.raw.copy` 增加引用。`.result = .value` 只适合在当前调用帧内读写。
+
+# [PHP 资源]($heading.id('php-resources'))
+
+`zend.Resource` 提供已有资源的只读访问：
+
+| 方法 | 含义 |
+| --- | --- |
+| `handle()` | 资源在 Zend 资源表中的句柄 |
+| `@"type"()` | 资源类型 ID |
+| `userPtr()` | 注册资源时保存的用户指针 |
+| `refcount()` / `addref()` / `delref()` | 引用计数访问 |
+
+它不是自动注册资源类型和析构器的完整高层 API。自定义资源需要通过 `phpz.c` 调用 PHP 的资源注册与析构接口，并确保只把匹配类型的 `userPtr()` 转成自己的指针。
+
+`delref()` 只减少引用计数，不是完整析构操作；释放拥有的资源值应走 zval / Zend 的正确释放路径。原生资源在 bailout 下的清理可参考 [Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/reference.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/reference.zig)
+- [src/zend/resource.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/resource.zig)

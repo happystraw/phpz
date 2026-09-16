@@ -1,0 +1,147 @@
+---
+.title = "接口、枚举、注解与 Trait",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/declarations",
+.custom = { "section": "声明与注册" },
+---
+
+接口、枚举、注解和 Trait 主要由 Stub 声明。没有额外 Zig backing 或方法实现时，使用 `phpz.ClassDecl("Vendor\\Name", .{})` 注册；需要构造器或方法实现时改用 `phpz.Class`，并把包装类型放入 `module.classes`。方法绑定细节见[类、属性与方法]($link.page('reference/registration/classes'))。
+
+# [接口]($heading.id('interfaces'))
+
+```php
+<?php
+namespace Vendor;
+
+interface Identifiable {
+    public function getId(): int;
+}
+```
+
+```zig
+pub const IdentifiableClass = phpz.ClassDecl("Vendor\\Identifiable", .{});
+```
+
+接口只声明方法，不需要 Zig 方法处理器时使用 `ClassDecl`。父类和接口必须放在依赖它们的类之前注册。
+
+类实现接口时，通过 `.register` 回调把接口 class entry 传给生成的注册函数：
+
+```zig
+fn register(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{
+        IdentifiableClass.entry.ptr(),
+    });
+}
+```
+
+# [枚举]($heading.id('enums'))
+
+```php
+<?php
+namespace Vendor;
+
+enum Status: int {
+    case Inactive = 0;
+    case Active = 1;
+}
+```
+
+```zig
+pub const StatusClass = phpz.ClassDecl("Vendor\\Status", .{});
+```
+
+注册后可以获取 case：
+
+```zig
+const case = StatusClass.entry.getEnumCase("Active");
+```
+
+`getEnumCase()` 返回可选对象指针；case 不存在时返回 `null`。`enumCaseName()` 返回名字，backed enum 的 `enumCaseValue()` 返回借用的 backing zval，unit enum 没有 backing 值。取出的 case 由 PHP 枚举运行时持有，直接返回给 PHP 前需要按对象所有权规则处理。
+
+# [Trait]($heading.id('traits'))
+
+```php
+<?php
+namespace Vendor;
+
+trait Greets {
+    public function greet(): string {}
+}
+```
+
+Trait 方法需要 Zig 实现时，定义对应的 `pub fn`：
+
+```zig
+const Greets = struct {
+    pub fn greet(ctx: phpz.Ctx) !void {
+        ctx.ret(.string, "Hello");
+    }
+};
+
+const GreetsTrait = phpz.Class("Vendor\\Greets", Greets, .{});
+```
+
+如果 Trait 只有声明、方法实现全部由 PHP 提供，也可以使用 `phpz.ClassDecl("Vendor\\Greets", .{})`。需要共享 backing 时改用 `Class`，并检查生成器输出的注册顺序。
+
+# [注解]($heading.id('attributes'))
+
+```php
+<?php
+namespace Vendor;
+
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_PARAMETER | \Attribute::IS_REPEATABLE)]
+final class Tag {
+    public string $name;
+    public ?string $description;
+
+    public function __construct(string $name, ?string $description = null) {}
+}
+```
+
+注解类没有需要 Zig 初始化的构造器或方法时，可以直接使用：
+
+```zig
+pub const TagClass = phpz.ClassDecl("Vendor\\Tag", .{});
+```
+
+如果 `__construct` 需要设置属性，则用 `Class` 并实现构造器：
+
+```zig
+const Tag = struct {
+    pub fn __construct(ctx: phpz.Ctx) !void {
+        const name, const description = try ctx.call.expectArgs(&.{
+            .{ .string = .{} },
+            .{ .string = .{ .optional = true, .nullable = true } },
+        }, {});
+
+        const tag = ctx.call.this().?;
+        try tag.setProperty(.string, "name", name);
+
+        if (description) |provided| {
+            switch (provided) {
+                .null => try tag.setProperty(.null, "description", {}),
+                .value => |value| try tag.setProperty(.string, "description", value),
+            }
+        } else {
+            try tag.setProperty(.null, "description", {});
+        }
+    }
+};
+
+const TagClass = phpz.Class("Vendor\\\\Tag", Tag, .{});
+```
+
+Stub 需要引入 `Zend/zend_attributes.stub.php` 以供生成器处理内置注解声明。如果 `zig build gen-stub` 提示找不到该文件，请改用与目标 PHP 版本匹配的 php-src 中的 `gen_stub.php`：
+
+```sh
+php /path/to/php-src/build/gen_stub.php demo.stub.php
+```
+
+注解元数据和实例是两回事：把 `#[Tag(...)]` 写在类或参数上只记录元数据，反射创建注解实例时才运行对应构造器。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)
+- [src/stub.zig](https://github.com/happystraw/phpz/blob/dev/src/stub.zig)
+- [src/zend/class_entry.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/class_entry.zig)
