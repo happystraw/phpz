@@ -27,6 +27,10 @@ comptime {
     const extension = @import("extension_info");
 
     phpz.namedFunctions(.{
+        .@"MyPHPExt\\Test\\typedArgument" = @import("testing/typed_arguments.zig").typedArgument,
+        .@"MyPHPExt\\Test\\checkStringArguments" = @import("testing/typed_arguments.zig").checkStringArguments,
+        .@"MyPHPExt\\Test\\checkZvalStrings" = @import("testing/typed_arguments.zig").checkZvalStrings,
+        .@"MyPHPExt\\Test\\checkStringWriteFailure" = @import("testing/typed_arguments.zig").checkStringWriteFailure,
         .hello = functions.hello,
         .greet = functions.greet,
         .@"MyPHPExt\\increment" = functions.increment,

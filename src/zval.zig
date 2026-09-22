@@ -45,20 +45,20 @@ pub const Zval = opaque {
         TypeMismatch,
     };
 
-    /// PHP value types that can be stored in a zval.
-    ///
-    /// This enum represents all possible PHP value types, mapped to Zig-friendly names.
+    /// PHP value kinds and their Zig representations.
     pub const Kind = enum {
         /// Undefined value (uninitialized variable)
         undef,
         /// PHP null value
         null,
-        /// PHP integer (always 64-bit in PHP 8+)
+        /// PHP integer (zend_long; platform-dependent width)
         int,
         /// PHP float (double precision)
         float,
-        /// PHP string (binary-safe, reference-counted)
+        /// PHP string as a binary-safe byte slice.
         string,
+        /// Zend string wrapper. `is(.str)` matches strings; `kind()` returns `.string`.
+        str,
         /// PHP boolean (true or false)
         bool,
         /// PHP array (ordered hashmap)
@@ -78,7 +78,7 @@ pub const Zval = opaque {
         mixed,
 
         pub inline fn cstr(self: Kind) [*:0]const u8 {
-            return @tagName(self).ptr;
+            return if (self == .str) "string" else @tagName(self).ptr;
         }
     };
 
@@ -88,8 +88,9 @@ pub const Zval = opaque {
     ///
     /// Type Mappings:
     ///   - undef, null -> void (no value)
-    ///   - int -> i64 (PHP integers are always 64-bit)
+    ///   - int -> i64 (PHP zend_long values widened as needed)
     ///   - float -> f64 (PHP floats are double precision)
+    ///   - str -> *zend.String (borrowed wrapper when reading)
     ///   - string -> []const u8 (byte slice)
     ///   - bool -> bool
     ///   - array -> *zend.Array (PHP array structure)
@@ -101,13 +102,15 @@ pub const Zval = opaque {
     /// Example:
     /// ```zig
     /// const IntType = Zval.Type(.int); // i64
-    /// const StrType = Zval.Type(.string); // []const u8
+    /// const StrType = Zval.Type(.str); // *zend.String
+    /// const StringType = Zval.Type(.string); // []const u8
     /// ```
     pub fn Type(comptime zk: Kind) type {
         return switch (zk) {
             .undef, .null => void,
             .int => i64,
             .float => f64,
+            .str => *zend.String,
             .string => []const u8,
             .bool => bool,
             .array => *zend.Array,
@@ -154,7 +157,8 @@ pub const Zval = opaque {
         return Object.from(self.ptr());
     }
 
-    /// Get the type (Kind) of this zval.
+    /// Get the PHP runtime type (Kind) of this zval.
+    /// Strings always report `.string`, including values written with `.str`.
     ///
     /// Returns:
     ///   The PHP value kind
@@ -178,6 +182,7 @@ pub const Zval = opaque {
     /// Check if this zval is of a specific type.
     ///
     /// This is the preferred way to check zval types before conversion.
+    /// `.string` and `.str` both match PHP strings; prefer `.string` for type checks.
     ///
     /// Parameters:
     ///   - zk: The kind to check against
@@ -233,14 +238,13 @@ pub const Zval = opaque {
     /// Result type for a non-mutating PHP cast.
     pub fn CastType(comptime zk: Kind) type {
         return switch (zk) {
-            .int, .float, .bool, .array, .object => Type(zk),
-            .string => *zend.String,
+            .int, .float, .bool, .str, .array, .object => Type(zk),
             else => @compileError("PHP casts do not support target ." ++ @tagName(zk)),
         };
     }
 
     /// Return a PHP cast result without replacing this zval's value.
-    /// Supports .int, .float, .bool, .string, .array, and .object. The caller owns
+    /// Supports .int, .float, .bool, .str, .array, and .object. The caller owns
     /// returned strings/arrays/objects and must release() or transfer ownership.
     /// Payloads may be shared, as with PHP casts; this is not a deep copy.
     /// Requires an initialized PHP value (or a reference to one), not an internal value.
@@ -250,7 +254,8 @@ pub const Zval = opaque {
     }
 
     /// Convert in place using PHP's explicit conversion rules, then return the value.
-    /// Supports .int, .float, .bool, .string, .array, and .object.
+    /// Supports .int, .float, .bool, .str, .string, .array, and .object.
+    /// .str returns a Zend wrapper; .string returns a slice of the converted string.
     /// References are unwrapped; other owners of the reference keep their value.
     /// Returned slices/pointers are borrowed from this zval until it changes or is released.
     /// Requires an initialized PHP value (or a reference to one), not an internal value.
@@ -342,12 +347,13 @@ pub const Zval = opaque {
     /// ```
     ///
     /// Special cases:
-    ///   - For .string: The string is automatically copied and reference-counted by PHP
+    ///   - For .string: The bytes are copied into a PHP string
+    ///   - For .str: Transfer one owned Zend string reference without copying
     ///   - For .undef and .null: The val parameter should be {} (void value)
     ///   - For .array, .object, .resource, .reference: Pass the appropriate wrapper pointer
     ///
     /// Ownership: this zval owns the value after `set`. For refcounted wrapper
-    /// inputs (`.array`, `.object`, `.resource`, `.reference`), the pointer is
+    /// inputs (`.str`, `.array`, `.object`, `.resource`, `.reference`), the pointer is
     /// stored without addref; addref first if the input is borrowed and remains
     /// independently owned elsewhere. Destroy any previous zval contents before
     /// overwriting them.
@@ -450,7 +456,7 @@ pub const Zval = opaque {
             return c.zend_zval_type_name(zv);
         }
 
-        /// Get the type (Kind) of a raw zval.
+        /// Raw-pointer equivalent of `Zval.kind`; strings always report `.string`.
         pub fn kind(zv: *c.zval) Kind {
             return switch (getType(zv)) {
                 c.IS_UNDEF => .undef,
@@ -469,7 +475,7 @@ pub const Zval = opaque {
             };
         }
 
-        /// Check if a raw zval is of a specific type.
+        /// Raw-pointer equivalent of `Zval.is`; `.string` and `.str` match PHP strings.
         pub fn is(zv: *c.zval, comptime zk: Kind) bool {
             const t = getType(zv);
             return switch (zk) {
@@ -478,7 +484,7 @@ pub const Zval = opaque {
                 .int => t == c.IS_LONG,
                 .float => t == c.IS_DOUBLE,
                 .bool => t == c.IS_TRUE or t == c.IS_FALSE,
-                .string => t == c.IS_STRING,
+                .string, .str => t == c.IS_STRING,
                 .array => t == c.IS_ARRAY,
                 .object => t == c.IS_OBJECT,
                 .resource => t == c.IS_RESOURCE,
@@ -507,7 +513,7 @@ pub const Zval = opaque {
                     const result = c.zend_is_true(zv);
                     break :blk if (@TypeOf(result) == bool) result else result != 0;
                 },
-                .string => zend.String.from(c.zval_get_string(zv)),
+                .str => zend.String.from(c.zval_get_string(zv)),
                 .array, .object => {
                     var value = raw.undef;
                     raw.copyDeref(&value, zv);
@@ -517,7 +523,7 @@ pub const Zval = opaque {
                 else => unreachable,
             };
             if (errors.hasException()) {
-                if (zk == .string) result.release();
+                if (zk == .str) result.release();
                 return error.PhpException;
             }
             return result;
@@ -529,7 +535,7 @@ pub const Zval = opaque {
                 .int => c.convert_to_long,
                 .float => c.convert_to_double,
                 .bool => c.convert_to_boolean,
-                .string => c._convert_to_string,
+                .str, .string => c._convert_to_string,
                 .array => c.convert_to_array,
                 .object => c.convert_to_object,
                 else => @compileError("PHP casts do not support target ." ++ @tagName(zk)),
@@ -551,15 +557,16 @@ pub const Zval = opaque {
                 )),
                 .int => zv.value.lval,
                 .float => zv.value.dval,
+                .str => zend.String.from(zv.value.str),
                 .string => blk: {
                     const zend_str = zv.value.str;
                     break :blk zend_str.*.val()[0..zend_str.*.len];
                 },
                 .bool => getType(zv) == c.IS_TRUE,
-                .array => zend.Array.from(zv.value.arr orelse unreachable),
-                .object => zend.Object.from(zv.value.obj orelse unreachable),
-                .resource => zend.Resource.from(zv.value.res orelse unreachable),
-                .reference => zend.Reference.from(zv.value.ref orelse unreachable),
+                .array => zend.Array.from(zv.value.arr),
+                .object => zend.Object.from(zv.value.obj),
+                .resource => zend.Resource.from(zv.value.res),
+                .reference => zend.Reference.from(zv.value.ref),
                 .indirect => zv.value.zv,
                 .ptr => zv.value.ptr,
                 .mixed => zv,
@@ -569,7 +576,7 @@ pub const Zval = opaque {
         /// Set a raw zval to the specified type and value.
         ///
         /// Ownership: `zv` owns the value after `set`. For refcounted wrapper
-        /// inputs (`.array`, `.object`, `.resource`, `.reference`), the pointer is
+        /// inputs (`.str`, `.array`, `.object`, `.resource`, `.reference`), the pointer is
         /// stored without addref; addref first if the input is borrowed and remains
         /// independently owned elsewhere. Destroy any previous zval contents before
         /// overwriting them.
@@ -591,10 +598,10 @@ pub const Zval = opaque {
                     zv.value.dval = @floatCast(val);
                     zv.u1.type_info = c.IS_DOUBLE;
                 },
-                .string => {
-                    const str: *zend.String = .init(val, false);
-                    zv.value.str = str.ptr();
-                    zv.u1.type_info = if (str.isInterned()) c.IS_INTERNED_STRING_EX else c.IS_STRING_EX;
+                .string => raw.set(zv, .str, zend.String.init(val, false)),
+                .str => {
+                    zv.value.str = val.ptr();
+                    zv.u1.type_info = if (val.isInterned()) c.IS_INTERNED_STRING_EX else c.IS_STRING_EX;
                 },
                 .bool => {
                     zv.u1.type_info = if (val) c.IS_TRUE else c.IS_FALSE;

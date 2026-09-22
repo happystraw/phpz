@@ -214,14 +214,14 @@ pub const CallFrame = opaque {
     ///     .{ .callable = .{ .resolve = true } },
     ///     .{ .object = .{ .instanceof = true } },
     /// }, .{
-    ///     .{ .target = &cb },
-    ///     .{ .type = UserClass.entry },
+    ///     .{ .out = &cb },
+    ///     .{ .class = UserClass.entry },
     /// });
     ///
     /// // .mixed with union types:
     /// // (int|string $id_or_name)
     /// const args3 = try self.expectArgs(&.{
-    ///     .{ .mixed = .{ .unions = &.{ .int, .string } } },
+    ///     .{ .mixed = .{ .one_of = &.{ .int, .string } } },
     /// }, {});
     /// switch (args3[0]) {
     ///     .int => |id| _ = id,
@@ -230,7 +230,7 @@ pub const CallFrame = opaque {
     ///
     /// // Check a reference and its value, while keeping the reference writable:
     /// const args4 = try self.expectArgs(&.{
-    ///     .{ .reference = .{ .type = .int, .result = .value } },
+    ///     .{ .reference = .{ .kind = .int, .as = .value } },
     /// }, {});
     /// const value: *Zval = args4[0];
     /// ```
@@ -292,7 +292,8 @@ pub const CallFrame = opaque {
 
     pub const ExpectArgError = errors.ArgumentTypeError || errors.ArgumentValueError;
 
-    /// Argument parsing type tags, aligned with ZPP (fast zend_parse_parameters).
+    /// Argument parsing type tags. This checks actual PHP types without ZPP's
+    /// weak scalar coercions. The table below compares type categories only.
     ///
     /// Each member maps to a ZPP type spec and macro:
     ///
@@ -310,7 +311,7 @@ pub const CallFrame = opaque {
     ///   .mixed           'z'         Z_PARAM_ZVAL
     ///   .callable        'f'         Z_PARAM_FUNC
     ///
-    /// `.null` can be used in `.mixed` unions or `.reference.type`, but not as a standalone argument type.
+    /// `.null` can be used in `.mixed` unions or `.reference.kind`, but not as a standalone argument type.
     pub const ExpectArgKind = enum {
         null,
         int,
@@ -330,15 +331,30 @@ pub const CallFrame = opaque {
         fn BuildSpec(ak: ExpectArgKind) type {
             return switch (ak) {
                 .null => unreachable,
-                .mixed => struct { optional: bool = false, unions: ?[]const ExpectArgKind = null },
-                .object => struct { optional: bool = false, nullable: bool = false, zval: bool = false, instanceof: bool = false },
+                .int => struct {
+                    as: enum { i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, zval } = .i64,
+                    optional: bool = false,
+                    nullable: bool = false,
+                },
+                .float => struct {
+                    as: enum { f32, f64, zval } = .f64,
+                    optional: bool = false,
+                    nullable: bool = false,
+                },
+                .string => struct {
+                    as: enum { string, str, zval } = .string,
+                    optional: bool = false,
+                    nullable: bool = false,
+                },
+                .mixed => struct { optional: bool = false, one_of: ?[]const ExpectArgKind = null },
+                .object => struct { as: enum { value, zval } = .value, optional: bool = false, nullable: bool = false, instanceof: bool = false },
                 .callable => struct { optional: bool = false, nullable: bool = false, resolve: bool = false },
                 .reference => struct {
                     optional: bool = false,
-                    type: ?ExpectArgKind = null,
-                    result: enum { reference, zval, value } = .reference,
+                    kind: ?ExpectArgKind = null,
+                    as: enum { reference, zval, value } = .reference,
                 },
-                else => struct { optional: bool = false, nullable: bool = false, zval: bool = false },
+                else => struct { as: enum { value, zval } = .value, optional: bool = false, nullable: bool = false },
             };
         }
 
@@ -361,18 +377,25 @@ pub const CallFrame = opaque {
                     inline else => |m| m.optional,
                 };
             }
+
+            fn isZval(comptime self: Spec) bool {
+                return switch (self) {
+                    .null, .mixed, .callable => false,
+                    inline else => |s| s.as == .zval,
+                };
+            }
         };
 
         /// Runtime extension data for a single `Spec`.
-        ///   - `.callable` with `.resolve = true`    → `struct { target: *zend.Callable }`
+        ///   - `.callable` with `.resolve = true`    → `struct { out: *zend.Callable }`
         ///   - `.callable` without resolve           → `void`
-        ///   - `.object` with `.instanceof = true`   → `struct { type: *zend.ClassEntry }` (class/interface)
+        ///   - `.object` with `.instanceof = true`   → `struct { class: *zend.ClassEntry }` (class/interface)
         ///   - `.object` without instanceof          → `void`
         ///   - scalar types                          → `void` (pass `{}`)
         pub fn Runtime(comptime spec: Spec) type {
             return switch (spec) {
-                .callable => |s| if (s.resolve) struct { target: *zend.Callable } else void,
-                .object => |s| if (s.instanceof) struct { type: *zend.ClassEntry } else void,
+                .callable => |s| if (s.resolve) struct { out: *zend.Callable } else void,
+                .object => |s| if (s.instanceof) struct { class: *zend.ClassEntry } else void,
                 else => void,
             };
         }
@@ -389,11 +412,41 @@ pub const CallFrame = opaque {
         }
     };
 
+    fn ExpectArgValueType(comptime spec: ExpectArgKind.Spec) type {
+        return switch (spec) {
+            .int => |s| switch (s.as) {
+                .i8 => i8,
+                .i16 => i16,
+                .i32 => i32,
+                .i64 => i64,
+                .isize => isize,
+                .u8 => u8,
+                .u16 => u16,
+                .u32 => u32,
+                .u64 => u64,
+                .usize => usize,
+                .zval => *Zval,
+            },
+            .float => |s| switch (s.as) {
+                .f32 => f32,
+                .f64 => f64,
+                .zval => *Zval,
+            },
+            .string => |s| switch (s.as) {
+                .string => []const u8,
+                .str => *zend.String,
+                .zval => *Zval,
+            },
+            .null, .mixed, .callable, .reference => unreachable,
+            inline else => if (spec.isZval()) *Zval else @as(ExpectArgKind, spec).InnerType(),
+        };
+    }
+
     fn ExpectArgResult(comptime spec: ExpectArgKind.Spec) type {
         return switch (spec) {
             .null => @compileError(".null cannot be used as a standalone type; use another type with the `nullable` flag or use .mixed with unions to allow null as a distinct case"),
             .mixed => |s| {
-                if (s.unions) |u| {
+                if (s.one_of) |u| {
                     if (u.len <= 1) @compileError("invalid .mixed specification: unions array must contain at least 2 types");
                     const TagInt = @typeInfo(ExpectArgKind).@"enum".tag_type;
                     var field_names: [u.len][]const u8 = undefined;
@@ -428,31 +481,27 @@ pub const CallFrame = opaque {
                 return if (s.optional) ?T else T;
             },
             .reference => |s| {
-                if (s.type) |kind| {
+                if (s.kind) |kind| {
                     if (kind == .reference or kind == .mixed) {
-                        @compileError("invalid .reference.type: use a value type or .callable; omit .type to accept any referenced value");
+                        @compileError("invalid .reference.kind: use a value type or .callable; omit .kind to accept any referenced value");
                     }
                 }
-                const T = switch (s.result) {
+                const T = switch (s.as) {
                     .reference => *zend.Reference,
                     .zval, .value => *Zval,
                 };
                 return if (s.optional) ?T else T;
             },
             inline else => |s| {
-                const tag: ExpectArgKind = spec;
-                const T = if (s.zval)
-                    *Zval
-                else if (s.nullable)
-                    Nullable(tag.InnerType())
-                else
-                    tag.InnerType();
+                const Value = ExpectArgValueType(spec);
+                const T = if (s.nullable and !spec.isZval()) Nullable(Value) else Value;
                 return if (s.optional) ?T else T;
             },
         };
     }
 
-    /// Returned when `nullable` is set without `zval`: distinguishes "null was passed" (.null) from "argument omitted" (?T).
+    /// Returned for nullable typed values (except `.as = .zval`): distinguishes
+    /// "null was passed" (.null) from "argument omitted" (outer Zig optional).
     pub fn Nullable(comptime T: type) type {
         return union(enum) {
             null,
@@ -470,50 +519,55 @@ pub const CallFrame = opaque {
     /// Extract and type-check argument N (1-indexed). Must call expectArgCount first.
     ///
     /// Accepts an `ExpectArgKind.Spec` tagged union specifying the expected type
-    /// and options (optional, nullable, zval). Pass runtime extension data via `runtime`:
-    ///   - `.callable` with `.resolve = true`    → `.{ .target = &cb }`
+    /// and options (optional, nullable, as). Pass runtime extension data via `runtime`:
+    ///   - `.callable` with `.resolve = true`    → `.{ .out = &cb }`
     ///   - `.callable` without resolve           → `{}`
-    ///   - `.object` with `.instanceof = true`   → `.{ .type = entry }` (class/interface)
+    ///   - `.object` with `.instanceof = true`   → `.{ .class = entry }` (class/interface)
     ///   - `.object` without instanceof          → `{}`
     ///   - scalar types → `{}`
     ///
-    /// `.zval = true` returns a borrowed `*Zval`; use `.ptr()` for the C pointer.
+    /// `.as = .zval` returns a borrowed `*Zval`; use `.ptr()` for the C pointer.
     /// With `nullable`, PHP null is a Zval; with `optional`, an omitted argument is Zig null.
     /// `.mixed` without unions and `.callable` also return borrowed `*Zval` values.
     /// Nullable callables return `Nullable(*Zval)`; optional arguments wrap the result in `?`.
-    /// For `.reference`, `result` selects a borrowed view:
+    /// For `.reference`, `as` selects a borrowed view:
     /// `.reference` (default) returns `*zend.Reference`, `.zval` returns the outer
     /// container as `*Zval`, and `.value` returns the referenced value as `*Zval`.
-    /// `.type` only checks the referenced value; it does not change the result type.
+    /// `.kind` only checks the referenced value; it does not change the result type.
+    /// Numeric `.as` selects the Zig width (e.g. `.u8`, `.f32`); out-of-range
+    /// values raise a parameter ValueError. Strings default to `.string`, with
+    /// `.str` borrowing a `*zend.String` without allocation or addref.
+    /// A resolved callable writes `runtime.out` only for a present non-null
+    /// value. Initialize it before use; later argument failures do not roll it back.
     ///
     /// Prefer `expectArgs` for multi-arg cases.
     pub fn expectArg(
         self: *CallFrame,
-        n: u32,
+        arg_num: u32,
         comptime spec: ExpectArgKind.Spec,
         runtime: ExpectArgKind.Runtime(spec),
     ) ExpectArgError!ExpectArgResult(spec) {
-        if (n > self.argCount()) {
+        if (arg_num > self.argCount()) {
             if (comptime spec.isOptional())
                 return null
             else {
-                return errors.argumentValueError(n, "must be provided", .{});
+                return errors.argumentValueError(arg_num, "must be provided", .{});
             }
         }
-        return self.extractArg(n, spec, runtime);
+        return self.extractArg(arg_num, spec, runtime);
     }
 
     inline fn extractArg(
         self: *CallFrame,
-        n: u32,
+        arg_num: u32,
         comptime spec: ExpectArgKind.Spec,
         runtime: ExpectArgKind.Runtime(spec),
     ) ExpectArgError!ExpectArgResult(spec) {
-        const zv = self.arg(n);
+        const zv = self.arg(arg_num);
         switch (comptime spec) {
-            .null => @compileError(".null cannot be used as a standalone type; use another type with the `nullable` flag or use .mixed with unions to allow null as a distinct case"),
+            .null => unreachable,
             .mixed => |s| {
-                if (comptime s.unions) |unions| {
+                if (comptime s.one_of) |unions| {
                     const Result = ExpectArgResult(spec);
                     const Union = if (comptime s.optional) @typeInfo(Result).optional.child else Result;
                     comptime var php_union_type: []const u8 = "";
@@ -525,7 +579,7 @@ pub const CallFrame = opaque {
                             return @unionInit(Union, @tagName(kind), if (zk == .null) {} else Zval.raw.asUnchecked(zv, zk));
                         }
                     }
-                    return errors.argumentTypeError(n, "must be of type " ++ php_union_type ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
+                    return errors.argumentTypeError(arg_num, "must be of type " ++ php_union_type ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
                 } else {
                     return Zval.from(zv);
                 }
@@ -535,34 +589,34 @@ pub const CallFrame = opaque {
                 if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return .null;
                 if (comptime s.resolve) {
                     var err: ?[*:0]u8 = null;
-                    runtime.target.parse(zv, &err) catch {
+                    runtime.out.parse(zv, &err) catch {
                         if (err) |e| {
                             defer if (comptime c.ZEND_DEBUG == 1) c._efree(@as(*anyopaque, @ptrCast(e)), @src().file.ptr, @intCast(@src().line), null, 0) else c.efree(@as(*anyopaque, @ptrCast(e)));
-                            return errors.argumentTypeError(n, "must be a valid callback" ++ or_null ++ ", %s", .{e});
+                            return errors.argumentTypeError(arg_num, "must be a valid callback" ++ or_null ++ ", %s", .{e});
                         }
-                        return errors.argumentTypeError(n, "must be a valid callback" ++ or_null, .{});
+                        return errors.argumentTypeError(arg_num, "must be a valid callback" ++ or_null, .{});
                     };
                 } else if (!zend.Callable.isCallable(zv)) {
-                    return errors.argumentTypeError(n, "must be a valid callback" ++ or_null, .{});
+                    return errors.argumentTypeError(arg_num, "must be a valid callback" ++ or_null, .{});
                 }
                 return if (comptime s.nullable) .{ .value = Zval.from(zv) } else Zval.from(zv);
             },
             .reference => |s| {
                 if (!Zval.raw.is(zv, .reference)) {
-                    return errors.argumentTypeError(n, "must be of type reference, %s given", .{Zval.raw.kind(zv).cstr()});
+                    return errors.argumentTypeError(arg_num, "must be of type reference, %s given", .{Zval.raw.kind(zv).cstr()});
                 }
                 const ref = Zval.raw.asUnchecked(zv, .reference);
-                if (comptime s.type) |kind| {
+                if (comptime s.kind) |kind| {
                     const value = ref.val();
                     const matches = if (comptime kind == .callable)
                         zend.Callable.isCallable(value)
                     else
                         Zval.raw.is(value, comptime kind.toZvalKind());
                     if (!matches) {
-                        return errors.argumentTypeError(n, "must be of type " ++ @tagName(kind) ++ ", %s given", .{Zval.raw.kind(value).cstr()});
+                        return errors.argumentTypeError(arg_num, "must be of type " ++ @tagName(kind) ++ ", %s given", .{Zval.raw.kind(value).cstr()});
                     }
                 }
-                return switch (comptime s.result) {
+                return switch (comptime s.as) {
                     .reference => ref,
                     .zval => Zval.from(zv),
                     .value => Zval.from(ref.val()),
@@ -570,32 +624,47 @@ pub const CallFrame = opaque {
             },
             .object => |s| {
                 const or_null = comptime if (s.nullable) " or null" else "";
-                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return if (comptime s.zval) Zval.from(zv) else .null;
-                if (comptime s.instanceof) {
-                    const expected_type = runtime.type;
-                    const obj: *zend.Object = Zval.raw.as(zv, .object) catch return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, Zval.raw.kind(zv).cstr() });
-                    if (!obj.instanceof(expected_type)) return errors.argumentTypeError(n, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, obj.class().name().ptr });
-                    if (comptime s.zval) return Zval.from(zv);
-                    return if (comptime s.nullable) .{ .value = obj } else obj;
-                } else if (!Zval.raw.is(zv, .object)) {
-                    return errors.argumentTypeError(n, "must be of type object" ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
-                }
-                if (comptime s.zval) return Zval.from(zv);
-                const raw = Zval.raw.asUnchecked(zv, .object);
-                return if (comptime s.nullable) .{ .value = raw } else raw;
+                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return if (comptime spec.isZval()) Zval.from(zv) else .null;
+                const obj = if (comptime s.instanceof) blk: {
+                    const expected_type = runtime.class;
+                    const value = Zval.raw.as(zv, .object) catch return errors.argumentTypeError(arg_num, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, Zval.raw.kind(zv).cstr() });
+                    if (!value.instanceof(expected_type)) return errors.argumentTypeError(arg_num, "must be instance of %s" ++ or_null ++ ", %s given", .{ expected_type.name().ptr, value.class().name().ptr });
+                    break :blk value;
+                } else Zval.raw.as(zv, .object) catch return errors.argumentTypeError(arg_num, "must be of type object" ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
+                if (comptime spec.isZval()) return Zval.from(zv);
+                return if (comptime s.nullable) .{ .value = obj } else obj;
             },
             inline else => |s| {
                 const tag: ExpectArgKind = spec;
                 const or_null = comptime if (s.nullable) " or null" else "";
-                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return if (comptime s.zval) Zval.from(zv) else .null;
+                if (comptime s.nullable) if (Zval.raw.is(zv, .null)) return if (comptime spec.isZval()) Zval.from(zv) else .null;
                 const zk = comptime tag.toZvalKind();
                 if (!Zval.raw.is(zv, zk))
-                    return errors.argumentTypeError(n, "must be of type " ++ @tagName(tag) ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
-                if (comptime s.zval) return Zval.from(zv);
-                const raw = Zval.raw.asUnchecked(zv, zk);
+                    return errors.argumentTypeError(arg_num, "must be of type " ++ @tagName(tag) ++ or_null ++ ", %s given", .{Zval.raw.kind(zv).cstr()});
+                if (comptime spec.isZval()) return Zval.from(zv);
+                const raw = try extractTypedValue(arg_num, zv, spec);
                 return if (comptime s.nullable) .{ .value = raw } else raw;
             },
         }
+    }
+
+    fn extractTypedValue(arg_num: u32, zv: *c.zval, comptime spec: ExpectArgKind.Spec) ExpectArgError!ExpectArgValueType(spec) {
+        const T = ExpectArgValueType(spec);
+        return switch (comptime spec) {
+            .int => std.math.cast(T, Zval.raw.asUnchecked(zv, .int)) orelse
+                errors.argumentValueError(arg_num, "must be between " ++ comptime std.fmt.comptimePrint("{d} and {d} ({s})", .{ std.math.minInt(T), std.math.maxInt(T), @typeName(T) }), .{}),
+            .float => blk: {
+                const value = Zval.raw.asUnchecked(zv, .float);
+                if (comptime T == f32) {
+                    if (std.math.isFinite(value) and @abs(value) > std.math.floatMax(f32)) {
+                        return errors.argumentValueError(arg_num, "must be within the finite f32 range or be INF, -INF or NAN", .{});
+                    }
+                }
+                break :blk @as(T, @floatCast(value));
+            },
+            .string => |s| Zval.raw.asUnchecked(zv, if (s.as == .str) .str else .string),
+            inline else => Zval.raw.asUnchecked(zv, comptime @as(ExpectArgKind, spec).toZvalKind()),
+        };
     }
 
     pub const ParseArgsError = error{ParseFailure};

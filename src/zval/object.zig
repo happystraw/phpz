@@ -93,8 +93,8 @@ pub const Object = opaque {
     ///
     /// Ownership: `.mixed` is borrowed and must already be dereferenced.
     /// The caller keeps its input reference on success and failure.
-    /// Scalar/string values are copied.
-    /// The native helpers for `.array`, `.object`, `.resource` release the
+    /// Scalars and `.string` are copied.
+    /// The native helpers for `.str`, `.array`, `.object`, `.resource` release the
     /// supplied reference after the property handler returns, including when a
     /// PHP exception is pending. Bailout may bypass this cleanup. Addref first
     /// if that reference is borrowed.
@@ -106,6 +106,7 @@ pub const Object = opaque {
             .int => c.add_property_long_ex(self.ptr(), key.ptr, key.len, @intCast(val)),
             .float => c.add_property_double_ex(self.ptr(), key.ptr, key.len, val),
             .string => c.add_property_stringl_ex(self.ptr(), key.ptr, key.len, val.ptr, val.len),
+            .str => c.add_property_str_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .bool => c.add_property_bool_ex(self.ptr(), key.ptr, key.len, val),
             .array => c.add_property_array_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .object => c.add_property_object_ex(self.ptr(), key.ptr, key.len, val.ptr()),

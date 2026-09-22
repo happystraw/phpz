@@ -9,19 +9,14 @@ pub fn castValue(ctx: phpz.Ctx) !void {
         .{ .string = .{} },
         .{ .bool = .{} },
     }, {});
-    inline for (.{ .int, .float, .bool, .string, .array, .object }) |kind| {
-        if (std.mem.eql(u8, args[1], @tagName(kind))) {
+    inline for (.{ .int, .float, .bool, .str, .array, .object }) |kind| {
+        if (std.mem.eql(u8, args[1], if (kind == .str) "string" else @tagName(kind))) {
             if (args[2]) {
                 Zval.raw.copy(ctx.retval.ptr(), args[0].ptr());
                 _ = try ctx.retval.convert(kind);
             } else {
                 const result = try args[0].cast(kind);
-                if (comptime kind == .string) {
-                    defer result.release();
-                    ctx.retval.set(.string, result.slice());
-                } else {
-                    ctx.retval.set(kind, result);
-                }
+                ctx.retval.set(kind, result);
             }
             return;
         }

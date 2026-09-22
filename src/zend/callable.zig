@@ -15,7 +15,7 @@ const bailout = @import("bailout.zig");
 /// var cb: Callable = .nil;
 /// _ = try ctx.call.expectArgs(
 ///     &.{.{ .callable = .{ .resolve = true } }},
-///     .{.{ .target = &cb }},
+///     .{.{ .out = &cb }},
 /// );
 /// try cb.call(null, .{ arg1 }, null);
 /// ```

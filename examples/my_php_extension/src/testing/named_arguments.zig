@@ -71,7 +71,7 @@ pub fn invokeArguments(ctx: phpz.Ctx) !void {
         .{ .array = .{} },
         .{ .array = .{ .nullable = true } },
         .{ .bool = .{} },
-    }, .{ {}, .{ .target = &callback }, {}, {}, {} });
+    }, .{ {}, .{ .out = &callback }, {}, {}, {} });
     const named_params = args[3].asOptional();
     switch (args[2].len()) {
         0 => try invoke(ctx, args[0], &callback, .{}, named_params, args[4]),

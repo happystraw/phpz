@@ -184,6 +184,10 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function typedArgument(string $mode, bool $single, mixed $value = null): mixed {}
+    function checkStringArguments(string $value): bool {}
+    function checkZvalStrings(string $value, object $fixture): string {}
+    function checkStringWriteFailure(object $fixture, string $api, string $exception): void {}
     function checkArrayCallbacks(): void {}
     function checkObjectPropertyHandlers(?object $lazy = null): void {}
     function checkObjectCreation(string $stage): void {}

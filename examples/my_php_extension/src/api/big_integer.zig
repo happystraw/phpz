@@ -23,7 +23,7 @@ const BigInteger = struct {
     /// PHP: MyPHPExt\BigInteger::__construct(int|string $value = 0): void
     pub fn __construct(ctx: phpz.Ctx) !BigInteger {
         const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{ .optional = true, .unions = &.{ .int, .string } } },
+            .{ .mixed = .{ .optional = true, .one_of = &.{ .int, .string } } },
         }, {});
         var self = try init();
         errdefer self.deinit();

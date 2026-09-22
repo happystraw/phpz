@@ -17,9 +17,9 @@ pub fn referenceArgument(ctx: phpz.Ctx) !void {
                     inline for ([_]?Kind{ null, .null, .int, .float, .string, .bool, .array, .object, .resource, .callable }) |kind| {
                         if (std.mem.eql(u8, type_name, if (kind) |k| @tagName(k) else "any")) {
                             const spec: Kind.Spec = comptime spec: {
-                                var spec: Kind.Spec = .{ .reference = .{ .optional = is_optional, .type = kind } };
-                                if (std.mem.eql(u8, result, "zval")) spec.reference.result = .zval;
-                                if (std.mem.eql(u8, result, "value")) spec.reference.result = .value;
+                                var spec: Kind.Spec = .{ .reference = .{ .optional = is_optional, .kind = kind } };
+                                if (std.mem.eql(u8, result, "zval")) spec.reference.as = .zval;
+                                if (std.mem.eql(u8, result, "value")) spec.reference.as = .value;
                                 break :spec spec;
                             };
                             return inspect(ctx, spec, single);
@@ -45,7 +45,7 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
         }, {});
         break :result args[4];
     };
-    const Expected = switch (spec.reference.result) {
+    const Expected = switch (spec.reference.as) {
         .reference => *phpz.zend.Reference,
         .zval, .value => *phpz.Zval,
     };
@@ -61,7 +61,7 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
 
     const outer = ctx.call.arg(5);
     const reference = phpz.Zval.raw.asUnchecked(outer, .reference);
-    const inner: *phpz.Zval = switch (comptime spec.reference.result) {
+    const inner: *phpz.Zval = switch (comptime spec.reference.as) {
         .reference => blk: {
             if (value != reference) return error.UnexpectedReferencePointer;
             break :blk .from(value.val());

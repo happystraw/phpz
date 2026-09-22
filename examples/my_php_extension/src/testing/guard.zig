@@ -25,7 +25,7 @@ pub fn guardResources(ctx: phpz.GuardCtx) !void {
         .{ .string = .{} },
         .{ .callable = .{ .resolve = true } },
         .{ .bool = .{ .optional = true } },
-    }, .{ {}, .{ .target = &callback }, {} });
+    }, .{ {}, .{ .out = &callback }, {} });
 
     try registerResources(ctx, args[0]);
     defer std.debug.print("defer {s}\n", .{args[0]});

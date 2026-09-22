@@ -22,7 +22,7 @@ pub fn greet(ctx: phpz.Ctx) !void {
 /// PHP: MyPHPExt\increment(int &$value, int $by = 1): void
 pub fn increment(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .reference = .{ .type = .int, .result = .value } },
+        .{ .reference = .{ .kind = .int, .as = .value } },
         .{ .int = .{ .optional = true } },
     }, {});
 
@@ -42,7 +42,7 @@ pub fn mapValues(ctx: phpz.Ctx) !void {
         },
         .{
             {},
-            .{ .target = &mapper },
+            .{ .out = &mapper },
         },
     );
 

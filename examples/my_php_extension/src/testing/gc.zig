@@ -13,7 +13,7 @@ const GcNode = struct {
             .{ .mixed = .{ .optional = true } },
             .{ .mixed = .{ .optional = true } },
             .{ .callable = .{ .optional = true, .nullable = true, .resolve = true } },
-        }, .{ {}, {}, .{ .target = &callback } });
+        }, .{ {}, {}, .{ .out = &callback } });
         var self: GcNode = .{ .first = Zval.raw.undef, .second = Zval.raw.undef, .callback = callback };
         if (args[0]) |value| Zval.raw.copy(&self.first, value.ptr());
         if (args[1]) |value| Zval.raw.copy(&self.second, value.ptr());

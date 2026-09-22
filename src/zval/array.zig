@@ -85,8 +85,8 @@ pub const Array = opaque {
     /// Requires mutable, uniquely owned storage. Call separate() first if the
     /// array may be shared or immutable; this method does not separate it.
     ///
-    /// Ownership: scalar/string values are copied. Refcounted wrapper values
-    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// Ownership: scalars and `.string` are copied. Refcounted wrapper values
+    /// (`.str`, `.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
     /// `.mixed` preserves reference wrappers and does not clear the source zval;
@@ -97,6 +97,7 @@ pub const Array = opaque {
             .int => c.add_assoc_long_ex(self.ptr(), key.ptr, key.len, @intCast(val)),
             .float => c.add_assoc_double_ex(self.ptr(), key.ptr, key.len, val),
             .string => c.add_assoc_stringl_ex(self.ptr(), key.ptr, key.len, val.ptr, val.len),
+            .str => c.add_assoc_str_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .bool => c.add_assoc_bool_ex(self.ptr(), key.ptr, key.len, val),
             .array => c.add_assoc_array_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .object => c.add_assoc_object_ex(self.ptr(), key.ptr, key.len, val.ptr()),
@@ -113,8 +114,8 @@ pub const Array = opaque {
     ///
     /// Requires mutable, uniquely owned storage; see separate(). No automatic COW.
     ///
-    /// Ownership: scalar/string values are copied. Refcounted wrapper values
-    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// Ownership: scalars and `.string` are copied. Refcounted wrapper values
+    /// (`.str`, `.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
     /// `.mixed` preserves reference wrappers and does not clear the source zval.
@@ -127,6 +128,7 @@ pub const Array = opaque {
             .int => c.add_index_long(self.ptr(), idx, @intCast(val)),
             .float => c.add_index_double(self.ptr(), idx, val),
             .string => c.add_index_stringl(self.ptr(), idx, val.ptr, val.len),
+            .str => c.add_index_str(self.ptr(), idx, val.ptr()),
             .bool => c.add_index_bool(self.ptr(), idx, val),
             .array => c.add_index_array(self.ptr(), idx, val.ptr()),
             .object => c.add_index_object(self.ptr(), idx, val.ptr()),
@@ -145,8 +147,8 @@ pub const Array = opaque {
     ///
     /// Requires mutable, uniquely owned storage; see separate(). No automatic COW.
     ///
-    /// Ownership: scalar/string values are copied. Refcounted wrapper values
-    /// (`.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
+    /// Ownership: scalars and `.string` are copied. Refcounted wrapper values
+    /// (`.str`, `.array`, `.object`, `.resource`, `.reference`) and `.mixed` zvals are
     /// transferred into the array; addref/copy first if the input is borrowed
     /// and must remain independently owned.
     /// `.mixed` preserves reference wrappers and does not clear the source zval.
@@ -158,6 +160,7 @@ pub const Array = opaque {
             .int => c.add_next_index_long(self.ptr(), @intCast(val)),
             .float => c.add_next_index_double(self.ptr(), val),
             .string => c.add_next_index_stringl(self.ptr(), val.ptr, val.len),
+            .str => c.add_next_index_str(self.ptr(), val.ptr()),
             .bool => c.add_next_index_bool(self.ptr(), val),
             .array => c.add_next_index_array(self.ptr(), val.ptr()),
             .object => c.add_next_index_object(self.ptr(), val.ptr()),

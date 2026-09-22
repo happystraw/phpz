@@ -15,7 +15,7 @@ pub fn __construct(ctx: phpz.Ctx) !void {
             .{ .object = .{ .optional = true, .instanceof = true } },
             .{ .object = .{ .optional = true, .instanceof = true } },
         },
-        .{ {}, {}, {}, .{ .type = role.Class.entry }, .{ .type = status.Class.entry } },
+        .{ {}, {}, {}, .{ .class = role.Class.entry }, .{ .class = status.Class.entry } },
     );
 
     const user = ctx.call.this().?;

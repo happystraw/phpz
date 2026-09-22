@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 08cfe9a78c05ebb1d48bed7ce6b8ff906978394c */
+ * Stub hash: 8a97573bd00544e41cc3eabf9366abcaceeda4d6 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -28,6 +28,27 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_typedArgument, 0, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, mode, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, single, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, value, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkStringArguments, 0, 1, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkZvalStrings, 0, 2, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, fixture, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkStringWriteFailure, 0, 3, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, fixture, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, exception, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_checkArrayCallbacks arginfo_hello
@@ -355,6 +376,10 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_typedArgument);
+ZEND_FUNCTION(MyPHPExt_Test_checkStringArguments);
+ZEND_FUNCTION(MyPHPExt_Test_checkZvalStrings);
+ZEND_FUNCTION(MyPHPExt_Test_checkStringWriteFailure);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectPropertyHandlers);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectCreation);
@@ -461,6 +486,26 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "typedArgument"), zif_MyPHPExt_Test_typedArgument, arginfo_MyPHPExt_Test_typedArgument, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "typedArgument"), zif_MyPHPExt_Test_typedArgument, arginfo_MyPHPExt_Test_typedArgument, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStringArguments"), zif_MyPHPExt_Test_checkStringArguments, arginfo_MyPHPExt_Test_checkStringArguments, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStringArguments"), zif_MyPHPExt_Test_checkStringArguments, arginfo_MyPHPExt_Test_checkStringArguments, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkZvalStrings"), zif_MyPHPExt_Test_checkZvalStrings, arginfo_MyPHPExt_Test_checkZvalStrings, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkZvalStrings"), zif_MyPHPExt_Test_checkZvalStrings, arginfo_MyPHPExt_Test_checkZvalStrings, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStringWriteFailure"), zif_MyPHPExt_Test_checkStringWriteFailure, arginfo_MyPHPExt_Test_checkStringWriteFailure, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStringWriteFailure"), zif_MyPHPExt_Test_checkStringWriteFailure, arginfo_MyPHPExt_Test_checkStringWriteFailure, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArrayCallbacks"), zif_MyPHPExt_Test_checkArrayCallbacks, arginfo_MyPHPExt_Test_checkArrayCallbacks, 0, NULL, NULL)

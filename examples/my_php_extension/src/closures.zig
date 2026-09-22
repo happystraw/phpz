@@ -94,7 +94,7 @@ pub const ReferenceClass = phpz.Class("MyPHPExt\\ClosureRef", Reference, .{
 /// PHP: MyPHPExt\makeReference(mixed &$value): Closure
 pub fn makeReference(ctx: phpz.Ctx) !void {
     const args = try ctx.call.expectArgs(&.{
-        .{ .reference = .{ .result = .zval } },
+        .{ .reference = .{ .as = .zval } },
     }, {});
     const owner = try ReferenceClass.create();
     defer owner.object().release();
