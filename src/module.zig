@@ -5,6 +5,7 @@ const phpz_options = @import("phpz_options");
 const c = @import("root.zig").c;
 pub const ModuleEntry = c.zend_module_entry;
 const errors = @import("errors.zig");
+const guard = @import("guard.zig");
 const ini_helper = @import("ini.zig");
 const observer = @import("observer.zig");
 
@@ -125,11 +126,12 @@ fn makePhpModuleStartupFn(
 ) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
     const symbols_fn_name = "register_" ++ module_name ++ "_symbols";
     const has_symbols = comptime @hasDecl(c, symbols_fn_name);
-    const has_observers = comptime if (observer_cfg) |o| o.fcall != null or o.errors != null or o.exception != null else false;
-    if (!has_symbols and hook_fn == null and ini_defs == null and classes == null and !has_observers) return null;
     return struct {
         fn handle(module_type: c_int, module_number: c_int) callconv(.c) c.zend_result {
             _ = module_type;
+
+            guard.ScopeObject.register(module_number);
+
             if (comptime has_symbols) {
                 @field(c, symbols_fn_name)(module_number);
             }

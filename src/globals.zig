@@ -32,6 +32,10 @@ pub inline fn global(
     };
 }
 
+pub inline fn stdObjectHandlers() c.zend_object_handlers {
+    return global(.value, c.zend_object_handlers, "std_object_handlers");
+}
+
 pub const class = struct {
     fn symbolName(comptime prefix: []const u8, comptime class_name: []const u8, comptime lowercase: bool) []const u8 {
         const name = if (class_name.len > 0 and class_name[0] == '\\') class_name[1..] else class_name;

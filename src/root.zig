@@ -36,6 +36,7 @@ pub const CallFrame = @import("ctx.zig").CallFrame;
 pub const GuardCtx = @import("ctx.zig").GuardCtx;
 pub const Zval = @import("zval.zig").Zval;
 pub const Guard = @import("guard.zig").Guard;
+pub const GuardScope = @import("guard.zig").Scope;
 
 pub const errors = @import("errors.zig");
 

@@ -1,6 +1,79 @@
 //! Native resources owned by a managed PHP handler.
 const std = @import("std");
 
+const c = @import("c.zig").c;
+const errors = @import("errors.zig");
+const globals = @import("globals.zig");
+const zend = @import("zend.zig");
+
+pub const ScopeObject = extern struct {
+    storage: [@sizeOf(Scope)]u8 align(@alignOf(Scope)),
+    object: c.zend_object,
+
+    const Self = @This();
+
+    var entry: *c.zend_class_entry = undefined;
+    var handlers: c.zend_object_handlers = undefined;
+
+    comptime {
+        if (@alignOf(Scope) > c.ZEND_MM_ALIGNMENT) {
+            @compileError("guard scope alignment exceeds Zend MM alignment");
+        }
+    }
+
+    inline fn scopeStorage(self: *Self) *Scope {
+        return @ptrCast(@alignCast(&self.storage));
+    }
+
+    pub fn register(module_number: c_int) void {
+        handlers = globals.stdObjectHandlers();
+        handlers.offset = @offsetOf(Self, "object");
+        handlers.free_obj = freeObject;
+        handlers.get_constructor = getConstructor;
+        handlers.clone_obj = null;
+        entry = @ptrCast(c.phpz_register_guard_scope_class(module_number));
+        c.phpz_class_entry_set_create_object(entry, createObject);
+    }
+
+    pub fn ensure(slot: *?*Scope) !*Scope {
+        if (slot.*) |scope| return scope;
+        const object = try create();
+        const scope = object.scopeStorage();
+        slot.* = scope;
+        return scope;
+    }
+
+    pub fn release(scope: *Scope) void {
+        const object: *Self = @ptrCast(@alignCast(scope));
+        zend.Object.from(&object.object).release();
+    }
+
+    fn create() !*Self {
+        const object = try zend.bailout.run(createObject, .{entry});
+        return @fieldParentPtr("object", object.?);
+    }
+
+    fn getConstructor(_: ?*c.zend_object) callconv(.c) ?*c.zend_function {
+        errors.throwError(null, "Instantiation of a Phpz guard scope is not allowed", .{}) catch {};
+        return null;
+    }
+
+    fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
+        const intern: *Self = @ptrCast(@alignCast(c.zend_object_alloc(@sizeOf(Self), ce.?).?));
+        intern.scopeStorage().* = Scope.init(std.heap.c_allocator);
+        c.zend_object_std_init(&intern.object, ce.?);
+        intern.object.handlers = &handlers;
+        c.object_properties_init(&intern.object, ce.?);
+        return &intern.object;
+    }
+
+    fn freeObject(obj: ?*c.zend_object) callconv(.c) void {
+        const intern: *Self = @fieldParentPtr("object", obj.?);
+        intern.scopeStorage().deinit();
+        c.zend_object_std_dtor(obj);
+    }
+};
+
 const Entry = struct {
     scope: *Scope,
     link: std.DoublyLinkedList.Node = .{},
@@ -16,7 +89,7 @@ const Entry = struct {
     }
 };
 
-/// Owns resource entries outside a bailout capture boundary.
+/// Owns registered resources.
 /// Keep its address stable until deinit; do not share it across threads or Fibers.
 pub const Scope = struct {
     allocator: std.mem.Allocator,
@@ -35,11 +108,10 @@ pub const Scope = struct {
         }
     }
 
-    /// Copy a resource into native storage and take ownership on success.
-    /// On allocation failure the caller still owns value.
-    /// Cleanup must not call PHP, bailout, or register additional resources.
-    /// Pointers in value must not refer to locals skipped by a possible longjmp.
-    pub fn register(self: *Scope, value: anytype, comptime cleanup: fn (@TypeOf(value)) void) !Guard(@TypeOf(value)) {
+    /// Copy value into native storage; caller retains it on allocation failure.
+    /// Cleanup must not call PHP, bailout, or register more resources.
+    /// Stored pointers must outlive cleanup.
+    pub fn register(self: *Scope, value: anytype, comptime cleanup: fn (@TypeOf(value)) void) std.mem.Allocator.Error!Guard(@TypeOf(value)) {
         const G = Guard(@TypeOf(value));
         const resource = try self.allocator.create(G.Resource);
         resource.* = .{

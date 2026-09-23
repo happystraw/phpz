@@ -235,8 +235,8 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime invoke: anytype)
             @as(
                 anyerror!void,
                 if (comptime Context == GuardCtx) blk: {
-                    var scope = guard.Scope.init(std.heap.c_allocator);
-                    defer scope.deinit();
+                    var scope: ?*guard.Scope = null;
+                    defer if (scope) |owned| guard.ScopeObject.release(owned);
                     break :blk zend.bailout.run(invoke, .{GuardCtx{
                         .call = .from(execute_data.?),
                         .retval = .from(return_value.?),

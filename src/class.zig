@@ -589,7 +589,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
         /// and handler overrides, creates the class entry, then installs
         /// `create_object`. Errors from a custom `.register` hook are propagated.
         pub fn register() !void {
-            handlers = globals.global(.value, c.zend_object_handlers, "std_object_handlers");
+            handlers = globals.stdObjectHandlers();
             handlers.free_obj = lifecycle.destroyObject;
             handlers.offset = @offsetOf(Self, "std");
             handlers.clone_obj = if (resolved.clone != null) lifecycle.cloneObject else null;

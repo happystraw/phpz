@@ -38,11 +38,11 @@ pub const Ctx = struct {
 
 /// Use instead of Ctx in a function, method, constructor, or Closure callback
 /// to enable a handler-local guard scope. Arbitrary Zig defer is not covered.
-/// Do not retain this context beyond the handler or across threads or Fiber suspension.
+/// Do not retain this context beyond the handler or across threads.
 pub const GuardCtx = struct {
     call: *CallFrame,
     retval: *Zval,
-    guard_scope: *GuardScope,
+    guard_scope: *?*GuardScope,
 
     pub inline fn ret(self: GuardCtx, comptime kind: Zval.Kind, value: Zval.Type(kind)) void {
         self.retval.set(kind, value);
@@ -53,12 +53,12 @@ pub const GuardCtx = struct {
         return .{ .call = self.call, .retval = self.retval };
     }
 
-    /// Transfer a native resource to this handler on success. Remaining resources
-    /// are released on return or bailout; release() cleans early and take() transfers ownership.
-    /// On failure the caller still owns value. Cleanup must not call PHP or bailout.
-    /// Pointers in value must survive a longjmp; do not point into skipped locals.
-    pub fn guard(self: GuardCtx, value: anytype, comptime cleanup: fn (@TypeOf(value)) void) std.mem.Allocator.Error!Guard(@TypeOf(value)) {
-        return self.guard_scope.register(value, cleanup);
+    /// Register value for cleanup on return, bailout, or request shutdown.
+    /// Ownership transfers only on success; release() cleans early, take() returns it.
+    /// Propagate ZendBailout so caller errdefer can run.
+    /// Cleanup must not call PHP or bailout; stored pointers must outlive cleanup.
+    pub fn guard(self: GuardCtx, value: anytype, comptime cleanup: fn (@TypeOf(value)) void) !Guard(@TypeOf(value)) {
+        return (try resource_guard.ScopeObject.ensure(self.guard_scope)).register(value, cleanup);
     }
 };
 

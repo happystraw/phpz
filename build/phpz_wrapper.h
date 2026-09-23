@@ -138,4 +138,30 @@ static zend_always_inline zend_class_entry *phpz_class_entry_get_interface(zend_
     return ce->interfaces[index];
 }
 
+static ZEND_NAMED_FUNCTION(phpz_guard_scope_constructor) {
+    zend_throw_error(NULL, "Instantiation of a Phpz guard scope is not allowed");
+}
+
+static zend_always_inline zend_class_entry *phpz_register_guard_scope_class(int module_number) {
+    ZEND_BEGIN_ARG_INFO_EX(arginfo_guard_ctor, 0, 0, 0)
+    ZEND_END_ARG_INFO()
+
+    static const zend_function_entry guard_scope_methods[] = {
+        ZEND_NAMED_ME(__construct, phpz_guard_scope_constructor, arginfo_guard_ctor, ZEND_ACC_PRIVATE)
+        ZEND_FE_END
+    };
+
+    char name[21];
+    int length = snprintf(name, sizeof(name), "PhpzGuard@%d", module_number);
+    zend_class_entry ce, *entry;
+    INIT_CLASS_ENTRY_EX(ce, name, length, guard_scope_methods);
+#if PHP_VERSION_ID >= 80400
+    entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE);
+#else
+    entry = zend_register_internal_class_ex(&ce, NULL);
+    entry->ce_flags |= ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE;
+#endif
+    return entry;
+}
+
 #endif // PHPZ_WRAPPER_H
