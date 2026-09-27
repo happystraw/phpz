@@ -1,38 +1,32 @@
 const phpz = @import("phpz");
 
-pub fn separateArray(ctx: phpz.Ctx) !void {
-    _ = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
-    ctx.retval.set(.mixed, ctx.call.arg(1));
-    const result = phpz.Zval.Array.fromUnchecked(ctx.retval.ptr());
+pub fn separateArray(ctx: phpz.Ctx, source: *phpz.zend.Array) !void {
+    if (!source.isImmutable()) source.addref();
+    ctx.retval.set(.array, source);
+    const result = try ctx.retval.array();
     result.separate();
     result.set(.int, "count", 1);
     try result.setAt(.int, 0, 2);
     try result.append(.int, 3);
 }
 
-pub fn copyArray(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{ .{ .array = .{} }, .{ .array = .{} } }, {});
-    const result = args[0].dupe();
+pub fn copyArray(ctx: phpz.Ctx, target: *phpz.zend.Array, source: *phpz.zend.Array) void {
+    const result = target.dupe();
     ctx.retval.set(.array, result);
-    result.copy(args[1]);
+    result.copy(source);
 }
 
-pub fn mergeArray(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{ .{ .array = .{} }, .{ .array = .{} }, .{ .bool = .{} } }, {});
-    const result = args[0].dupe();
+pub fn mergeArray(ctx: phpz.Ctx, target: *phpz.zend.Array, source: *phpz.zend.Array, overwrite: bool) void {
+    const result = target.dupe();
     ctx.retval.set(.array, result);
-    result.merge(args[1], args[2]);
+    result.merge(source, overwrite);
 }
 
-pub fn compareArrays(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .array = .{} }, .{ .array = .{} }, .{ .bool = .{} }, .{ .bool = .{} },
-    }, {});
-    const result = if (args[3])
-        try args[0].compare(args[1], compareIdentical, args[2])
+pub fn compareArrays(left: *phpz.zend.Array, right: *phpz.zend.Array, ordered: bool, identical: bool) !i64 {
+    return if (identical)
+        try left.compare(right, compareIdentical, ordered)
     else
-        try args[0].compare(args[1], compareValues, args[2]);
-    ctx.retval.set(.int, result);
+        try left.compare(right, compareValues, ordered);
 }
 
 fn compareValues(left: *const phpz.c.zval, right: *const phpz.c.zval) c_int {

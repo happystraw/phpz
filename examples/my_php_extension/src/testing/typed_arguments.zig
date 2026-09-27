@@ -91,7 +91,7 @@ fn writeValue(ctx: phpz.Ctx, value: anytype) !void {
 }
 
 /// Verify borrowing at parse time, before the return path obtains a reference.
-pub fn checkStringArguments(ctx: phpz.Ctx) !void {
+pub fn checkStringArguments(ctx: phpz.Ctx) !bool {
     try ctx.call.expectArgCount(1, 1);
     try ctx.call.expectNoExtraNamedArgs();
     const original = try Zval.from(ctx.call.arg(1)).as(.str);
@@ -100,13 +100,12 @@ pub fn checkStringArguments(ctx: phpz.Ctx) !void {
     const tuple = try ctx.call.expectArgs(&.{.{ .string = .{ .as = .str } }}, {});
     try std.testing.expect(original == single and original == tuple[0]);
     try std.testing.expectEqual(count, original.refcount());
-    ctx.ret(.bool, true);
+    return true;
 }
 
 /// The fixture object has a public string `value` and static string `shared`.
-pub fn checkZvalStrings(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{ .{ .string = .{} }, .{ .object = .{} } }, {});
-    const str = phpz.zend.String.init(args[0], false);
+pub fn checkZvalStrings(ctx: phpz.Ctx, text: []const u8, object: *phpz.zend.Object) !*phpz.zend.String {
+    const str = phpz.zend.String.init(text, false);
     var storage = Zval.raw.init(.str, str);
     const source = Zval.from(&storage);
     defer source.release();
@@ -118,7 +117,7 @@ pub fn checkZvalStrings(ctx: phpz.Ctx) !void {
     try std.testing.expect(source.asUnchecked(.str) == str);
     try std.testing.expect(source.asUnchecked(.string).ptr == str.slice().ptr);
     try std.testing.expectEqual(initial, str.refcount());
-    try std.testing.expectEqualStrings(args[0], source.asOrDefault(.string, "fallback"));
+    try std.testing.expectEqualStrings(text, source.asOrDefault(.string, "fallback"));
 
     var number = Zval.raw.init(.int, 42);
     try std.testing.expect(!Zval.raw.is(&number, .string) and !Zval.raw.is(&number, .str));
@@ -172,7 +171,6 @@ pub fn checkZvalStrings(ctx: phpz.Ctx) !void {
         try checkRefcount(str, initial);
     }
 
-    const object = args[1];
     try object.setProperty(.str, "value", str);
     try checkRefcount(str, initial + 1);
     try object.setProperty(.string, "value", "reset");
@@ -188,7 +186,7 @@ pub fn checkZvalStrings(ctx: phpz.Ctx) !void {
     try checkRefcount(str, initial);
 
     // Returning a separate owned reference must leave PHP with a live string.
-    ctx.ret(.str, str.copy());
+    return str.copy();
 }
 
 fn checkRefcount(str: *phpz.zend.String, expected: u32) !void {
@@ -196,26 +194,25 @@ fn checkRefcount(str: *phpz.zend.String, expected: u32) !void {
 }
 
 /// Check ownership after a rejected property write, including exception traces.
-pub fn checkStringWriteFailure(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{ .{ .object = .{} }, .{ .string = .{} }, .{ .string = .{} } }, {});
+pub fn checkStringWriteFailure(ctx: phpz.Ctx, object: *phpz.zend.Object, api: []const u8, exception_name: []const u8) !void {
     const str = phpz.zend.String.init("owned nonnumeric string for a rejected write", false);
     defer str.release();
     try std.testing.expect(!str.isInterned());
     try std.testing.expectEqual(@as(u32, 1), str.refcount());
 
-    const result: anyerror!void = if (std.mem.eql(u8, args[1], "object"))
-        args[0].setProperty(.str, "value", str)
-    else if (std.mem.eql(u8, args[1], "zval"))
+    const result: anyerror!void = if (std.mem.eql(u8, api, "object"))
+        object.setProperty(.str, "value", str)
+    else if (std.mem.eql(u8, api, "zval"))
         // This API consumes the offered reference even when the write fails.
         (try Zval.Object.from(ctx.call.arg(1))).set(.str, "value", str.copy())
-    else if (std.mem.eql(u8, args[1], "static"))
-        args[0].class().setStaticProperty(.str, "shared", str)
+    else if (std.mem.eql(u8, api, "static"))
+        object.class().setStaticProperty(.str, "shared", str)
     else
         return error.UnknownPropertyAPI;
 
     const pending = phpz.errors.exception();
     const expected_exception = if (pending) |exception|
-        std.mem.eql(u8, args[2], exception.class().name())
+        std.mem.eql(u8, exception_name, exception.class().name())
     else
         false;
     // A __set() exception trace may temporarily retain the string argument.

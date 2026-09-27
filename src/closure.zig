@@ -2,8 +2,8 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const function_helper = @import("function.zig");
-const Handler = function_helper.Handler;
+const functions = @import("function.zig");
+const Handler = functions.Handler;
 const String = @import("zend/string.zig").String;
 const Zval = @import("zval.zig").Zval;
 
@@ -16,11 +16,13 @@ const handler_arginfo = [_]c.zend_internal_arg_info{
     },
 };
 
-/// Create a Closure from fn(Ctx), fn(GuardCtx), or fn(), returning void or !void.
+/// Create a Closure from a typed Zig function, optionally with a leading Ctx or
+/// GuardCtx. The handler parses PHP parameters and writes non-void Zig results;
+/// void/!void preserves a manually set result.
 /// Uses phpz.function's error and bailout handling.
 /// See fromHandler for the closure's signature and creation constraints.
 pub fn fromFn(comptime func: anytype, result: *Zval) void {
-    const handler = function_helper.createHandler("{closure}()", func);
+    const handler = functions.createHandler("{closure}()", func);
     fromHandler(handler, result);
 }
 

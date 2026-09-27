@@ -21,13 +21,10 @@ const BigInteger = struct {
     }
 
     /// PHP: MyPHPExt\BigInteger::__construct(int|string $value = 0): void
-    pub fn __construct(ctx: phpz.Ctx) !BigInteger {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{ .optional = true, .one_of = &.{ .int, .string } } },
-        }, {});
+    pub fn __construct(initial: ?phpz.Mixed(&.{ .int, .string })) !BigInteger {
         var self = try init();
         errdefer self.deinit();
-        if (args[0]) |input| switch (input) {
+        if (initial) |input| switch (input) {
             .int => |n| try self.integer.set(n),
             .string => |text| {
                 // Managed.setString permits separators and empty input; the
@@ -47,10 +44,10 @@ const BigInteger = struct {
     }
 
     /// PHP: MyPHPExt\BigInteger::value(): string
-    pub fn value(self: *const BigInteger, ctx: phpz.Ctx) !void {
+    pub fn value(self: *const BigInteger) !*phpz.zend.String {
         const text = try self.integer.toString(allocator, 10, .lower);
         defer allocator.free(text);
-        ctx.retval.set(.string, text);
+        return phpz.zend.String.init(text, false);
     }
 
     const ops = struct {

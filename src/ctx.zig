@@ -173,7 +173,9 @@ pub const CallFrame = opaque {
         }
     }
 
-    fn ExpectArgsRuntime(comptime specs: []const ExpectArgKind.Spec) type {
+    /// Runtime argument type for expectArgs: void when no spec needs runtime data,
+    /// otherwise a tuple with one Runtime(spec) entry per argument, including void entries.
+    pub fn ExpectArgsRuntime(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
             var types: [specs.len]type = undefined;
             var is_all_void = true;
@@ -446,35 +448,8 @@ pub const CallFrame = opaque {
         return switch (spec) {
             .null => @compileError(".null cannot be used as a standalone type; use another type with the `nullable` flag or use .mixed with unions to allow null as a distinct case"),
             .mixed => |s| {
-                if (s.one_of) |u| {
-                    if (u.len <= 1) @compileError("invalid .mixed specification: unions array must contain at least 2 types");
-                    const TagInt = @typeInfo(ExpectArgKind).@"enum".tag_type;
-                    var field_names: [u.len][]const u8 = undefined;
-                    var field_types: [u.len]type = undefined;
-                    var field_attrs: [u.len]std.lang.Type.Union.FieldAttributes = undefined;
-                    var field_values: [u.len]TagInt = undefined;
-                    inline for (u, 0..) |kind, i| {
-                        if (kind == .mixed) @compileError("invalid .mixed specification: unions cannot contain .mixed");
-                        if (kind == .reference) @compileError("invalid .mixed specification: unions cannot contain .reference");
-                        if (kind == .callable) @compileError("invalid .mixed specification: unions cannot contain .callable");
-                        for (u[0..i]) |prev| if (prev == kind) @compileError("invalid .mixed specification: unions contains duplicate type ." ++ @tagName(kind));
-                        field_names[i] = @tagName(kind);
-                        field_types[i] = kind.InnerType();
-                        field_attrs[i] = .{};
-                        field_values[i] = @backingInt(kind);
-                    }
-
-                    const PhpUnionType = @Union(
-                        .auto,
-                        @Enum(TagInt, .exhaustive, &field_names, &field_values),
-                        &field_names,
-                        &field_types,
-                        &field_attrs,
-                    );
-                    return if (s.optional) ?PhpUnionType else PhpUnionType;
-                } else {
-                    return if (s.optional) ?*Zval else *Zval;
-                }
+                const T = if (s.one_of) |kinds| Mixed(kinds) else *Zval;
+                return if (s.optional) ?T else T;
             },
             .callable => |s| {
                 const T = if (s.nullable) Nullable(*Zval) else *Zval;
@@ -500,8 +475,37 @@ pub const CallFrame = opaque {
         };
     }
 
-    /// Returned for nullable typed values (except `.as = .zval`): distinguishes
-    /// "null was passed" (.null) from "argument omitted" (outer Zig optional).
+    /// A tagged PHP union, e.g. Mixed(&.{ .int, .string }).
+    /// Include .null to accept PHP null; an outer optional permits omitted arguments.
+    pub fn Mixed(comptime kinds: []const ExpectArgKind) type {
+        if (kinds.len <= 1) @compileError("Mixed requires at least two types");
+        const TagInt = @typeInfo(ExpectArgKind).@"enum".tag_type;
+        var field_names: [kinds.len][]const u8 = undefined;
+        var field_types: [kinds.len]type = undefined;
+        var field_attrs: [kinds.len]std.lang.Type.Union.FieldAttributes = undefined;
+        var field_values: [kinds.len]TagInt = undefined;
+        inline for (kinds, 0..) |kind, i| {
+            if (kind == .mixed or kind == .reference or kind == .callable) {
+                @compileError("Mixed cannot contain ." ++ @tagName(kind));
+            }
+            for (kinds[0..i]) |prev| if (prev == kind) @compileError("Mixed contains duplicate type ." ++ @tagName(kind));
+            field_names[i] = @tagName(kind);
+            field_types[i] = kind.InnerType();
+            field_attrs[i] = .{};
+            field_values[i] = @backingInt(kind);
+        }
+        return @Union(
+            .auto,
+            @Enum(TagInt, .exhaustive, &field_names, &field_values),
+            &field_names,
+            &field_types,
+            &field_attrs,
+        );
+    }
+
+    /// Explicit PHP null (.null) or a typed value (.value), for nullable arguments
+    /// and handler returns. An outer Zig optional distinguishes omitted arguments.
+    /// expectArgs uses this for nullable typed outputs except `.as = .zval`.
     pub fn Nullable(comptime T: type) type {
         return union(enum) {
             null,

@@ -1,10 +1,5 @@
 /// PHP: MyPHPExt\Tag::__construct(string $name, ?string $description = null): void
-pub fn __construct(ctx: phpz.Ctx) !void {
-    const name, const description = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-        .{ .string = .{ .optional = true, .nullable = true } },
-    }, {});
-
+pub fn __construct(ctx: phpz.Ctx, name: []const u8, description: ?phpz.Nullable([]const u8)) !void {
     const tag = ctx.call.this().?;
     try tag.setProperty(.string, "name", name);
     if (description) |provided| {

@@ -28,15 +28,10 @@ const functions = struct {
     }
 
     /// function greet(string $name): string
-    pub fn greet(ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .string = .{} },
-        }, {});
-        const name = args[0];
-
+    pub fn greet(name: []const u8) !*phpz.zend.String {
         var buffer: [256]u8 = undefined;
         const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
-        ctx.ret(.string, result);
+        return .init(result, false);
     }
 };
 
@@ -47,31 +42,22 @@ const Counter = struct {
     n: i64 = 0,
 
     /// public function __construct(int $n = 0): void
-    pub fn __construct(ctx: phpz.Ctx) !Counter {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{ .optional = true } },
-        }, {});
-        return .{ .n = args[0] orelse 0 };
+    pub fn __construct(n: ?i64) Counter {
+        return .{ .n = n orelse 0 };
     }
 
     /// public function add(int $n): void
-    pub fn add(self: *Counter, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{} },
-        }, {});
-        self.n +|= args[0];
+    pub fn add(self: *Counter, n: i64) void {
+        self.n +|= n;
     }
 
     /// public function dec(int $n): void
-    pub fn dec(self: *Counter, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{} },
-        }, {});
-        self.n -|= args[0];
+    pub fn dec(self: *Counter, n: i64) void {
+        self.n -|= n;
     }
 
     /// public function value(): int
-    pub fn value(self: *const Counter, ctx: phpz.Ctx) void {
-        ctx.ret(.int, self.n);
+    pub fn value(self: *const Counter) i64 {
+        return self.n;
     }
 };

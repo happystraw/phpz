@@ -7,30 +7,25 @@ const GcNode = struct {
     callback: phpz.zend.Callable,
 
     /// PHP: MyPHPExt\Test\GcNode::__construct(mixed $first = null, mixed $second = null, ?callable $callback = null): void
-    pub fn __construct(ctx: phpz.Ctx) !GcNode {
-        var callback: phpz.zend.Callable = .nil;
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{ .optional = true } },
-            .{ .mixed = .{ .optional = true } },
-            .{ .callable = .{ .optional = true, .nullable = true, .resolve = true } },
-        }, .{ {}, {}, .{ .out = &callback } });
-        var self: GcNode = .{ .first = Zval.raw.undef, .second = Zval.raw.undef, .callback = callback };
-        if (args[0]) |value| Zval.raw.copy(&self.first, value.ptr());
-        if (args[1]) |value| Zval.raw.copy(&self.second, value.ptr());
-        // Parsing borrows the callable; retain it beyond this constructor call.
-        if (self.callback.fci.size != 0) self.callback.addref();
+    pub fn __construct(first: ?*Zval, second: ?*Zval, callback: ?phpz.Nullable(*phpz.zend.Callable)) GcNode {
+        var self: GcNode = .{ .first = Zval.raw.undef, .second = Zval.raw.undef, .callback = .nil };
+        if (first) |value| Zval.raw.copy(&self.first, value.ptr());
+        if (second) |value| Zval.raw.copy(&self.second, value.ptr());
+        if (callback) |provided| {
+            if (provided.asOptional()) |resolved| {
+                // Copy the borrowed call info and retain its PHP references.
+                self.callback = resolved.*;
+                self.callback.addref();
+            }
+        }
         return self;
     }
 
     /// PHP: MyPHPExt\Test\GcNode::invokeCallback(mixed $value, bool $guarded = false): mixed
-    pub fn invokeCallback(self: *GcNode, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{} },
-            .{ .bool = .{ .optional = true } },
-        }, {});
+    pub fn invokeCallback(self: *GcNode, ctx: phpz.Ctx, value: *Zval, guarded: ?bool) !void {
         if (self.callback.fci.size == 0) return error.MissingCallback;
-        const params = .{args[0].ptr().*};
-        if (args[1] orelse false) {
+        const params = .{value.ptr().*};
+        if (guarded orelse false) {
             try self.callback.tryCall(ctx.retval.ptr(), params, null);
         } else {
             try self.callback.call(ctx.retval.ptr(), params, null);

@@ -3,7 +3,7 @@ const Zval = phpz.Zval;
 
 /// PHP: MyPHPExt\Test\superglobalsSnapshot(): array
 pub fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
-    _ = try ctx.call.expectArgs(&.{}, {});
+    try ctx.call.expectNoArgs();
 
     const php = phpz.globals.php();
     const executor = phpz.globals.executor();
@@ -31,9 +31,7 @@ fn setBorrowed(result: *Zval.Array, key: []const u8, value: *Zval.Array) void {
 }
 
 /// PHP: MyPHPExt\Test\mutateSuperglobals(): void
-pub fn mutateSuperglobals(ctx: phpz.Ctx) !void {
-    _ = try ctx.call.expectArgs(&.{}, {});
-
+pub fn mutateSuperglobals() !void {
     const executor = phpz.globals.executor();
     const get = executor.superglobalMut(.GET) orelse return error.SuperglobalUnavailable;
     const post = executor.superglobalMut(.POST) orelse return error.SuperglobalUnavailable;

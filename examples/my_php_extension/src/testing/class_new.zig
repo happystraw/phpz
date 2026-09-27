@@ -6,19 +6,14 @@ const Value = struct {
     second: i64 = 0,
     trace_cleanup: bool = false,
 
-    pub fn __construct(ctx: phpz.Ctx) !Value {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{} },
-            .{ .int = .{ .optional = true } },
-            .{ .bool = .{ .optional = true } },
-        }, {});
-        if (args[2] orelse false) {
+    pub fn __construct(ctx: phpz.Ctx, first: i64, second: ?i64, fail: ?bool) !Value {
+        if (fail orelse false) {
             // Trace the already initialized backing when construction fails.
             const instance = try ValueClass.fromObject(ctx.call.this().?);
             instance.backing().?.trace_cleanup = true;
             return phpz.errors.throwError(null, "constructor failed", .{});
         }
-        return .{ .first = args[0], .second = args[1] orelse 7 };
+        return .{ .first = first, .second = second orelse 7 };
     }
 
     pub fn values(self: *const Value, ctx: phpz.Ctx) !void {
@@ -42,17 +37,11 @@ const BareClass = phpz.Class("MyPHPExt\\Test\\NewBare", struct { value: i64 = 0 
 pub const classes = .{ ValueClass, BareClass };
 
 /// Exercise Class.new()/tryNew() with borrowed positional and named arguments.
-pub fn newObject(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .bool = .{} },
-        .{ .array = .{} },
-        .{ .array = .{ .nullable = true } },
-        .{ .bool = .{} },
-    }, {});
-    if (args[0]) {
-        try create(BareClass, ctx, args[1], args[2].asOptional(), args[3]);
+pub fn newObject(ctx: phpz.Ctx, bare: bool, positional: *phpz.zend.Array, named: phpz.Nullable(*phpz.zend.Array), guarded: bool) !void {
+    if (bare) {
+        try create(BareClass, ctx, positional, named.asOptional(), guarded);
     } else {
-        try create(ValueClass, ctx, args[1], args[2].asOptional(), args[3]);
+        try create(ValueClass, ctx, positional, named.asOptional(), guarded);
     }
 }
 
