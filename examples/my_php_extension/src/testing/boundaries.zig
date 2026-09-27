@@ -31,8 +31,7 @@ fn sortWithException(a: *c.Bucket, b: *c.Bucket) phpz.zend.Array.SortOrder {
     return if (left < right) .less else if (left > right) .greater else .equal;
 }
 
-pub fn checkArrayCallbacks(ctx: phpz.Ctx) !void {
-    _ = try ctx.call.expectArgs(&.{}, {});
+pub fn checkArrayCallbacks() !void {
     const source = phpz.zend.Array.empty();
     defer source.release();
     for ([_]i64{ 3, 2, 1 }) |number| {
@@ -74,9 +73,8 @@ fn throwingNoProperties(obj: ?*c.zend_object) callconv(.c) ?*c.HashTable {
     return null;
 }
 
-pub fn checkObjectPropertyHandlers(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{.{ .object = .{ .optional = true, .nullable = true } }}, {});
-    if (args[0]) |arg| {
+pub fn checkObjectPropertyHandlers(object: ?phpz.Nullable(*phpz.zend.Object)) !void {
+    if (object) |arg| {
         if (arg.asOptional()) |lazy| {
             try expectPhpException(lazy.stdProperties());
             try expectPhpException(lazy.properties());
@@ -136,9 +134,8 @@ fn freeObject(obj: ?*c.zend_object) callconv(.c) void {
     c.zend_object_std_dtor(obj);
 }
 
-pub fn checkObjectCreation(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{.{ .string = .{} }}, {});
-    creation_stage = std.meta.stringToEnum(CreationStage, args[0]) orelse return error.InvalidStage;
+pub fn checkObjectCreation(stage: []const u8) !void {
+    creation_stage = std.meta.stringToEnum(CreationStage, stage) orelse return error.InvalidStage;
     // Each PHPT defines this dedicated user class; no other class is modified.
     const entry = (try phpz.ClassEntry.lookup("NativeBoundaryTarget", false)) orelse return error.ClassNotFound;
     creation_handlers = c.std_object_handlers;

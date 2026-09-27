@@ -32,67 +32,41 @@ const Collection = struct {
     }
 
     /// PHP: MyPHPExt\Collection::__construct(array $values = [])
-    pub fn __construct(ctx: phpz.Ctx) !Collection {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .array = .{ .optional = true } },
-        }, {});
-
+    pub fn __construct(values: ?*phpz.zend.Array) Collection {
         var self = init();
-        if (args[0]) |values| {
-            self.data.copy(values);
+        if (values) |provided| {
+            self.data.copy(provided);
         }
         return self;
     }
 
     /// PHP: MyPHPExt\Collection::toArray(): array
-    pub fn toArray(self: *const Collection, ctx: phpz.Ctx) void {
-        ctx.retval.set(.array, self.data.dupe());
+    pub fn toArray(self: *const Collection) *phpz.zend.Array {
+        return self.data.dupe();
     }
 
     /// PHP: MyPHPExt\Collection::offsetExists(mixed $offset): bool
-    pub fn offsetExists(self: *Collection, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{} },
-        }, {});
-        const offset = args[0];
-
-        ctx.retval.set(.bool, switch (offset.kind()) {
+    pub fn offsetExists(self: *Collection, offset: *Zval) bool {
+        return switch (offset.kind()) {
             .int => self.data.hasIndex(@intCast(offset.asUnchecked(.int))),
             .string => self.data.has(offset.asUnchecked(.string)),
             else => false,
-        });
+        };
     }
 
     /// PHP: MyPHPExt\Collection::offsetGet(mixed $offset): mixed
-    pub fn offsetGet(self: *Collection, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{} },
-        }, {});
-        const offset = args[0];
-
+    pub fn offsetGet(self: *Collection, offset: *Zval) ?*Zval {
         const value = switch (offset.kind()) {
             .int => self.data.findIndex(@intCast(offset.asUnchecked(.int))),
             .string => self.data.find(offset.asUnchecked(.string)),
             else => null,
         };
 
-        if (value) |found| {
-            Zval.raw.tryAddref(found);
-            ctx.retval.set(.mixed, found);
-        } else {
-            ctx.retval.set(.null, {});
-        }
+        return if (value) |found| .from(found) else null;
     }
 
     /// PHP: MyPHPExt\Collection::offsetSet(mixed $offset, mixed $value): void
-    pub fn offsetSet(self: *Collection, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{} },
-            .{ .mixed = .{} },
-        }, {});
-        const offset = args[0];
-        const value = args[1];
-
+    pub fn offsetSet(self: *Collection, offset: *Zval, value: *Zval) void {
         switch (offset.kind()) {
             .int => {
                 value.tryAddref();
@@ -119,12 +93,7 @@ const Collection = struct {
     }
 
     /// PHP: MyPHPExt\Collection::offsetUnset(mixed $offset): void
-    pub fn offsetUnset(self: *Collection, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .mixed = .{} },
-        }, {});
-        const offset = args[0];
-
+    pub fn offsetUnset(self: *Collection, offset: *Zval) void {
         switch (offset.kind()) {
             .int => self.data.deleteIndex(
                 @intCast(offset.asUnchecked(.int)),
@@ -139,30 +108,24 @@ const Collection = struct {
     }
 
     /// PHP: MyPHPExt\Collection::count(): int
-    pub fn count(self: *const Collection, ctx: phpz.Ctx) void {
-        ctx.retval.set(.int, @intCast(self.data.len()));
+    pub fn count(self: *const Collection) usize {
+        return self.data.len();
     }
 
     /// PHP: MyPHPExt\Collection::current(): mixed
-    pub fn current(self: *Collection, ctx: phpz.Ctx) void {
-        if (self.iterator.currentValue()) |value| {
-            Zval.raw.tryAddref(value);
-            ctx.retval.set(.mixed, value);
-        } else {
-            ctx.retval.set(.null, {});
-        }
+    pub fn current(self: *Collection) ?*Zval {
+        return if (self.iterator.currentValue()) |value| .from(value) else null;
     }
 
     /// PHP: MyPHPExt\Collection::key(): mixed
-    pub fn key(self: *Collection, ctx: phpz.Ctx) void {
+    pub fn key(self: *Collection) phpz.Mixed(&.{ .int, .string, .null }) {
         if (self.iterator.currentKey()) |key_value| {
-            switch (key_value) {
-                .int => |index| ctx.retval.set(.int, index),
-                .string => |key_name| ctx.retval.set(.string, key_name),
-            }
-        } else {
-            ctx.retval.set(.null, {});
+            return switch (key_value) {
+                .int => |index| .{ .int = index },
+                .string => |key_name| .{ .string = key_name },
+            };
         }
+        return .null;
     }
 
     /// PHP: MyPHPExt\Collection::next(): void
@@ -176,8 +139,8 @@ const Collection = struct {
     }
 
     /// PHP: MyPHPExt\Collection::valid(): bool
-    pub fn valid(self: *Collection, ctx: phpz.Ctx) void {
-        ctx.retval.set(.bool, self.iterator.current() != null);
+    pub fn valid(self: *Collection) bool {
+        return self.iterator.current() != null;
     }
 };
 

@@ -3,23 +3,19 @@ fn register(register_fn: anytype) *phpz.ClassEntry {
 }
 
 /// PHP: MyPHPExt\Entity::__construct(int $id): void
-pub fn __construct(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .int = .{} },
-    }, {});
-
+pub fn __construct(ctx: phpz.Ctx, id: i64) !void {
     const entity = ctx.call.this().?;
-    try entity.setProperty(.int, "id", args[0]);
+    try entity.setProperty(.int, "id", id);
 }
 
 /// PHP: MyPHPExt\Entity::getId(): int
-pub fn getId(ctx: phpz.Ctx) !void {
+pub fn getId(ctx: phpz.Ctx) !i64 {
     const entity = ctx.call.this().?;
     var scratch = phpz.Zval.raw.undef;
     defer phpz.Zval.raw.tryRelease(&scratch);
 
     const id = try entity.property("id", false, &scratch);
-    ctx.retval.set(.int, phpz.Zval.raw.asUnchecked(id.ptr(), .int));
+    return phpz.Zval.raw.asUnchecked(id.ptr(), .int);
 }
 
 pub const Class = phpz.Class("MyPHPExt\\Entity", @This(), .{ .register = register });

@@ -4,14 +4,13 @@ const SerializableValue = struct {
     number: i64 = 0,
 
     /// PHP: MyPHPExt\Test\SerializableValue::__construct(int $value): void
-    pub fn __construct(ctx: phpz.Ctx) !SerializableValue {
-        const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
-        return .{ .number = args[0] };
+    pub fn __construct(number: i64) SerializableValue {
+        return .{ .number = number };
     }
 
     /// PHP: MyPHPExt\Test\SerializableValue::value(): int
-    pub fn value(self: *const SerializableValue, ctx: phpz.Ctx) void {
-        ctx.retval.set(.int, self.number);
+    pub fn value(self: *const SerializableValue) i64 {
+        return self.number;
     }
 
     /// PHP: MyPHPExt\Test\SerializableValue::__serialize(): array
@@ -21,9 +20,8 @@ const SerializableValue = struct {
     }
 
     /// PHP: MyPHPExt\Test\SerializableValue::__unserialize(array $data): void
-    pub fn __unserialize(self: *SerializableValue, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
-        const value_zval = args[0].find("value") orelse return error.InvalidSerializedData;
+    pub fn __unserialize(self: *SerializableValue, data: *phpz.zend.Array) !void {
+        const value_zval = data.find("value") orelse return error.InvalidSerializedData;
         const stored = phpz.Zval.from(value_zval);
         if (!stored.is(.int)) return error.InvalidSerializedData;
         self.number = stored.asUnchecked(.int);

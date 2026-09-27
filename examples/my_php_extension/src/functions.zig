@@ -9,14 +9,10 @@ pub fn hello() void {
 }
 
 /// PHP: greet(string $name): string
-pub fn greet(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-    }, {});
-
+pub fn greet(name: []const u8) !*phpz.zend.String {
     var buffer: [4096]u8 = undefined;
-    const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{args[0]});
-    ctx.retval.set(.string, result);
+    const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
+    return phpz.zend.String.init(result, false);
 }
 
 /// PHP: MyPHPExt\increment(int &$value, int $by = 1): void
@@ -33,19 +29,7 @@ pub fn increment(ctx: phpz.Ctx) !void {
 }
 
 /// PHP: MyPHPExt\mapValues(array $values, callable $mapper): array
-pub fn mapValues(ctx: phpz.Ctx) !void {
-    var mapper: phpz.zend.Callable = .nil;
-    const values, _ = try ctx.call.expectArgs(
-        &.{
-            .{ .array = .{} },
-            .{ .callable = .{ .resolve = true } },
-        },
-        .{
-            {},
-            .{ .out = &mapper },
-        },
-    );
-
+pub fn mapValues(ctx: phpz.Ctx, values: *phpz.zend.Array, mapper: *phpz.zend.Callable) !void {
     var result = phpz.Zval.Array.empty(ctx.retval.ptr());
     var iterator = values.fastIterator();
     while (iterator.next()) |entry| {

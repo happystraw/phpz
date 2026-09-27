@@ -40,13 +40,13 @@ pub fn __construct(ctx: phpz.Ctx) !void {
 
 /// PHP: MyPHPExt\User::label(): string
 /// PHP: MyPHPExt\User::__toString(): string
-pub fn label(ctx: phpz.Ctx) !void {
+pub fn label(ctx: phpz.Ctx) !*phpz.zend.String {
     const user = ctx.call.this().?;
     var scratch = phpz.Zval.raw.undef;
     defer phpz.Zval.raw.tryRelease(&scratch);
 
     const name = try user.property("name", false, &scratch);
-    ctx.retval.set(.string, phpz.Zval.raw.asUnchecked(name.ptr(), .string));
+    return name.asUnchecked(.str).copy();
 }
 
 pub const Class = phpz.Class("MyPHPExt\\User", @This(), .{ .register = register });

@@ -19,21 +19,14 @@ fn registerResources(ctx: phpz.GuardCtx, label: []const u8) !void {
     }
 }
 
-pub fn guardResources(ctx: phpz.GuardCtx) !void {
-    var callback: phpz.zend.Callable = .nil;
-    const args = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-        .{ .callable = .{ .resolve = true } },
-        .{ .bool = .{ .optional = true } },
-    }, .{ {}, .{ .out = &callback }, {} });
-
-    try registerResources(ctx, args[0]);
-    defer std.debug.print("defer {s}\n", .{args[0]});
+pub fn guardResources(ctx: phpz.GuardCtx, label: []const u8, callback: *phpz.zend.Callable, fail: ?bool) !void {
+    try registerResources(ctx, label);
+    defer std.debug.print("defer {s}\n", .{label});
     try callback.call(null, .{}, null);
-    if (args[2] orelse false) return error.GuardFailure;
+    if (fail orelse false) return error.GuardFailure;
 }
 
-pub fn value(ctx: phpz.GuardCtx) void {
-    registerResources(ctx, "closure") catch return;
-    ctx.ret(.int, 42);
+pub fn value(ctx: phpz.GuardCtx) !i64 {
+    try registerResources(ctx, "closure");
+    return 42;
 }

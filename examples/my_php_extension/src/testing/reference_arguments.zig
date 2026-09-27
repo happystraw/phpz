@@ -3,7 +3,7 @@ const phpz = @import("phpz");
 const Kind = phpz.CallFrame.ExpectArgKind;
 
 /// PHP: MyPHPExt\Test\referenceArgument(string $mode, string $type, bool $optional, bool $single, mixed &$value = null): string
-pub fn referenceArgument(ctx: phpz.Ctx) !void {
+pub fn referenceArgument(ctx: phpz.Ctx) ![]const u8 {
     try ctx.call.expectArgCount(4, 5);
     const mode = try ctx.call.expectArg(1, .{ .string = .{} }, {});
     const type_name = try ctx.call.expectArg(2, .{ .string = .{} }, {});
@@ -32,7 +32,7 @@ pub fn referenceArgument(ctx: phpz.Ctx) !void {
     return error.InvalidReferenceTestOptions;
 }
 
-fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
+fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) ![]const u8 {
     const parsed = if (single)
         try ctx.call.expectArg(5, spec, {})
     else result: {
@@ -54,10 +54,7 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
             @compileError("unexpected reference argument result type");
         }
     }
-    const value = if (comptime spec.reference.optional) parsed orelse {
-        ctx.retval.set(.string, "omitted");
-        return;
-    } else parsed;
+    const value = if (comptime spec.reference.optional) parsed orelse return "omitted" else parsed;
 
     const outer = ctx.call.arg(5);
     const reference = phpz.Zval.raw.asUnchecked(outer, .reference);
@@ -76,5 +73,5 @@ fn inspect(ctx: phpz.Ctx, comptime spec: Kind.Spec, single: bool) !void {
         },
     };
     if (inner.is(.int)) inner.set(.int, inner.asUnchecked(.int) + 1);
-    ctx.retval.set(.string, @tagName(inner.kind()));
+    return @tagName(inner.kind());
 }

@@ -48,34 +48,26 @@ fn collect(ctx: phpz.Ctx, result: *Zval.Array, prefix: usize) !void {
     }
 }
 
-pub fn parsedSum(ctx: phpz.Ctx) !void {
+pub fn parsedSum(ctx: phpz.Ctx) !i64 {
     var left: phpz.c.zend_long = 0;
     var right: phpz.c.zend_long = 0;
     try ctx.call.parseArgs("ll", .{ &left, &right });
-    ctx.retval.set(.int, left +| right);
+    return left +| right;
 }
 
-pub fn parsedVariadicCount(ctx: phpz.Ctx) !void {
+pub fn parsedVariadicCount(ctx: phpz.Ctx) !u32 {
     var args: ?*phpz.c.zval = null;
     var count: u32 = 0;
     try ctx.call.parseArgs("*", .{ &args, &count });
-    ctx.retval.set(.int, count);
+    return count;
 }
 
 /// Exercise named-argument call wrappers with zero or one positional argument.
-pub fn invokeArguments(ctx: phpz.Ctx) !void {
-    var callback: phpz.zend.Callable = .nil;
-    const args = try ctx.call.expectArgs(&.{
-        .{ .string = .{} },
-        .{ .callable = .{ .resolve = true } },
-        .{ .array = .{} },
-        .{ .array = .{ .nullable = true } },
-        .{ .bool = .{} },
-    }, .{ {}, .{ .out = &callback }, {}, {}, {} });
-    const named_params = args[3].asOptional();
-    switch (args[2].len()) {
-        0 => try invoke(ctx, args[0], &callback, .{}, named_params, args[4]),
-        1 => try invoke(ctx, args[0], &callback, .{(args[2].findIndex(0) orelse return error.InvalidPositionalArguments).*}, named_params, args[4]),
+pub fn invokeArguments(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Callable, positional: *phpz.zend.Array, named: phpz.Nullable(*phpz.zend.Array), guarded: bool) !void {
+    const named_params = named.asOptional();
+    switch (positional.len()) {
+        0 => try invoke(ctx, mode, callback, .{}, named_params, guarded),
+        1 => try invoke(ctx, mode, callback, .{(positional.findIndex(0) orelse return error.InvalidPositionalArguments).*}, named_params, guarded),
         else => return error.TooManyTestArguments,
     }
 }

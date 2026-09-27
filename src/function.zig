@@ -4,10 +4,12 @@ const abi = @import("abi.zig");
 const c = @import("root.zig").c;
 const Ctx = @import("ctx.zig").Ctx;
 const GuardCtx = @import("ctx.zig").GuardCtx;
+const CallFrame = @import("ctx.zig").CallFrame;
 const errors = @import("errors.zig");
 const guard = @import("guard.zig");
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
+const Zval = @import("zval.zig").Zval;
 
 pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
@@ -159,12 +161,14 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 /// does not report other stub functions that are missing Zig bindings. Prefer
 /// `functions` when all extension functions can be bound together.
 ///
-/// Supported function signatures:
-///   - `fn (Ctx) void|!void`  - Access parameters and set return value via ctx
-///   - `fn (GuardCtx) void|!void` - Also enable native resource cleanup on bailout
-///   - `fn () void|!void`     - No parameters or return value
+/// The optional Ctx or GuardCtx must be first. Other parameters are extracted
+/// through CallFrame.expectArgs. Non-void results are written to PHP's result zval;
+/// void/!void leaves it unchanged, allowing the function to set it manually.
+/// Use a context-only signature for expectArgs specifications that a Zig type
+/// cannot express.
 ///
-/// When the function takes no parameters, PHP will reject calls with extra arguments.
+/// When the function takes neither a context nor PHP parameters, extra arguments
+/// are rejected. A context-only handler retains control of its own parsing.
 ///
 /// Parameters:
 ///   - func_name: The name of the PHP function (null-terminated string)
@@ -174,6 +178,10 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 /// ```zig
 /// fn helloWorld() void {
 ///     _ = phpz.printf("Hello from ZIG!\n", .{});
+/// }
+///
+/// fn twice(value: u8) i64 {
+///     return @as(i64, value) * 2;
 /// }
 ///
 /// fn add(ctx: Ctx) !void {
@@ -222,31 +230,199 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
     }
 }
 
-/// Create a PHP handler from fn(), fn(Ctx), or fn(GuardCtx), returning void or !void.
-/// GuardCtx enables bailout capture and resource cleanup.
-pub fn createHandler(comptime func_desc: [:0]const u8, comptime invoke: anytype) Handler {
-    const params = @typeInfo(@TypeOf(invoke)).@"fn".param_types;
-    if (params.len > 1 or (params.len == 1 and params[0] != Ctx and params[0] != GuardCtx)) {
-        @compileError("unsupported handler signature for " ++ func_desc ++ ": expected fn(), fn(Ctx), or fn(GuardCtx)");
+fn NullablePayloadType(comptime T: type) ?type {
+    if (@typeInfo(T) != .@"union" or !@hasField(T, "value")) return null;
+    const Payload = @FieldType(T, "value");
+    return if (T == CallFrame.Nullable(Payload)) Payload else null;
+}
+
+fn mixedKinds(comptime T: type) ?[]const CallFrame.ExpectArgKind {
+    comptime {
+        if (@typeInfo(T) != .@"union") return null;
+        const info = @typeInfo(T).@"union";
+        if (info.tag_type == null or info.field_names.len < 2) return null;
+        var kinds: [info.field_names.len]CallFrame.ExpectArgKind = undefined;
+        for (info.field_names, 0..) |name, i| {
+            if (!@hasField(CallFrame.ExpectArgKind, name)) return null;
+            const kind = @field(CallFrame.ExpectArgKind, name);
+            if (kind == .mixed or kind == .reference or kind == .callable) return null;
+            kinds[i] = kind;
+        }
+        const result = kinds;
+        return if (T == CallFrame.Mixed(&result)) &result else null;
     }
-    const Context = if (params.len == 1) params[0].? else Ctx;
+}
+
+fn specFor(comptime T: type) CallFrame.ExpectArgKind.Spec {
+    const optional = @typeInfo(T) == .optional;
+    const Inner = if (optional) @typeInfo(T).optional.child else T;
+    const nullable = NullablePayloadType(Inner) != null;
+    const Base = NullablePayloadType(Inner) orelse Inner;
+    const Spec = CallFrame.ExpectArgKind.Spec;
+
+    inline for (.{ i8, i16, i32, i64, isize, u8, u16, u32, u64, usize }) |Int| {
+        if (Base == Int) {
+            const As = @TypeOf((@as(Spec, .{ .int = .{} })).int.as);
+            return .{ .int = .{ .as = @field(As, @typeName(Int)), .optional = optional, .nullable = nullable } };
+        }
+    }
+    if (Base == f32 or Base == f64) {
+        return .{ .float = .{ .as = if (Base == f32) .f32 else .f64, .optional = optional, .nullable = nullable } };
+    }
+    if (Base == []const u8) return .{ .string = .{ .as = .string, .optional = optional, .nullable = nullable } };
+    if (Base == *zend.String) return .{ .string = .{ .as = .str, .optional = optional, .nullable = nullable } };
+    if (Base == bool) return .{ .bool = .{ .optional = optional, .nullable = nullable } };
+    if (Base == *zend.Array) return .{ .array = .{ .optional = optional, .nullable = nullable } };
+    if (Base == *zend.Object) return .{ .object = .{ .optional = optional, .nullable = nullable } };
+    if (Base == *zend.Resource) return .{ .resource = .{ .optional = optional, .nullable = nullable } };
+    if (Base == *zend.Reference and !nullable) return .{ .reference = .{ .optional = optional } };
+    if (Base == *Zval and !nullable) return .{ .mixed = .{ .optional = optional } };
+    if (Base == *zend.Callable) return .{ .callable = .{ .optional = optional, .nullable = nullable, .resolve = true } };
+    if (!nullable) if (mixedKinds(Base)) |kinds| return .{ .mixed = .{ .optional = optional, .one_of = kinds } };
+    @compileError("unsupported PHP handler parameter type " ++ @typeName(T) ++ "; use a leading Ctx or GuardCtx and call expectArgs for complex specifications");
+}
+
+fn makeCallableArg(comptime T: type, parsed: anytype, resolved: *zend.Callable) T {
+    if (@typeInfo(T) == .optional) {
+        return if (parsed) |present| makeCallableArg(@typeInfo(T).optional.child, present, resolved) else null;
+    }
+    if (NullablePayloadType(T) != null) {
+        return switch (parsed) {
+            .null => .null,
+            .value => .{ .value = resolved },
+        };
+    }
+    return resolved;
+}
+
+pub fn ContextType(comptime func: anytype, comptime has_receiver: bool) type {
+    const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
+    const index: usize = if (has_receiver) 1 else 0;
+    if (params.len > index and (params[index] == Ctx or params[index] == GuardCtx)) return params[index].?;
+    return Ctx;
+}
+
+fn ResultType(comptime func: anytype) type {
+    const R = @typeInfo(@TypeOf(func)).@"fn".return_type.?;
+    return if (@typeInfo(R) == .error_union) @typeInfo(R).error_union.payload else R;
+}
+
+pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!ResultType(func) {
+    const param_types = @typeInfo(@TypeOf(func)).@"fn".param_types;
+    const has_receiver = @TypeOf(receiver) != void;
+    const context_idx: usize = if (has_receiver) 1 else 0;
+    const has_context = param_types.len > context_idx and (param_types[context_idx] == Ctx or param_types[context_idx] == GuardCtx);
+    const php_params_offset = context_idx + @intFromBool(has_context);
+    const php_params_count = param_types.len - php_params_offset;
+    comptime {
+        if (has_context and param_types[context_idx] != @TypeOf(ctx)) {
+            @compileError("handler context type does not match its binding");
+        }
+        for (param_types[php_params_offset..]) |ParamType| {
+            if (ParamType == Ctx or ParamType == GuardCtx) @compileError("Ctx or GuardCtx must precede all PHP parameters");
+        }
+    }
+
+    var params: std.meta.ArgsTuple(@TypeOf(func)) = undefined;
+    if (comptime has_receiver) params[0] = receiver;
+    if (comptime has_context) params[context_idx] = ctx;
+    comptime var callable_count = 0;
+    const specs = comptime blk: {
+        var arg_specs: [php_params_count]CallFrame.ExpectArgKind.Spec = undefined;
+        for (0..php_params_count) |i| {
+            arg_specs[i] = specFor(param_types[php_params_offset + i].?);
+            if (arg_specs[i] == .callable) callable_count += 1;
+        }
+        break :blk arg_specs;
+    };
+    var resolved_callables: [callable_count]zend.Callable = @splat(.nil);
+    if (comptime php_params_count == 0) {
+        if (comptime !has_context) try ctx.call.expectNoArgs();
+    } else {
+        var runtime: CallFrame.ExpectArgsRuntime(&specs) = undefined;
+        if (comptime @TypeOf(runtime) != void) {
+            comptime var callable_idx = 0;
+            inline for (specs, 0..) |spec, i| {
+                if (comptime spec == .callable) {
+                    runtime[i] = .{ .out = &resolved_callables[callable_idx] };
+                    callable_idx += 1;
+                } else runtime[i] = {};
+            }
+        } else runtime = {};
+        const values = try ctx.call.expectArgs(&specs, runtime);
+        inline for (specs, 0..) |spec, i| {
+            const ParamType = param_types[php_params_offset + i].?;
+            params[php_params_offset + i] = if (comptime spec == .callable)
+                makeCallableArg(ParamType, values[i], runtime[i].out)
+            else
+                values[i];
+        }
+    }
+    return @call(.auto, func, params);
+}
+
+pub fn setReturnValue(retval: *Zval, value: anytype) anyerror!void {
+    const T = @TypeOf(value);
+    if (T == void) return;
+    if (@typeInfo(T) == .optional) {
+        if (value) |present| return setReturnValue(retval, present);
+        retval.set(.null, {});
+        return;
+    }
+    if (comptime mixedKinds(T) != null) {
+        switch (value) {
+            inline else => |payload| if (@TypeOf(payload) == void)
+                retval.set(.null, {})
+            else
+                try setReturnValue(retval, payload),
+        }
+        return;
+    }
+    if (NullablePayloadType(T) != null) {
+        switch (value) {
+            .null => retval.set(.null, {}),
+            .value => |present| try setReturnValue(retval, present),
+        }
+        return;
+    }
+    if (T == bool) return retval.set(.bool, value);
+    inline for (.{ i8, i16, i32, i64, isize, u8, u16, u32, u64, usize }) |Int| {
+        if (T == Int) {
+            const number = std.math.cast(c.zend_long, value) orelse return error.ReturnValueOutOfRange;
+            return retval.set(.int, @intCast(number));
+        }
+    }
+    if (T == f32 or T == f64) return retval.set(.float, @floatCast(value));
+    if (T == []u8 or T == []const u8) return retval.set(.string, value);
+    if (T == *zend.String) return retval.set(.str, value);
+    if (T == *zend.Array) return retval.set(.array, value);
+    if (T == *zend.Object) return retval.set(.object, value);
+    if (T == *zend.Resource) return retval.set(.resource, value);
+    if (T == *zend.Reference) return retval.set(.reference, value);
+    if (T == *Zval) return retval.set(.mixed, value.ptr());
+    @compileError("unsupported PHP handler return type " ++ @typeName(T));
+}
+
+pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
+    const Context = ContextType(func, false);
     return struct {
+        fn call(ctx: Context) anyerror!void {
+            const value = try invoke(func, ctx, {});
+            try setReturnValue(ctx.retval, value);
+        }
+
         fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
             @as(
                 anyerror!void,
                 if (comptime Context == GuardCtx) blk: {
                     var scope: ?*guard.Scope = null;
                     defer if (scope) |owned| guard.ScopeObject.release(owned);
-                    break :blk zend.bailout.run(invoke, .{GuardCtx{
+                    break :blk zend.bailout.run(call, .{GuardCtx{
                         .call = .from(execute_data.?),
                         .retval = .from(return_value.?),
                         .guard_scope = &scope,
                     }});
-                } else if (comptime params.len == 0) blk: {
-                    const ctx: Ctx = .{ .call = .from(execute_data.?), .retval = .from(return_value.?) };
-                    ctx.call.expectNoArgs() catch |err| break :blk err;
-                    break :blk invoke();
-                } else invoke(.{ .call = .from(execute_data.?), .retval = .from(return_value.?) }),
+                } else call(.{ .call = .from(execute_data.?), .retval = .from(return_value.?) }),
             ) catch |err| {
                 if (err == error.ZendBailout or err == error.OutOfMemory) zend.bailout.raise();
                 if (!errors.hasException()) {

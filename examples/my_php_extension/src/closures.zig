@@ -2,9 +2,8 @@ const phpz = @import("phpz");
 const Zval = phpz.Zval;
 
 /// PHP: {closure}(...$args) — accepts two integers and returns their sum.
-fn sum(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{ .{ .int = .{} }, .{ .int = .{} } }, {});
-    ctx.retval.set(.int, args[0] +| args[1]);
+fn sum(a: i64, b: i64) i64 {
+    return a +| b;
 }
 
 /// PHP: MyPHPExt\makeSumClosure(): Closure
@@ -23,12 +22,9 @@ const Counter = struct {
     }
 
     /// PHP: MyPHPExt\ClosureCounter::__invoke(int $step = 1): int
-    pub fn __invoke(self: *Counter, ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{ .optional = true } },
-        }, {});
-        self.value +|= args[0] orelse 1;
-        ctx.retval.set(.int, self.value);
+    pub fn __invoke(self: *Counter, step: ?i64) i64 {
+        self.value +|= step orelse 1;
+        return self.value;
     }
 
     fn deinit(self: *Counter) void {
@@ -47,16 +43,12 @@ pub const CounterClass = phpz.Class("MyPHPExt\\ClosureCounter", Counter, .{
 });
 
 /// PHP: MyPHPExt\makeCounter(int $start = 0, mixed $held = null): Closure
-pub fn makeCounter(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{
-        .{ .int = .{ .optional = true } },
-        .{ .mixed = .{ .optional = true } },
-    }, {});
+pub fn makeCounter(ctx: phpz.Ctx, start: ?i64, held: ?*Zval) !void {
     const owner = try CounterClass.create();
     defer owner.object().release();
     const backing = owner.backing().?;
-    backing.value = args[0] orelse 0;
-    if (args[1]) |held| Zval.raw.copy(&backing.held, held.ptr());
+    backing.value = start orelse 0;
+    if (held) |value| Zval.raw.copy(&backing.held, value.ptr());
     const invoke = phpz.zend.Function.findMethod(CounterClass.entry, "__invoke").?;
     try invoke.toClosure(ctx.retval, .{ .object = owner.object() });
 }

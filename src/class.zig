@@ -4,10 +4,8 @@ const std = @import("std");
 
 const c = @import("c.zig").c;
 const CallFrame = @import("ctx.zig").CallFrame;
-const Ctx = @import("ctx.zig").Ctx;
-const GuardCtx = @import("ctx.zig").GuardCtx;
 const errors = @import("errors.zig");
-const function_helper = @import("function.zig");
+const functions = @import("function.zig");
 const GcBuffer = @import("gc.zig").GcBuffer;
 const globals = @import("globals.zig");
 const stub = @import("stub.zig");
@@ -452,14 +450,17 @@ pub const ObjectHandlers = struct {
 ///
 /// ## Method signatures
 ///
-/// - Standard-layout methods and backed static methods use `fn () void` or
-///   `fn (Ctx) void`, optionally error-returning.
-/// - Backed instance methods receive `*T` or `*const T`, optionally followed by
-///   `Ctx`, and return `void` or `!void`.
-/// - A backed `__construct` accepts no arguments or one `Ctx` and returns `T`
-///   or `!T`. The result replaces the backing while PHP observes `void`;
-///   any previous backing is released through `.deinit` when provided.
-/// Use `GuardCtx` in place of `Ctx` to enable native resource cleanup on bailout.
+/// - Standard-layout methods and backed static methods accept an optional leading
+///   `Ctx` or `GuardCtx`, followed by typed PHP parameters, and return values to PHP.
+/// - Backed instance methods receive `*T` or `*const T` first, then an optional
+///   `Ctx` or `GuardCtx`, followed by typed PHP parameters.
+/// - A backed `__construct` accepts an optional leading context and typed PHP
+///   parameters, and returns `T` or `!T`. The result replaces the backing while
+///   PHP observes `void`; any previous backing is released through `.deinit` when provided.
+///
+/// For complex argument specs, take only a context after any receiver and parse manually.
+/// Except for backed constructors, non-void results are written to PHP;
+/// `void`/`!void` preserves a manually set result. `GuardCtx` enables native cleanup on bailout.
 ///
 /// ## Options
 ///
@@ -906,7 +907,7 @@ fn bind(
     comptime func: anytype,
 ) void {
     if (class_layout == .std) {
-        function_helper.method(class_name, method.name, func);
+        functions.method(class_name, method.name, func);
         return;
     }
     if (std.mem.eql(u8, method.name, "__construct")) {
@@ -914,28 +915,17 @@ fn bind(
         return;
     }
     switch (method.kind) {
-        .static => function_helper.method(class_name, method.name, func),
+        .static => functions.method(class_name, method.name, func),
         .instance => bindInstanceMethod(class_name, T, ClassType, method.name, func),
     }
 }
 
 fn bindConstructor(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime func: anytype) void {
-    const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
-    if (params.len > 1 or (params.len == 1 and params[0] != Ctx and params[0] != GuardCtx)) {
-        @compileError("unsupported constructor signature for " ++ class_name ++ ": expected fn(Ctx), fn(GuardCtx), or fn()");
-    }
-    const Context = if (params.len == 1) params[0].? else Ctx;
-    const Args = std.meta.ArgsTuple(@TypeOf(func));
-    const handler = function_helper.createHandler(class_name ++ "::__construct()", struct {
+    const Context = functions.ContextType(func, false);
+    const handler = functions.createHandler(class_name ++ "::__construct()", struct {
         fn invoke(ctx: Context) anyerror!void {
             const self = ClassType.receiver(ctx.call) orelse return;
-            const args: Args = if (comptime @typeInfo(Args).@"struct".field_types.len == 1)
-                .{ctx}
-            else blk: {
-                try ctx.call.expectNoArgs();
-                break :blk .{};
-            };
-            const value = try @as(anyerror!T, @call(.auto, func, args));
+            const value: T = try functions.invoke(func, ctx, {});
             self.commitBacking(value);
         }
     }.invoke);
@@ -948,26 +938,16 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
     if (params.len == 0 or (params[0] != *T and params[0] != *const T)) {
         @compileError("instance method " ++ func_desc ++ " must take *" ++ @typeName(T) ++ " or *const " ++ @typeName(T) ++ " as its first parameter");
     }
-    if (params.len > 2 or (params.len == 2 and params[1] != Ctx and params[1] != GuardCtx)) {
-        @compileError("unsupported instance method signature for " ++ func_desc ++ ": expected only an optional Ctx or GuardCtx after the receiver");
-    }
-
-    const Context = if (params.len == 2) params[1].? else Ctx;
-    const Args = std.meta.ArgsTuple(@TypeOf(func));
-    const handler = function_helper.createHandler(func_desc, struct {
+    const Context = functions.ContextType(func, true);
+    const handler = functions.createHandler(func_desc, struct {
         fn invoke(ctx: Context) anyerror!void {
             const self = ClassType.receiver(ctx.call) orelse return;
             const backing = self.backing() orelse {
                 errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{}) catch {};
                 return;
             };
-            const args: Args = if (comptime params.len == 2)
-                .{ backing, ctx }
-            else blk: {
-                try ctx.call.expectNoArgs();
-                break :blk .{backing};
-            };
-            return @call(.auto, func, args);
+            const value = try functions.invoke(func, ctx, backing);
+            try functions.setReturnValue(ctx.retval, value);
         }
     }.invoke);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, method_name) });

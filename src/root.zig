@@ -26,13 +26,14 @@ pub const Operator = class_helper.Operator;
 pub const Comparison = class_helper.Comparison;
 pub const GcBuffer = @import("gc.zig").GcBuffer;
 
-const function_helper = @import("function.zig");
-pub const function = function_helper.function;
-pub const functions = function_helper.functions;
-pub const namedFunctions = function_helper.namedFunctions;
+pub const function = @import("function.zig").function;
+pub const functions = @import("function.zig").functions;
+pub const namedFunctions = @import("function.zig").namedFunctions;
 
 pub const Ctx = @import("ctx.zig").Ctx;
 pub const CallFrame = @import("ctx.zig").CallFrame;
+pub const Nullable = CallFrame.Nullable;
+pub const Mixed = CallFrame.Mixed;
 pub const GuardCtx = @import("ctx.zig").GuardCtx;
 pub const Zval = @import("zval.zig").Zval;
 pub const Guard = @import("guard.zig").Guard;
