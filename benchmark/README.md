@@ -36,9 +36,9 @@ Linux, PHP 8.5.8, Zig 0.17.0-dev.1282, 1M iterations × 10 runs averaged. C uses
 | Function | Parsing | Description |
 |---|---|---|
 | `bench_{c,zig}_empty()` | — | Empty function call overhead |
-| `bench_{c,zig}_parse_multi(...)` | macro / expect | Parse 8 params: long, string, double, bool, array, object, mixed, optional long |
+| `bench_{c,zig}_parse_multi(...)` | macro / typed signature | Parse 8 params: long, string, double, bool, array, object, mixed, optional long |
 | `bench_{c,zig}_parse_multi_pp(...)` | zpp / parse | Same, using traditional parameter parsing |
-| `bench_{c,zig}_array_sum_fast(...)` | macro / expect | Sum 1k integers, modern parsing |
+| `bench_{c,zig}_array_sum_fast(...)` | macro / typed signature | Sum 1k integers, modern parsing |
 | `bench_{c,zig}_array_sum_parse(...)` | zpp / parse | Sum 1k integers, traditional parsing |
 
 ## Manual Build
