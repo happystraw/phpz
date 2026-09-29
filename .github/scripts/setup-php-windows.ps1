@@ -32,6 +32,7 @@ $vsVersion = switch ($PhpVersion) {
     '8.3' { 'vs16' }
     '8.4' { 'vs17' }
     '8.5' { 'vs17' }
+    '8.6' { 'vs18' }
     default { throw "Unsupported PHP version $PhpVersion" }
 }
 
@@ -63,13 +64,31 @@ $vsConfiguration = switch ($vsVersion) {
             )
         }
     }
+    'vs18' {
+        [PSCustomObject]@{
+            ToolsetMajor = 14
+            ToolsetMinorMinimum = 50
+            ToolsetMinorMaximum = $null
+            Components = @(
+                'Microsoft.VisualStudio.Component.CoreBuildTools'
+                'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+                'Microsoft.VisualStudio.Component.VC.ATL'
+                'Microsoft.VisualStudio.Component.Windows10SDK.19041'
+            )
+        }
+    }
 }
 
 $baseUrl = 'https://downloads.php.net/~windows/releases'
 $releases = Invoke-RestMethod -Uri "$baseUrl/releases.json"
 $releaseProperty = $releases.PSObject.Properties[$PhpVersion]
 if ($null -eq $releaseProperty) {
-    throw "PHP $PhpVersion is missing from releases.json"
+    $baseUrl = 'https://downloads.php.net/~windows/qa'
+    $releases = Invoke-RestMethod -Uri "$baseUrl/releases.json"
+    $releaseProperty = $releases.PSObject.Properties[$PhpVersion]
+}
+if ($null -eq $releaseProperty) {
+    throw "PHP $PhpVersion is missing from both release and QA indexes"
 }
 
 $release = $releaseProperty.Value
@@ -109,15 +128,35 @@ function Get-VsWherePath {
 function Get-VisualStudioInstance {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $VsWherePath
+        [string] $VsWherePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $VsVersion,
+
+        [Parameter(Mandatory = $true)]
+        [object] $Configuration
     )
 
-    $json = ((& $VsWherePath -latest -products '*' -format json 2>$null) -join [Environment]::NewLine)
+    $minimumVersion = $VsVersion.Substring(2)
+    $json = ((& $VsWherePath -products '*' -version "[$minimumVersion.0,)" -format json 2>$null) -join [Environment]::NewLine)
     if ([string]::IsNullOrWhiteSpace($json)) {
         return $null
     }
 
-    return @($json | ConvertFrom-Json) | Select-Object -First 1
+    $instances = @($json | ConvertFrom-Json)
+    $selectedInstance = $null
+    $selectedToolset = $null
+    foreach ($instance in $instances) {
+        $candidate = Get-MsvcToolset -VsInstance $instance -Configuration $Configuration
+        if ($null -ne $candidate -and ($null -eq $selectedToolset -or $candidate.Version -gt $selectedToolset.Version)) {
+            $selectedInstance = $instance
+            $selectedToolset = $candidate
+        }
+    }
+    if ($null -ne $selectedInstance) {
+        return $selectedInstance
+    }
+    return $instances | Select-Object -First 1
 }
 
 function Get-MsvcToolset {
@@ -141,7 +180,7 @@ function Get-MsvcToolset {
                 [System.Version]::TryParse($_.Name, [ref] $version) -and
                 $version.Major -eq $Configuration.ToolsetMajor -and
                 $version.Minor -ge $Configuration.ToolsetMinorMinimum -and
-                $version.Minor -le $Configuration.ToolsetMinorMaximum
+                ($null -eq $Configuration.ToolsetMinorMaximum -or $version.Minor -le $Configuration.ToolsetMinorMaximum)
             ) {
                 [PSCustomObject]@{
                     Name = $_.Name
@@ -190,7 +229,8 @@ function Install-VisualStudioComponents {
     }
 
     $installerPath = Join-Path $downloadDirectory $installerName
-    $installerUrl = "https://aka.ms/vs/$channel/release/$installerName"
+    $releaseChannel = if ([int] $channel -ge 18) { 'stable' } else { 'release' }
+    $installerUrl = "https://aka.ms/vs/$channel/$releaseChannel/$installerName"
     Write-Host "Downloading $installerUrl"
     Invoke-WebRequest `
         -Uri $installerUrl `
@@ -219,26 +259,50 @@ function Install-VisualStudioComponents {
     }
 }
 
-function Get-ZigLibCFields {
+function Get-WindowsSdk {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $ZigExe
+        [ValidateSet('x64', 'x86')]
+        [string] $Arch
     )
 
-    $fields = [ordered]@{}
-    foreach ($line in @(& $ZigExe libc)) {
-        if ($line -match '^([a-z0-9_]+)=(.*)$') {
-            $fields[$Matches[1]] = $Matches[2]
-        }
+    $sdkRoot = Get-ItemPropertyValue `
+        -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots' `
+        -Name 'KitsRoot10' `
+        -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace($sdkRoot)) {
+        return $null
+    }
+    $includeRoot = Join-Path $sdkRoot 'Include'
+    if (!(Test-Path -LiteralPath $includeRoot)) {
+        return $null
     }
 
-    foreach ($name in @('include_dir', 'sys_include_dir', 'crt_dir', 'msvc_lib_dir', 'kernel32_lib_dir', 'gcc_dir')) {
-        if (!$fields.Contains($name)) {
-            throw "zig libc did not provide $name"
-        }
-    }
+    $sdks = @(
+        Get-ChildItem -LiteralPath $includeRoot -Directory | ForEach-Object {
+            $version = $null
+            if ([System.Version]::TryParse($_.Name, [ref] $version)) {
+                $includeDirectory = Join-Path $_.FullName 'ucrt'
+                $libDirectory = Join-Path (Join-Path $sdkRoot 'Lib') $_.Name
+                $crtDirectory = Join-Path $libDirectory "ucrt\$Arch"
+                $kernel32Directory = Join-Path $libDirectory "um\$Arch"
+                if (
+                    (Test-Path -LiteralPath (Join-Path $includeDirectory 'stdlib.h')) -and
+                    (Test-Path -LiteralPath (Join-Path $crtDirectory 'ucrt.lib')) -and
+                    (Test-Path -LiteralPath (Join-Path $kernel32Directory 'kernel32.lib'))
+                ) {
+                    [PSCustomObject]@{
+                        Version = $version
+                        IncludeDirectory = $includeDirectory
+                        CrtDirectory = $crtDirectory
+                        Kernel32Directory = $kernel32Directory
+                    }
+                }
+            }
+        } | Sort-Object -Property Version -Descending
+    )
 
-    return $fields
+    return $sdks | Select-Object -First 1
 }
 
 function Save-PhpAsset {
@@ -275,6 +339,45 @@ function Save-PhpAsset {
     }
 
     return $archivePath
+}
+
+# Prepare the toolchain before invoking PHP, as php-windows-builder does.
+$vsWherePath = Get-VsWherePath
+$vsInstance = Get-VisualStudioInstance -VsWherePath $vsWherePath -VsVersion $vsVersion -Configuration $vsConfiguration
+$toolset = if ($null -ne $vsInstance) {
+    Get-MsvcToolset -VsInstance $vsInstance -Configuration $vsConfiguration
+} else {
+    $null
+}
+$windowsSdk = Get-WindowsSdk -Arch $Arch
+if ($null -eq $toolset -or $null -eq $windowsSdk) {
+    Install-VisualStudioComponents `
+        -VsVersion $vsVersion `
+        -VsInstance $vsInstance `
+        -Components $vsConfiguration.Components
+    $vsInstance = Get-VisualStudioInstance -VsWherePath $vsWherePath -VsVersion $vsVersion -Configuration $vsConfiguration
+    if ($null -eq $vsInstance) {
+        throw 'Visual Studio installation is not available after installing components'
+    }
+    $toolset = Get-MsvcToolset -VsInstance $vsInstance -Configuration $vsConfiguration
+    $windowsSdk = Get-WindowsSdk -Arch $Arch
+}
+if ($null -eq $toolset) {
+    throw "Unable to locate an MSVC $vsVersion toolset after installing components"
+}
+if ($null -eq $windowsSdk) {
+    throw "Unable to locate a Windows SDK with UCRT headers, ucrt.lib and kernel32.lib for $Arch after installing components"
+}
+
+$zigExe = (Get-Command zig -CommandType Application -ErrorAction Stop).Source
+$libcTarget = if ($Arch -eq 'x64') { 'x86_64-windows-msvc' } else { 'x86-windows-msvc' }
+$toolsetIncludeDirectory = Join-Path $toolset.Path 'include'
+$toolsetLibDirectory = Join-Path (Join-Path $toolset.Path 'lib') $Arch
+if (!(Test-Path -LiteralPath (Join-Path $toolsetIncludeDirectory 'vcruntime.h'))) {
+    throw "Missing vcruntime.h in $toolsetIncludeDirectory"
+}
+if (!(Test-Path -LiteralPath (Join-Path $toolsetLibDirectory 'vcruntime.lib'))) {
+    throw "Missing vcruntime.lib in $toolsetLibDirectory"
 }
 
 $runtimeArchive = Save-PhpAsset -Asset $build.zip
@@ -329,64 +432,17 @@ if ($actualDebug -ne '0') {
     throw "Expected a release PHP build, got PHP_DEBUG=$actualDebug"
 }
 
-$vsWherePath = Get-VsWherePath
-$vsInstance = Get-VisualStudioInstance -VsWherePath $vsWherePath
-$toolset = if ($null -ne $vsInstance) {
-    Get-MsvcToolset -VsInstance $vsInstance -Configuration $vsConfiguration
-} else {
-    $null
-}
-if ($null -eq $toolset) {
-    Install-VisualStudioComponents `
-        -VsVersion $vsVersion `
-        -VsInstance $vsInstance `
-        -Components $vsConfiguration.Components
-    $vsInstance = Get-VisualStudioInstance -VsWherePath $vsWherePath
-    if ($null -eq $vsInstance) {
-        throw 'Visual Studio installation is not available after installing components'
-    }
-    $toolset = Get-MsvcToolset -VsInstance $vsInstance -Configuration $vsConfiguration
-}
-if ($null -eq $toolset) {
-    throw "Unable to locate an MSVC $vsVersion toolset after installing components"
-}
-
-$zigExe = (Get-Command zig -CommandType Application -ErrorAction Stop).Source
-$libcTarget = if ($Arch -eq 'x64') { 'x86_64-windows-msvc' } else { 'x86-windows-msvc' }
-$msvcArch = if ($Arch -eq 'x64') { 'x64' } else { 'x86' }
-$libcFields = Get-ZigLibCFields -ZigExe $zigExe
-if ($Arch -eq 'x86') {
-    $libcFields['crt_dir'] = Join-Path (Split-Path -Parent $libcFields['crt_dir']) 'x86'
-    $libcFields['kernel32_lib_dir'] = Join-Path (Split-Path -Parent $libcFields['kernel32_lib_dir']) 'x86'
-}
-$toolsetIncludeDirectory = Join-Path $toolset.Path 'include'
-$toolsetLibDirectory = Join-Path (Join-Path $toolset.Path 'lib') $msvcArch
-if (!(Test-Path -LiteralPath (Join-Path $toolsetIncludeDirectory 'vcruntime.h'))) {
-    throw "Missing vcruntime.h in $toolsetIncludeDirectory"
-}
-if (!(Test-Path -LiteralPath (Join-Path $toolsetLibDirectory 'vcruntime.lib'))) {
-    throw "Missing vcruntime.lib in $toolsetLibDirectory"
-}
-if (!(Test-Path -LiteralPath (Join-Path $libcFields['include_dir'] 'stdlib.h'))) {
-    throw "Missing stdlib.h in $($libcFields['include_dir'])"
-}
-if (!(Test-Path -LiteralPath (Join-Path $libcFields['crt_dir'] 'ucrt.lib'))) {
-    throw "Missing ucrt.lib in $($libcFields['crt_dir'])"
-}
-if (!(Test-Path -LiteralPath (Join-Path $libcFields['kernel32_lib_dir'] 'kernel32.lib'))) {
-    throw "Missing kernel32.lib in $($libcFields['kernel32_lib_dir'])"
-}
-$libcFields['sys_include_dir'] = $toolsetIncludeDirectory
-$libcFields['msvc_lib_dir'] = $toolsetLibDirectory
 $libcFile = Join-Path $destinationPath 'libc.txt'
+# Keep the field roles aligned with scripts/build-windows.sh. Windows/MSVC
+# does not use the crtbegin.o/crtend.o directory represented by cc_dir.
 @(
     '# The directory that contains stdlib.h.'
-    "include_dir=$($libcFields['include_dir'])"
-    "sys_include_dir=$($libcFields['sys_include_dir'])"
-    "crt_dir=$($libcFields['crt_dir'])"
-    "msvc_lib_dir=$($libcFields['msvc_lib_dir'])"
-    "kernel32_lib_dir=$($libcFields['kernel32_lib_dir'])"
-    "gcc_dir=$($libcFields['gcc_dir'])"
+    "include_dir=$($windowsSdk.IncludeDirectory)"
+    "sys_include_dir=$toolsetIncludeDirectory"
+    "crt_dir=$($windowsSdk.CrtDirectory)"
+    "msvc_lib_dir=$toolsetLibDirectory"
+    "kernel32_lib_dir=$($windowsSdk.Kernel32Directory)"
+    'cc_dir='
 ) | Set-Content -LiteralPath $libcFile -Encoding utf8
 & $zigExe libc -target $libcTarget $libcFile | Out-Null
 
@@ -411,4 +467,5 @@ Write-Host "PHP include: $phpIncludeDirectory"
 Write-Host "PHP lib: $phpLibDirectory"
 Write-Host "PHP Visual Studio: $vsVersion"
 Write-Host "MSVC toolset: $($toolset.Name)"
+Write-Host "Windows SDK: $($windowsSdk.Version)"
 Write-Host "Libc file: $libcFile"
