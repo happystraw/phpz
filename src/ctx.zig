@@ -9,6 +9,7 @@ const Guard = resource_guard.Guard;
 const zend = @import("zend.zig");
 const ClassEntry = @import("zend/class_entry.zig").ClassEntry;
 const Zval = @import("zval.zig").Zval;
+const Stream = @import("stream.zig").Stream;
 
 /// Provides access to the current call frame and return value.
 /// Passed as `Ctx` to user-defined PHP function/method bindings.
@@ -160,7 +161,7 @@ pub const CallFrame = opaque {
     }
 
     /// Error set for `expectArgs`: extra named arguments, argument count mismatch,
-    /// missing required argument, or type mismatch.
+    /// missing required argument, invalid value, or type mismatch.
     pub const ExpectArgsError = ExpectArgError || errors.WrongParameterCountError || errors.ArgumentCountError;
 
     fn ExpectArgResults(comptime specs: []const ExpectArgKind.Spec) type {
@@ -187,7 +188,7 @@ pub const CallFrame = opaque {
         }
     }
 
-    /// Extract all arguments of the currently executing call with compile-time validation.
+    /// Extract and type-check arguments using compile-time specifications.
     /// Rejects extra named variadic arguments; use expectArgsAllowExtraNamed() and
     /// extraNamedArgs() when explicitly accepting them.
     /// Optionals must come after required args. min/max derived automatically.
@@ -333,29 +334,14 @@ pub const CallFrame = opaque {
         fn BuildSpec(ak: ExpectArgKind) type {
             return switch (ak) {
                 .null => unreachable,
-                .int => struct {
-                    as: enum { i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, zval } = .i64,
-                    optional: bool = false,
-                    nullable: bool = false,
-                },
-                .float => struct {
-                    as: enum { f32, f64, zval } = .f64,
-                    optional: bool = false,
-                    nullable: bool = false,
-                },
-                .string => struct {
-                    as: enum { string, str, zval } = .string,
-                    optional: bool = false,
-                    nullable: bool = false,
-                },
+                .int => struct { as: enum { i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, zval } = .i64, optional: bool = false, nullable: bool = false },
+                .float => struct { as: enum { f32, f64, zval } = .f64, optional: bool = false, nullable: bool = false },
+                .string => struct { as: enum { string, str, zval } = .string, optional: bool = false, nullable: bool = false },
+                .resource => struct { as: enum { value, stream, zval } = .value, optional: bool = false, nullable: bool = false },
                 .mixed => struct { optional: bool = false, one_of: ?[]const ExpectArgKind = null },
                 .object => struct { as: enum { value, zval } = .value, optional: bool = false, nullable: bool = false, instanceof: bool = false },
                 .callable => struct { optional: bool = false, nullable: bool = false, resolve: bool = false },
-                .reference => struct {
-                    optional: bool = false,
-                    kind: ?ExpectArgKind = null,
-                    as: enum { reference, zval, value } = .reference,
-                },
+                .reference => struct { optional: bool = false, kind: ?ExpectArgKind = null, as: enum { reference, zval, value } = .reference },
                 else => struct { as: enum { value, zval } = .value, optional: bool = false, nullable: bool = false },
             };
         }
@@ -393,7 +379,7 @@ pub const CallFrame = opaque {
         ///   - `.callable` without resolve           → `void`
         ///   - `.object` with `.instanceof = true`   → `struct { class: *zend.ClassEntry }` (class/interface)
         ///   - `.object` without instanceof          → `void`
-        ///   - scalar types                          → `void` (pass `{}`)
+        ///   - all other specs                       → `void` (pass `{}`)
         pub fn Runtime(comptime spec: Spec) type {
             return switch (spec) {
                 .callable => |s| if (s.resolve) struct { out: *zend.Callable } else void,
@@ -437,6 +423,11 @@ pub const CallFrame = opaque {
             .string => |s| switch (s.as) {
                 .string => []const u8,
                 .str => *zend.String,
+                .zval => *Zval,
+            },
+            .resource => |s| switch (s.as) {
+                .value => *zend.Resource,
+                .stream => *Stream,
                 .zval => *Zval,
             },
             .null, .mixed, .callable, .reference => unreachable,
@@ -528,7 +519,7 @@ pub const CallFrame = opaque {
     ///   - `.callable` without resolve           → `{}`
     ///   - `.object` with `.instanceof = true`   → `.{ .class = entry }` (class/interface)
     ///   - `.object` without instanceof          → `{}`
-    ///   - scalar types → `{}`
+    ///   - all other specs → `{}`
     ///
     /// `.as = .zval` returns a borrowed `*Zval`; use `.ptr()` for the C pointer.
     /// With `nullable`, PHP null is a Zval; with `optional`, an omitted argument is Zig null.
@@ -541,6 +532,9 @@ pub const CallFrame = opaque {
     /// Numeric `.as` selects the Zig width (e.g. `.u8`, `.f32`); out-of-range
     /// values raise a parameter ValueError. Strings default to `.string`, with
     /// `.str` borrowing a `*zend.String` without allocation or addref.
+    /// `.resource.as = .stream` borrows a `*Stream` from an ordinary or persistent
+    /// stream resource; keep it alive and open. Invalid streams raise PHP TypeError.
+    /// `nullable` wraps it in `Nullable(*Stream)`; `optional` adds an outer `?`.
     /// A resolved callable writes `runtime.out` only for a present non-null
     /// value. Initialize it before use; later argument failures do not roll it back.
     ///
@@ -667,6 +661,11 @@ pub const CallFrame = opaque {
                 break :blk @as(T, @floatCast(value));
             },
             .string => |s| Zval.raw.asUnchecked(zv, if (s.as == .str) .str else .string),
+            .resource => |s| switch (s.as) {
+                .value => Zval.raw.asUnchecked(zv, .resource),
+                .stream => Stream.fromResource(Zval.raw.asUnchecked(zv, .resource)) catch return error.PhpArgumentTypeError,
+                .zval => Zval.from(zv),
+            },
             inline else => Zval.raw.asUnchecked(zv, comptime @as(ExpectArgKind, spec).toZvalKind()),
         };
     }

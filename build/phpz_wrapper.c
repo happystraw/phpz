@@ -1,5 +1,13 @@
 #include "phpz.h"
 
+bool phpz_stream_is_persistent(php_stream *stream) {
+    return php_stream_is_persistent(stream);
+}
+
+void phpz_stream_to_zval(php_stream *stream, zval *value) {
+    php_stream_to_zval(stream, value);
+}
+
 #if defined(ZTS) && defined(PHPZ_STATIC_TSRMLS_CACHE)
 void *phpz_tsrm_ls_cache(void) {
     return TSRMLS_CACHE;

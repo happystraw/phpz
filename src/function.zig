@@ -10,6 +10,7 @@ const guard = @import("guard.zig");
 const stub = @import("stub.zig");
 const zend = @import("zend.zig");
 const Zval = @import("zval.zig").Zval;
+const Stream = @import("stream.zig").Stream;
 
 pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
@@ -166,6 +167,8 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 /// void/!void leaves it unchanged, allowing the function to set it manually.
 /// Use a context-only signature for expectArgs specifications that a Zig type
 /// cannot express.
+/// A `*Stream` parameter borrows a PHP stream; keep its resource alive and open.
+/// `?T` permits omission; `CallFrame.Nullable(T)` permits PHP null.
 ///
 /// When the function takes neither a context nor PHP parameters, extra arguments
 /// are rejected. A context-only handler retains control of its own parsing.
@@ -275,6 +278,7 @@ fn specFor(comptime T: type) CallFrame.ExpectArgKind.Spec {
     if (Base == *zend.Array) return .{ .array = .{ .optional = optional, .nullable = nullable } };
     if (Base == *zend.Object) return .{ .object = .{ .optional = optional, .nullable = nullable } };
     if (Base == *zend.Resource) return .{ .resource = .{ .optional = optional, .nullable = nullable } };
+    if (Base == *Stream) return .{ .resource = .{ .as = .stream, .optional = optional, .nullable = nullable } };
     if (Base == *zend.Reference and !nullable) return .{ .reference = .{ .optional = optional } };
     if (Base == *Zval and !nullable) return .{ .mixed = .{ .optional = optional } };
     if (Base == *zend.Callable) return .{ .callable = .{ .optional = optional, .nullable = nullable, .resolve = true } };

@@ -38,6 +38,7 @@ pub const GuardCtx = @import("ctx.zig").GuardCtx;
 pub const Zval = @import("zval.zig").Zval;
 pub const Guard = @import("guard.zig").Guard;
 pub const GuardScope = @import("guard.zig").Scope;
+pub const Stream = @import("stream.zig").Stream;
 
 pub const errors = @import("errors.zig");
 
@@ -60,6 +61,7 @@ test {
     _ = @import("module.zig");
     _ = @import("observer.zig");
     _ = @import("stub.zig");
+    _ = @import("stream.zig");
     _ = @import("zend.zig");
     _ = @import("zval.zig");
     _ = @import("zend/array.zig");

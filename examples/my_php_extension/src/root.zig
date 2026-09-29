@@ -13,6 +13,7 @@ const closure_tests = @import("testing/closures.zig");
 const gc = @import("testing/gc.zig");
 const serialization = @import("testing/serialization.zig");
 const class_new = @import("testing/class_new.zig");
+const stream_tests = @import("testing/streams.zig");
 const closures = @import("closures.zig");
 
 fn info(m: *phpz.ModuleEntry) void {
@@ -27,6 +28,20 @@ comptime {
     const extension = @import("extension_info");
 
     phpz.namedFunctions(.{
+        .@"MyPHPExt\\Test\\checkStreams" = stream_tests.checkStreams,
+        .@"MyPHPExt\\Test\\openStream" = stream_tests.openStream,
+        .@"MyPHPExt\\Test\\openPersistentStream" = stream_tests.openPersistentStream,
+        .@"MyPHPExt\\Test\\checkPersistentStreams" = stream_tests.checkPersistentStreams,
+        .@"MyPHPExt\\Test\\openStreamDir" = stream_tests.openStreamDir,
+        .@"MyPHPExt\\Test\\readStreamDir" = stream_tests.readStreamDir,
+        .@"MyPHPExt\\Test\\rewindStreamDir" = stream_tests.rewindStreamDir,
+        .@"MyPHPExt\\Test\\readStream" = stream_tests.readStream,
+        .@"MyPHPExt\\Test\\nullableStream" = stream_tests.nullableStream,
+        .@"MyPHPExt\\Test\\optionalStream" = stream_tests.optionalStream,
+        .@"MyPHPExt\\Test\\optionalNullableStream" = stream_tests.optionalNullableStream,
+        .@"MyPHPExt\\Test\\closeStream" = stream_tests.closeStream,
+        .@"MyPHPExt\\Test\\syncStream" = stream_tests.syncStream,
+        .@"MyPHPExt\\Test\\checkStreamFailures" = stream_tests.checkStreamFailures,
         .@"MyPHPExt\\Test\\typedArgument" = @import("testing/typed_arguments.zig").typedArgument,
         .@"MyPHPExt\\Test\\checkStringArguments" = @import("testing/typed_arguments.zig").checkStringArguments,
         .@"MyPHPExt\\Test\\checkZvalStrings" = @import("testing/typed_arguments.zig").checkZvalStrings,

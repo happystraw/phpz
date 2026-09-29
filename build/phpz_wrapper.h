@@ -1,6 +1,21 @@
 #ifndef PHPZ_WRAPPER_H
 #define PHPZ_WRAPPER_H
 
+static zend_always_inline php_stream *phpz_stream_open(const char *path, const char *mode, int options) {
+    return php_stream_open_wrapper(path, mode, options, NULL);
+}
+
+static zend_always_inline php_stream *phpz_stream_opendir(const char *path, int options) {
+    return php_stream_opendir(path, options, NULL);
+}
+
+bool phpz_stream_is_persistent(php_stream *stream);
+void phpz_stream_to_zval(php_stream *stream, zval *value);
+
+static zend_always_inline zend_result phpz_stream_copy_to_stream(php_stream *src, php_stream *dest, size_t maxlen, size_t *len) {
+    return php_stream_copy_to_stream_ex(src, dest, maxlen, len);
+}
+
 static zend_always_inline const char *phpz_module_build_id(void) {
     return ZEND_MODULE_BUILD_ID;
 }

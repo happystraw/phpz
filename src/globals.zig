@@ -175,6 +175,12 @@ pub const ExecutorGlobals = opaque {
     pub inline fn iniDirectives(self: *ExecutorGlobals) *zend.Array {
         return zend.Array.from(self.ptr().ini_directives);
     }
+
+    /// Borrow PHP's persistent resource registry without changing reference counts.
+    /// PHP owns the table and its entries; do not release them.
+    pub inline fn persistentList(self: *ExecutorGlobals) *zend.Array {
+        return zend.Array.from(&self.ptr().persistent_list);
+    }
 };
 
 pub const CompilerGlobals = opaque {

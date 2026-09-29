@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 8a97573bd00544e41cc3eabf9366abcaceeda4d6 */
+ * Stub hash: 084a3103e9eaf9d30fed735fc8524f0fa003c455 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -28,6 +28,54 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_checkStreams arginfo_hello
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_MyPHPExt_Test_openStream, 0, 0, 1)
+	ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_openPersistentStream arginfo_MyPHPExt_Test_openStream
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkPersistentStreams, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_openStreamDir arginfo_MyPHPExt_Test_openStream
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readStreamDir, 0, 1, IS_STRING, 1)
+	ZEND_ARG_INFO(0, resource)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_rewindStreamDir, 0, 1, IS_VOID, 0)
+	ZEND_ARG_INFO(0, resource)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readStream, 0, 2, IS_STRING, 0)
+	ZEND_ARG_INFO(0, resource)
+	ZEND_ARG_TYPE_INFO(0, len, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_nullableStream, 0, 1, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, resource, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_optionalStream, 0, 0, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, resource, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_optionalNullableStream arginfo_MyPHPExt_Test_optionalStream
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_closeStream, 0, 1, IS_LONG, 0)
+	ZEND_ARG_INFO(0, resource)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_syncStream arginfo_MyPHPExt_Test_rewindStreamDir
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkStreamFailures, 0, 2, IS_VOID, 0)
+	ZEND_ARG_INFO(0, source)
+	ZEND_ARG_INFO(0, destination)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_typedArgument, 0, 2, IS_MIXED, 0)
@@ -376,6 +424,20 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_checkStreams);
+ZEND_FUNCTION(MyPHPExt_Test_openStream);
+ZEND_FUNCTION(MyPHPExt_Test_openPersistentStream);
+ZEND_FUNCTION(MyPHPExt_Test_checkPersistentStreams);
+ZEND_FUNCTION(MyPHPExt_Test_openStreamDir);
+ZEND_FUNCTION(MyPHPExt_Test_readStreamDir);
+ZEND_FUNCTION(MyPHPExt_Test_rewindStreamDir);
+ZEND_FUNCTION(MyPHPExt_Test_readStream);
+ZEND_FUNCTION(MyPHPExt_Test_nullableStream);
+ZEND_FUNCTION(MyPHPExt_Test_optionalStream);
+ZEND_FUNCTION(MyPHPExt_Test_optionalNullableStream);
+ZEND_FUNCTION(MyPHPExt_Test_closeStream);
+ZEND_FUNCTION(MyPHPExt_Test_syncStream);
+ZEND_FUNCTION(MyPHPExt_Test_checkStreamFailures);
 ZEND_FUNCTION(MyPHPExt_Test_typedArgument);
 ZEND_FUNCTION(MyPHPExt_Test_checkStringArguments);
 ZEND_FUNCTION(MyPHPExt_Test_checkZvalStrings);
@@ -486,6 +548,76 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openStream"), zif_MyPHPExt_Test_openStream, arginfo_MyPHPExt_Test_openStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openStream"), zif_MyPHPExt_Test_openStream, arginfo_MyPHPExt_Test_openStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openPersistentStream"), zif_MyPHPExt_Test_openPersistentStream, arginfo_MyPHPExt_Test_openPersistentStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openPersistentStream"), zif_MyPHPExt_Test_openPersistentStream, arginfo_MyPHPExt_Test_openPersistentStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkPersistentStreams"), zif_MyPHPExt_Test_checkPersistentStreams, arginfo_MyPHPExt_Test_checkPersistentStreams, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkPersistentStreams"), zif_MyPHPExt_Test_checkPersistentStreams, arginfo_MyPHPExt_Test_checkPersistentStreams, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openStreamDir"), zif_MyPHPExt_Test_openStreamDir, arginfo_MyPHPExt_Test_openStreamDir, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openStreamDir"), zif_MyPHPExt_Test_openStreamDir, arginfo_MyPHPExt_Test_openStreamDir, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStreamDir"), zif_MyPHPExt_Test_readStreamDir, arginfo_MyPHPExt_Test_readStreamDir, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStreamDir"), zif_MyPHPExt_Test_readStreamDir, arginfo_MyPHPExt_Test_readStreamDir, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rewindStreamDir"), zif_MyPHPExt_Test_rewindStreamDir, arginfo_MyPHPExt_Test_rewindStreamDir, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rewindStreamDir"), zif_MyPHPExt_Test_rewindStreamDir, arginfo_MyPHPExt_Test_rewindStreamDir, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStream"), zif_MyPHPExt_Test_readStream, arginfo_MyPHPExt_Test_readStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readStream"), zif_MyPHPExt_Test_readStream, arginfo_MyPHPExt_Test_readStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "nullableStream"), zif_MyPHPExt_Test_nullableStream, arginfo_MyPHPExt_Test_nullableStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "nullableStream"), zif_MyPHPExt_Test_nullableStream, arginfo_MyPHPExt_Test_nullableStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalStream"), zif_MyPHPExt_Test_optionalStream, arginfo_MyPHPExt_Test_optionalStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalStream"), zif_MyPHPExt_Test_optionalStream, arginfo_MyPHPExt_Test_optionalStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalNullableStream"), zif_MyPHPExt_Test_optionalNullableStream, arginfo_MyPHPExt_Test_optionalNullableStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalNullableStream"), zif_MyPHPExt_Test_optionalNullableStream, arginfo_MyPHPExt_Test_optionalNullableStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "closeStream"), zif_MyPHPExt_Test_closeStream, arginfo_MyPHPExt_Test_closeStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "closeStream"), zif_MyPHPExt_Test_closeStream, arginfo_MyPHPExt_Test_closeStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "syncStream"), zif_MyPHPExt_Test_syncStream, arginfo_MyPHPExt_Test_syncStream, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "syncStream"), zif_MyPHPExt_Test_syncStream, arginfo_MyPHPExt_Test_syncStream, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreamFailures"), zif_MyPHPExt_Test_checkStreamFailures, arginfo_MyPHPExt_Test_checkStreamFailures, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreamFailures"), zif_MyPHPExt_Test_checkStreamFailures, arginfo_MyPHPExt_Test_checkStreamFailures, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "typedArgument"), zif_MyPHPExt_Test_typedArgument, arginfo_MyPHPExt_Test_typedArgument, 0, NULL, NULL)

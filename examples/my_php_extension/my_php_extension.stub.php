@@ -184,6 +184,32 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function checkStreams(): void {}
+    /** @return resource */
+    function openStream(string $path) {}
+    /** @return resource */
+    function openPersistentStream(string $path) {}
+    function checkPersistentStreams(string $path): void {}
+    /** @return resource */
+    function openStreamDir(string $path) {}
+    /** @param resource $resource */
+    function readStreamDir($resource): ?string {}
+    /** @param resource $resource */
+    function rewindStreamDir($resource): void {}
+    /** @param resource $resource */
+    function readStream($resource, int $len): string {}
+    function nullableStream(mixed $resource): string {}
+    function optionalStream(mixed $resource = null): string {}
+    function optionalNullableStream(mixed $resource = null): string {}
+    /** @param resource $resource */
+    function closeStream($resource): int {}
+    /** @param resource $resource */
+    function syncStream($resource): void {}
+    /**
+     * @param resource $source
+     * @param resource $destination
+     */
+    function checkStreamFailures($source, $destination): void {}
     function typedArgument(string $mode, bool $single, mixed $value = null): mixed {}
     function checkStringArguments(string $value): bool {}
     function checkZvalStrings(string $value, object $fixture): string {}

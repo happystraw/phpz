@@ -16,6 +16,9 @@ pub fn typedArgument(ctx: phpz.Ctx) !void {
         const prefix = if (wrap == .required) "" else @tagName(wrap) ++ "-";
         const optional = wrap == .optional or wrap == .both;
         const nullable = wrap == .nullable or wrap == .both;
+        if (std.mem.eql(u8, mode, prefix ++ "stream")) {
+            return parse(ctx, single, .{ .resource = .{ .as = .stream, .optional = optional, .nullable = nullable } });
+        }
         inline for (.{ .i8, .i16, .i32, .i64, .isize, .u8, .u16, .u32, .u64, .usize }) |output| {
             if (std.mem.eql(u8, mode, prefix ++ @tagName(output))) {
                 return parse(ctx, single, .{ .int = .{ .as = output, .optional = optional, .nullable = nullable } });
@@ -43,10 +46,13 @@ pub fn typedArgument(ctx: phpz.Ctx) !void {
 fn parse(ctx: phpz.Ctx, single: bool, comptime spec: Spec) !void {
     const optional = comptime spec.isOptional();
     try ctx.call.expectArgCount(if (optional) 2 else 3, 3);
+    const resource = if (ctx.call.argCount() == 3) phpz.Zval.raw.as(ctx.call.arg(3), .resource) catch null else null;
+    const refcount = if (resource) |res| res.refcount() else 0;
     const result = if (single)
         try ctx.call.expectArg(3, spec, {})
     else
         (try ctx.call.expectArgs(&.{ .{ .string = .{} }, .{ .bool = .{} }, spec }, {}))[2];
+    if (resource) |res| try std.testing.expectEqual(refcount, res.refcount());
 
     const value = if (optional) result orelse {
         ctx.ret(.string, "omitted");
@@ -68,7 +74,11 @@ fn parse(ctx: phpz.Ctx, single: bool, comptime spec: Spec) !void {
 
 fn writeValue(ctx: phpz.Ctx, value: anytype) !void {
     const T = @TypeOf(value);
-    if (T == *phpz.zend.String or T == []const u8) {
+    if (T == *phpz.Stream) {
+        const resource = try Zval.from(ctx.call.arg(3)).as(.resource);
+        try std.testing.expect(value == try phpz.Stream.fromResource(resource));
+        ctx.ret(.string, "stream");
+    } else if (T == *phpz.zend.String or T == []const u8) {
         const source = Zval.from(ctx.call.arg(3));
         const str = try source.as(.str);
         const count = str.refcount();
