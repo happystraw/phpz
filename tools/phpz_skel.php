@@ -10,7 +10,7 @@ namespace Phpz\Tools;
 // phpcs:disable Generic.Files.LineLength.TooLong -- Embedded Zig templates use Zig formatting.
 
 const MIN_PHP_VERSION = '8.2.0';
-const MIN_ZIG_VERSION = '0.17.0-dev.2320+1e770dbef';
+const MIN_ZIG_VERSION = '0.17.0';
 const DEFAULT_PHPZ_SPEC = 'git+https://github.com/happystraw/phpz';
 const DEFAULT_PHP_INCLUDE_DIR = '/usr/include/php';
 const REQUIRED_PHP_EXTENSIONS = ['pcre', 'standard'];

@@ -188,6 +188,7 @@ crt_dir=$win_sdk/sdk/lib/ucrt/$ms_arch
 msvc_lib_dir=$win_sdk/crt/lib/$ms_arch
 kernel32_lib_dir=$win_sdk/sdk/lib/um/$ms_arch
 cc_dir=
+darwin_sdk_dir=
 EOF
 
 windows_zts=false

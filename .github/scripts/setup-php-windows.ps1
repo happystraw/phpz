@@ -443,6 +443,7 @@ $libcFile = Join-Path $destinationPath 'libc.txt'
     "msvc_lib_dir=$toolsetLibDirectory"
     "kernel32_lib_dir=$($windowsSdk.Kernel32Directory)"
     'cc_dir='
+    'darwin_sdk_dir='
 ) | Set-Content -LiteralPath $libcFile -Encoding utf8
 & $zigExe libc -target $libcTarget $libcFile | Out-Null
 
