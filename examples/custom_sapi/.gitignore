@@ -1,0 +1,10 @@
+/.vscode
+/.cursor
+/.idea
+/*.lua
+/build/
+/modules/
+/zig-out/
+/.zig-cache/
+/zig-pkg/
+/run-tests.php

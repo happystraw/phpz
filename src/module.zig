@@ -76,14 +76,9 @@ pub const Config = struct {
 pub const PhpInfoFn = fn (*ModuleEntry) void;
 pub const PhpHookFn = fn () anyerror!void;
 
-/// Creates and exports a PHP extension module.
-///
-/// This function creates a PHP module entry structure at compile time and exports
-/// the required symbols based on the configuration. For shared library mode, it
-/// additionally exports the `get_module` function for the PHP loader.
-///
-/// Parameters:
-///   - cfg: Module configuration including name, version, lifecycle hooks, INI declarations, and optional classes
+/// Create an extension module at comptime with static storage.
+/// Export <name>_module_entry; shared extensions also export get_module.
+/// Use initModuleEntry for direct registration without symbol exports.
 pub fn module(comptime cfg: Config) void {
     comptime {
         if (!@hasDecl(c, "zend_module_entry")) {
@@ -91,7 +86,7 @@ pub fn module(comptime cfg: Config) void {
         }
 
         const S = struct {
-            var entry: ModuleEntry = createModuleEntry(cfg);
+            var entry: ModuleEntry = initModuleEntry(cfg);
             fn getModule() callconv(.c) *ModuleEntry {
                 return &entry;
             }
@@ -199,7 +194,9 @@ fn makePhpInfoFn(comptime info_fn: PhpInfoFn) *const fn ([*c]ModuleEntry) callco
     }.handle;
 }
 
-inline fn createModuleEntry(comptime cfg: Config) ModuleEntry {
+/// Create a module entry without exporting symbols. The caller owns its storage.
+/// Keep the entry alive through PHP module shutdown.
+pub fn initModuleEntry(comptime cfg: Config) ModuleEntry {
     inline for (cfg.ini) |Entry| {
         if (@hasDecl(Entry, "Globals")) {
             if (Entry.Globals) |G| {

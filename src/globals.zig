@@ -3,8 +3,10 @@ const builtin = @import("builtin");
 
 const abi = @import("abi.zig");
 const c = @import("c.zig").c;
+const errors = @import("errors.zig");
 const Zval = @import("zval.zig").Zval;
 const zend = @import("zend.zig");
+const SapiGlobals = @import("sapi.zig").Globals;
 
 pub const GlobalAccess = enum { ptr, value };
 
@@ -131,6 +133,10 @@ pub const ExecutorGlobals = opaque {
         return @ptrCast(@alignCast(self));
     }
 
+    pub fn exitStatus(self: *ExecutorGlobals) errors.ExitStatus {
+        return @fromBackingInt(@intCast(self.ptr().exit_status));
+    }
+
     pub inline fn symbols(self: *ExecutorGlobals) *zend.Array {
         return zend.Array.from(&self.ptr().symbol_table);
     }
@@ -189,18 +195,6 @@ pub const CompilerGlobals = opaque {
     }
 
     pub inline fn ptr(self: *CompilerGlobals) *c.zend_compiler_globals {
-        return @ptrCast(@alignCast(self));
-    }
-
-    // TODO: more impl...
-};
-
-pub const SapiGlobals = opaque {
-    pub inline fn from(globals: *c.sapi_globals_struct) *SapiGlobals {
-        return @ptrCast(globals);
-    }
-
-    pub inline fn ptr(self: *SapiGlobals) *c.sapi_globals_struct {
         return @ptrCast(@alignCast(self));
     }
 

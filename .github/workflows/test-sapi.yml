@@ -1,0 +1,105 @@
+name: PHP SAPI Test
+
+on:
+  push:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/custom_sapi/**"
+      - "tools/windows_patcher.zig"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/test-sapi.sh"
+      - ".github/scripts/setup-php-windows.ps1"
+      - ".github/workflows/test-sapi.yml"
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - "src/**"
+      - "build/**"
+      - "examples/custom_sapi/**"
+      - "tools/windows_patcher.zig"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/scripts/test-sapi.sh"
+      - ".github/scripts/setup-php-windows.ps1"
+      - ".github/workflows/test-sapi.yml"
+  workflow_dispatch:
+    inputs:
+      php:
+        description: PHP version
+        type: choice
+        default: "8.5"
+        options: ["8.2", "8.3", "8.4", "8.5"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: SAPI (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-2022]
+    env:
+      PHP_BUILD_VERSION: ${{ inputs.php || '8.5' }}
+      GITHUB_TOKEN: ${{ github.token }}
+      NO_INTERACTION: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mlugg/setup-zig@v2
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: mbstring, curl, zip
+          tools: composer
+          coverage: none
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake bison re2c pkg-config cmake ninja-build
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install autoconf automake bison re2c pkgconf
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+      - name: Checkout PHP source
+        if: runner.os != 'Windows'
+        uses: actions/checkout@v5
+        with:
+          repository: php/php-src
+          ref: PHP-${{ env.PHP_BUILD_VERSION }}
+          path: build/php-src
+      - name: Prepare PHP source
+        if: runner.os != 'Windows'
+        working-directory: build/php-src
+        run: ./buildconf --force
+      - name: Checkout SPC
+        uses: actions/checkout@v5
+        with:
+          repository: crazywhalecc/static-php-cli
+          ref: 932096fe288c801e9d978870de2b014414a3ccb8
+          path: build/spc
+      - name: Install SPC dependencies
+        working-directory: build/spc
+        run: composer install --no-dev --prefer-dist --no-interaction
+      - name: Test NTS/ZTS and static/dynamic (plus Linux debug dynamic)
+        shell: bash
+        run: bash .github/scripts/test-sapi.sh
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sapi-logs-${{ matrix.os }}
+          path: |
+            build/sapi-tests/**/*.log
+            build/sapi-tests/results.md
+          if-no-files-found: ignore
