@@ -126,6 +126,9 @@ pub fn throwError(ce: ?*zend.ClassEntry, comptime format: [:0]const u8, args: an
 
 pub const Exception = error{PhpException};
 
+/// PHP's executor exit status.
+pub const ExitStatus = enum(c_int) { ok = 0, _ };
+
 /// Throw a PHP exception and return its Zig error marker.
 pub fn throwException(ce: *zend.ClassEntry, message: [:0]const u8, code: i64) Exception {
     _ = throwExceptionObject(ce, message, code);
@@ -164,8 +167,29 @@ pub inline fn exception() ?*zend.Object {
     return globals.executor().exception();
 }
 
+/// Check whether an exception is PHP's internal exit/die control signal.
+pub inline fn isUnwindExit(ex: *zend.Object) bool {
+    return c.zend_is_unwind_exit(ex.ptr());
+}
+
+/// Consume a pending PHP exit/die signal and return its exit status.
+/// Returns null without changing an ordinary exception or the exit status.
+/// The host must still finish request shutdown and check its final exit status.
+pub fn takeUnwindExit() ?ExitStatus {
+    const ex = exception() orelse return null;
+    if (!isUnwindExit(ex)) return null;
+    const status = globals.executor().exitStatus();
+    clearException();
+    return status;
+}
+
 /// Clear the pending PHP exception. Does nothing if no exception is set.
 pub const clearException = c.zend_clear_exception;
+
+/// Report and consume the pending PHP exception.
+pub fn reportException(ex: *zend.Object, level: Level) void {
+    _ = c.zend_exception_error(ex.ptr(), @backingInt(level));
+}
 
 /// Trigger a PHP error
 pub inline fn err(level: Level, comptime format: [:0]const u8, args: anytype) void {

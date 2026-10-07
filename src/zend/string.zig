@@ -158,7 +158,8 @@ pub const String = opaque {
 
     /// Check if string is interned
     pub inline fn isInterned(self: *String) bool {
-        return c.ZSTR_IS_INTERNED(self.ptr()) != 0;
+        const result = c.ZSTR_IS_INTERNED(self.ptr());
+        return if (@TypeOf(result) == bool) result else result != 0;
     }
 };
 

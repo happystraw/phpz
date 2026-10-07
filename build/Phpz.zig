@@ -1,6 +1,6 @@
 //! Phpz Build System Integration
 //!
-//! This module provides utilities for building PHP extensions with Zig.
+//! This module provides utilities for building PHP extensions and SAPI hosts with Zig.
 //! It handles C header translation, PHP include paths setup, and module creation.
 
 const std = @import("std");
@@ -10,7 +10,7 @@ const Translator = @import("translate_c").Translator;
 
 const Phpz = @This();
 
-/// The compiled Phpz module with PHP extension support.
+/// The phpz module imported by PHP extensions and SAPI hosts.
 mod: *Build.Module,
 
 /// Advanced access to the translator used to produce the PHP C bindings.
@@ -18,13 +18,12 @@ c: Translator,
 
 options: Options,
 
-/// Configuration options for building PHP extensions with Zig
+/// Configuration for building PHP extensions and SAPI hosts with Zig.
 pub const Options = struct {
-    /// Options passed to the PHP C translator.
-    /// Phpz forces `strict_flex_arrays` to `.@"1"`.
+    /// PHP header translation options, including the target and optimization mode.
     translator: Translator.Options,
 
-    /// Libc paths file used by both C translation and extension compilation.
+    /// Libc paths file used by C translation and the generated build targets.
     libc_file: ?Build.LazyPath = null,
 
     /// Directory containing PHP header files (main/, Zend/, TSRM/, ext/).
@@ -33,19 +32,22 @@ pub const Options = struct {
     ///   Windows: C:\php-sdk\php-8.5.6-devel-vs17-x64\include
     php_include_dir: ?Build.LazyPath = null,
 
-    /// Windows only: directory containing the matching php8*.lib import library.
+    /// Optional PHP library search directory.
+    /// Omit to use the toolchain's library search paths, including on Windows.
     php_lib_dir: ?Build.LazyPath = null,
 
-    /// Build a shared PHP extension when true, or a built-in PHP extension when false.
+    /// For extensions, true builds a dynamic library and false builds a static library.
+    /// For SAPI hosts, true links a shared PHP library and false links a static
+    /// PHP library. Static PHP libraries can be built with StaticPHP (SPC).
     shared: bool = true,
 
-    /// Maximum stack frames captured for memory leak traceback when
-    /// `ZEND_DEBUG=1` and using `php_allocator`. Each frame is resolved
-    /// to `file:line:column` via DWARF debug info and included in PHP's
-    /// leak reports. Has no effect when using a different allocator.
+    /// Maximum stack frames included in PHP memory leak reports.
+    /// Applies when using php_allocator with a debug PHP build.
     debug_leak_trace_frames: usize = 3,
 
+    /// Must match the Windows PHP build's thread-safety setting.
     windows_zts: bool = false,
+    /// Must match the Windows PHP build's debug setting.
     windows_debug: bool = false,
 };
 
@@ -67,7 +69,7 @@ pub fn initInner(b: *Build, options: Options) Phpz {
         .link_libc = true,
     });
 
-    // Add phpz_wrapper.c to the build and include path for phpz.h
+    // Include paths for phpz headers and the C wrapper.
     mod.addIncludePath(b.path("build"));
     if (options.php_include_dir) |root| {
         mod.addIncludePath(root);
@@ -76,14 +78,11 @@ pub fn initInner(b: *Build, options: Options) Phpz {
         mod.addIncludePath(root.path(b, "TSRM"));
         mod.addIncludePath(root.path(b, "ext"));
     }
+    if (options.php_lib_dir) |dir| mod.addLibraryPath(dir);
     switch (options.translator.target.result.os.tag) {
         .windows => {
             if (options.shared) {
-                if (options.php_lib_dir) |dir| mod.addLibraryPath(dir);
-                const php_lib_name = if (options.windows_debug)
-                    if (options.windows_zts) "php8ts_debug" else "php8_debug"
-                else if (options.windows_zts) "php8ts" else "php8";
-                mod.linkSystemLibrary(php_lib_name, .{});
+                mod.linkSystemLibrary(libPhp(options), .{});
             } else {
                 mod.addCMacro("PHP_EXPORTS", "1");
                 mod.addCMacro("LIBZEND_EXPORTS", "1");
@@ -106,12 +105,10 @@ pub fn initInner(b: *Build, options: Options) Phpz {
     }
     mod.addCSourceFile(.{ .file = b.path("build/phpz_wrapper.c") });
 
-    // Create build options for conditional compilation
     const mod_opts = b.addOptions();
     mod_opts.addOption(bool, "shared", options.shared);
     mod_opts.addOption(usize, "debug_leak_trace_frames", options.debug_leak_trace_frames);
     mod.addOptions("phpz_options", mod_opts);
-
     return .{ .mod = mod, .c = c, .options = options };
 }
 
@@ -127,6 +124,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     // phpz.h
     c.addIncludePath(b.path("build"));
     c.defineCMacro("PHPZ_TRANSLATE_C", "1");
+    if (translator_options.target.result.abi.isMusl()) c.defineCMacro("PHPZ_MUSL", "1");
     if (!options.shared) c.defineCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
 
     // Configure PHP include paths for the C preprocessor
@@ -165,9 +163,6 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
         } else {
             c.run.step.dependOn(&b.addFail("Windows PHP extensions require the MSVC ABI; use -Dtarget=native-windows-msvc").step);
         }
-        if (options.shared and options.php_lib_dir == null) {
-            c.run.step.dependOn(&b.addFail("Windows PHP extensions require the PHP SDK library directory; pass -Dphp-lib-dir=<path-to-php-sdk-lib>").step);
-        }
     }
 
     return c;
@@ -199,6 +194,33 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
         lib.step.dependOn(addArginfoCheckStep(self, b, options.name));
     }
     return lib;
+}
+
+fn libPhp(options: Options) []const u8 {
+    if (options.translator.target.result.os.tag != .windows) return "php";
+    if (!options.shared) return "php8embed";
+    return if (options.windows_debug)
+        if (options.windows_zts) "php8ts_debug" else "php8_debug"
+    else if (options.windows_zts) "php8ts" else "php8";
+}
+
+/// Build a standalone SAPI host against an existing PHP library.
+/// Provide matching PHP headers and a library discoverable through php_lib_dir
+/// or the toolchain's search paths.
+/// Add transitive dependencies and runtime search paths through the returned target.
+/// Use separate Phpz instances for extensions and SAPI hosts.
+pub fn addSapiExecutable(self: Phpz, b: *Build, options: Build.ExecutableOptions) *Build.Step.Compile {
+    const exe = b.addExecutable(options);
+    exe.root_module.addImport("phpz", self.mod);
+    const name = libPhp(self.options);
+    if (!exe.dependsOnSystemLibrary(name)) exe.root_module.linkSystemLibrary(name, .{
+        .use_pkg_config = .no,
+        .preferred_link_mode = if (self.options.shared) .dynamic else .static,
+        .search_strategy = .no_fallback,
+    });
+    exe.rdynamic = true;
+    if (self.options.libc_file) |file| exe.setLibCFile(file);
+    return exe;
 }
 
 fn addArginfoCheckStep(self: Phpz, b: *Build, extension_name: []const u8) *Build.Step {
