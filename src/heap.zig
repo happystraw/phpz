@@ -5,6 +5,48 @@ const Alignment = std.mem.Alignment;
 const c = @import("root.zig").c;
 const zend = @import("zend.zig");
 
+/// Allocate request memory. Like PHP's emalloc, allocation failure bails out;
+/// use php_allocator when a Zig OutOfMemory error is required.
+pub inline fn emalloc(size: usize) ?*anyopaque {
+    return emallocAt(size, @returnAddress());
+}
+
+/// Resize request memory, preserving its contents. A null pointer allocates.
+/// Allocation failure bails out, leaving the original allocation owned by caller.
+pub inline fn erealloc(memory: ?*anyopaque, size: usize) ?*anyopaque {
+    return ereallocAt(memory, size, @returnAddress());
+}
+
+/// Free request memory allocated by PHP's memory manager.
+pub inline fn efree(memory: *anyopaque) void {
+    efreeAt(memory, @returnAddress());
+}
+
+fn emallocAt(size: usize, address: usize) ?*anyopaque {
+    if (comptime c.ZEND_DEBUG == 1) {
+        const src = DebugSourceLocation.resolve(address);
+        return c._emalloc(size, src.file.ptr, @intCast(src.line), null, 0);
+    }
+    return c.emalloc(size);
+}
+
+fn ereallocAt(memory: ?*anyopaque, size: usize, address: usize) ?*anyopaque {
+    if (comptime c.ZEND_DEBUG == 1) {
+        const src = DebugSourceLocation.resolve(address);
+        return c._erealloc(memory, size, src.file.ptr, @intCast(src.line), null, 0);
+    }
+    return c.erealloc(memory, size);
+}
+
+fn efreeAt(memory: *anyopaque, address: usize) void {
+    if (comptime c.ZEND_DEBUG == 1) {
+        const src = DebugSourceLocation.resolve(address);
+        c._efree(memory, src.file.ptr, @intCast(src.line), null, 0);
+    } else {
+        c.efree(memory);
+    }
+}
+
 /// A wrapper around the PHP Memory Manager API which supports the full `Allocator` interface
 /// for alignments up to PHP's configured `ZEND_MM_ALIGNMENT`.
 ///
@@ -43,17 +85,7 @@ const php_allocator_impl = struct {
         _ = context;
         // Same as Zend MM allocator alignment.
         std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
-
-        return @ptrCast(zend.bailout.run(struct {
-            fn call(size: usize, address: usize) ?*anyopaque {
-                if (comptime c.ZEND_DEBUG == 1) {
-                    const src = DebugSourceLocation.resolve(address);
-                    return c._emalloc(size, src.file.ptr, @intCast(src.line), null, 0);
-                } else {
-                    return c.emalloc(size);
-                }
-            }
-        }.call, .{ len, return_address }) catch return null);
+        return @ptrCast(zend.bailout.run(emallocAt, .{ len, return_address }) catch return null);
     }
 
     fn resize(context: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, return_address: usize) bool {
@@ -69,28 +101,13 @@ const php_allocator_impl = struct {
         _ = context;
         // Same as Zend MM allocator alignment.
         std.debug.assert(alignment.compare(.lte, .fromByteUnits(c.ZEND_MM_ALIGNMENT)));
-
-        return @ptrCast(zend.bailout.run(struct {
-            fn call(buffer: []u8, size: usize, address: usize) ?*anyopaque {
-                if (comptime c.ZEND_DEBUG == 1) {
-                    const src = DebugSourceLocation.resolve(address);
-                    return c._erealloc(buffer.ptr, size, src.file.ptr, @intCast(src.line), null, 0);
-                } else {
-                    return c.erealloc(buffer.ptr, size);
-                }
-            }
-        }.call, .{ memory, new_len, return_address }) catch return null);
+        return @ptrCast(zend.bailout.run(ereallocAt, .{ memory.ptr, new_len, return_address }) catch return null);
     }
 
     fn free(context: *anyopaque, memory: []u8, alignment: Alignment, return_address: usize) void {
         _ = context;
         _ = alignment;
-        if (comptime c.ZEND_DEBUG == 1) {
-            const src = DebugSourceLocation.resolve(return_address);
-            c._efree(memory.ptr, src.file.ptr, @intCast(src.line), null, 0);
-        } else {
-            c.efree(memory.ptr);
-        }
+        efreeAt(memory.ptr, return_address);
     }
 
     test {

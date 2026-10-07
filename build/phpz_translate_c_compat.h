@@ -1,6 +1,17 @@
 #ifndef PHPZ_TRANSLATE_C_COMPAT_H
 #define PHPZ_TRANSLATE_C_COMPAT_H
 
+/* On 64-bit musl the timespec padding bitfields have zero width, but
+ * translate-c still makes the struct opaque. Preserve its two-field ABI. */
+#if defined(PHPZ_MUSL) && __SIZEOF_LONG__ == 8
+#define __NEED_time_t
+#include <bits/alltypes.h>
+#ifndef __DEFINED_struct_timespec
+struct timespec { time_t tv_sec; long tv_nsec; };
+#define __DEFINED_struct_timespec
+#endif
+#endif
+
 // Workaround for windows.h: https://codeberg.org/ziglang/translate-c/issues/307
 #if defined(PHP_WIN32) || defined(_WIN32) || defined(WIN32)
 #ifndef WIN32_LEAN_AND_MEAN

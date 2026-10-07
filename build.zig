@@ -19,7 +19,7 @@ const BuildOptions = struct {
 pub fn build(b: *std.Build) void {
     const options = BuildOptions{
         .php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "/usr/include/php",
-        .php_lib_dir = b.option([]const u8, "php-lib-dir", "Windows only: required PHP SDK library directory containing php8*.lib"),
+        .php_lib_dir = b.option([]const u8, "php-lib-dir", "PHP library search directory (Windows: PHP SDK libraries)"),
         .windows_zts = b.option(bool, "windows-zts", "Windows only: link against the thread-safe PHP library") orelse false,
         .windows_debug = b.option(bool, "windows-debug", "Windows only: build against a debug PHP SDK") orelse false,
         .libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation"),

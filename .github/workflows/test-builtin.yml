@@ -84,7 +84,7 @@ jobs:
         run: |
           brew install autoconf bison re2c pkgconf
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
-      - name: Build PHP with extension (Unix)
+      - name: Build PHP (Unix)
         if: runner.os != 'Windows'
         working-directory: build/php-src
         run: |
@@ -95,7 +95,7 @@ jobs:
           if [ "$PHP_BUILD_DEBUG" = 1 ]; then debug=--enable-debug; fi
           ./configure --disable-all --disable-phpdbg --enable-cli --enable-cgi "--enable-$PHP_BUILD_EXTENSION" "$zts" "$debug"
           make -j"$(getconf _NPROCESSORS_ONLN)"
-      - name: Test built-in extension (Unix)
+      - name: Test extension (Unix)
         if: runner.os != 'Windows'
         working-directory: build/php-src
         run: |
@@ -113,7 +113,7 @@ jobs:
           repository: php/php-windows-builder
           ref: v1
           path: build/php-windows-builder
-      - name: Build and test built-in extension (Windows)
+      - name: Build PHP and test extension (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
