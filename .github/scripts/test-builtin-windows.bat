@@ -1,7 +1,26 @@
 @echo off
 setlocal
-cd /d "%GITHUB_WORKSPACE%\build\php-src"
+if not defined PHP_BUILD_SOURCE exit /b 1
+cd /d "%PHP_BUILD_SOURCE%"
 if errorlevel 1 exit /b 1
+
+rem Verify native command resolution and output forwarding before a PHP build.
+echo === Windows build tools ===
+where nmake
+if errorlevel 1 exit /b 1
+where cl
+if errorlevel 1 exit /b 1
+where link
+if errorlevel 1 exit /b 1
+echo COMSPEC=%COMSPEC%
+where echo 2>nul
+"%COMSPEC%" /d /c echo PHPZ_CMD_OK
+if errorlevel 1 exit /b 1
+> "%TEMP%\phpz-nmake-smoke.mak" echo all:
+>> "%TEMP%\phpz-nmake-smoke.mak" echo 	@echo PHPZ_NMAKE_OK
+nmake /nologo /f "%TEMP%\phpz-nmake-smoke.mak"
+if errorlevel 1 exit /b 1
+del "%TEMP%\phpz-nmake-smoke.mak"
 
 set "ZTS_FLAG=--disable-zts"
 set "DEBUG_FLAG=--disable-debug"

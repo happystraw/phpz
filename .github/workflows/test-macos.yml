@@ -5,85 +5,82 @@ on:
     branches: ["dev"]
     paths:
       - "src/**"
+      - "build/**"
       - "examples/**"
+      - "tools/**"
       - "build.zig"
       - "build.zig.zon"
+      - ".github/actions/test-variant/**"
+      - ".github/scripts/ci.mjs"
+      - ".github/scripts/ci.test.mjs"
       - ".github/workflows/test-macos.yml"
   pull_request:
     branches: ["dev"]
     paths:
       - "src/**"
+      - "build/**"
       - "examples/**"
+      - "tools/**"
       - "build.zig"
       - "build.zig.zon"
+      - ".github/actions/test-variant/**"
+      - ".github/scripts/ci.mjs"
+      - ".github/scripts/ci.test.mjs"
       - ".github/workflows/test-macos.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    name: test (${{ matrix.php }}, ${{ matrix.arch }}, ${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
-    runs-on: ${{ matrix.os }}
+    name: test (PHP ${{ matrix.php }}, aarch64)
+    runs-on: macos-latest
+    timeout-minutes: 180
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
-        # setup-php no longer supports Intel macOS after Homebrew dropped support.
-        # https://github.com/shivammathur/setup-php/issues/1112
-        arch:
-          # - x86_64
-          - aarch64
-        phpts: [nts, ts]
-        debug: [true, false]
-        include:
-          # - arch: x86_64
-          #   os: macos-15-intel
-          - arch: aarch64
-            os: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - uses: mlugg/setup-zig@v2
-      - name: Setup PHP (${{ matrix.phpts }}, ${{ matrix.debug && 'debug' || 'release' }})
-        uses: shivammathur/setup-php@v2
+      - name: Setup Zig
+        id: zig
+        uses: mlugg/setup-zig@v2
+      - name: Test CI orchestration
+        run: node --test .github/scripts/ci.test.mjs
+      - name: Test NTS PHP release
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
         with:
-          php-version: ${{ matrix.php }}
-          tools: php-config
-        env:
-          phpts: ${{ matrix.phpts }}
-          debug: ${{ matrix.debug }}
-      - name: Verify PHP Installation
-        run: |
-          php -v
-      - name: Run unit tests
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test -Dphp-include-dir="$PHP_INCLUDE_DIR"
-      - name: Run example tests
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR"
-      - name: Run example tests (ReleaseSafe)
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSafe
-      # PHP 8.5 added a check rejecting NDEBUG when ZEND_DEBUG is enabled.
-      # translate-c defines NDEBUG in ReleaseFast and ReleaseSmall.
-      - name: Run example tests (ReleaseFast)
-        if: ${{ matrix.debug == false }}
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseFast
-      - name: Run example tests (ReleaseSmall)
-        if: ${{ matrix.debug == false }}
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build test-examples -Dphp-include-dir="$PHP_INCLUDE_DIR" -Doptimize=ReleaseSmall
-      - name: Run skeleton tests (phpize)
-        working-directory: examples/skeleton
-        env:
-          NO_INTERACTION: "1"
-          REPORT_EXIT_STATUS: "1"
-        run: |
-          phpize
-          ./configure --enable-skeleton --with-php-config="$(command -v php-config)"
-          make
-          make test TESTS=tests
+          php: ${{ matrix.php }}
+          ts: nts
+          debug: 'false'
+      - name: Test TS PHP release
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: ts
+          debug: 'false'
+      - name: Test NTS PHP debug
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: nts
+          debug: 'true'
+      - name: Test TS PHP debug
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: ts
+          debug: 'true'
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64-php-${{ matrix.php }}-logs
+          path: build/ci-results/
+          if-no-files-found: ignore

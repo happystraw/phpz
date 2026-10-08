@@ -1,0 +1,70 @@
+name: Test PHP variant
+description: Install one PHP ABI and test it in an isolated checkout
+inputs:
+  php:
+    description: PHP major.minor version
+    required: true
+  ts:
+    description: nts or ts
+    required: true
+  debug:
+    description: Whether PHP has ZEND_DEBUG enabled
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Prepare isolated checkout
+      id: prepare
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        CI_PHP: ${{ inputs.php }}
+        CI_TS: ${{ inputs.ts }}
+        CI_DEBUG: ${{ inputs.debug }}
+      run: node .github/scripts/ci.mjs prepare
+    - name: Setup PHP (Unix)
+      id: unix
+      if: ${{ !cancelled() && steps.prepare.outcome == 'success' && runner.os != 'Windows' }}
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php }}
+        tools: php-config
+        coverage: none
+      env:
+        phpts: ${{ inputs.ts }}
+        debug: ${{ inputs.debug }}
+        fail-fast: 'true'
+    - name: Setup PHP (Windows)
+      id: windows
+      if: ${{ !cancelled() && steps.prepare.outcome == 'success' && runner.os == 'Windows' }}
+      shell: pwsh
+      env:
+        CI_PHP: ${{ inputs.php }}
+        CI_TS: ${{ inputs.ts }}
+        CI_WORK: ${{ steps.prepare.outputs.work }}
+        CI_LOGS: ${{ steps.prepare.outputs.logs }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        & .\.github\scripts\setup-php-windows.ps1 `
+          -PhpVersion $env:CI_PHP -Arch x64 -ThreadSafety $env:CI_TS `
+          -Destination (Join-Path $env:CI_WORK 'sdk') *>&1 |
+          Tee-Object -FilePath (Join-Path $env:CI_LOGS 'setup.log')
+    - name: Verify ABI and run tests
+      id: test
+      if: ${{ !cancelled() && steps.prepare.outcome == 'success' && (steps.unix.outcome == 'success' || steps.windows.outcome == 'success') }}
+      shell: bash
+      env:
+        CI_PHP: ${{ inputs.php }}
+        CI_TS: ${{ inputs.ts }}
+        CI_DEBUG: ${{ inputs.debug }}
+      run: node .github/scripts/ci.mjs run
+    - name: Collect results and clean variant
+      if: ${{ always() && steps.prepare.outcome == 'success' }}
+      shell: bash
+      env:
+        CI_PHP: ${{ inputs.php }}
+        CI_TS: ${{ inputs.ts }}
+        CI_DEBUG: ${{ inputs.debug }}
+        CI_SETUP_OUTCOME: ${{ runner.os == 'Windows' && steps.windows.outcome || steps.unix.outcome }}
+        CI_TEST_OUTCOME: ${{ steps.test.outcome }}
+      run: node .github/scripts/ci.mjs finish
