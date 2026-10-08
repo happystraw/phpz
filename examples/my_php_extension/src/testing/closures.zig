@@ -12,7 +12,7 @@ fn sumHandler(execute_data: ?*phpz.c.zend_execute_data, return_value: ?*phpz.c.z
 /// PHP: MyPHPExt\Test\makeHandlerClosure(): Closure
 pub fn makeHandlerClosure(ctx: phpz.Ctx) !void {
     try ctx.call.expectNoArgs();
-    phpz.closure.fromHandler(&sumHandler, ctx.retval);
+    phpz.closure.createFromHandler(&sumHandler, ctx.retval);
 }
 
 fn sum(left: i64, right: i64) i64 {
@@ -119,55 +119,55 @@ fn optionalMixed(input: ?phpz.Mixed(&.{ .null, .int, .string })) []const u8 {
 pub fn makeFnClosure(ctx: phpz.Ctx, kind_arg: ?[]const u8) !void {
     const kind = kind_arg orelse "sum";
     if (std.mem.eql(u8, kind, "sum")) {
-        phpz.closure.fromFn(sum, ctx.retval);
+        phpz.closure.createFromFn(sum, ctx.retval);
     } else if (std.mem.eql(u8, kind, "empty")) {
-        phpz.closure.fromFn(empty, ctx.retval);
+        phpz.closure.createFromFn(empty, ctx.retval);
     } else if (std.mem.eql(u8, kind, "fail")) {
-        phpz.closure.fromFn(fail, ctx.retval);
+        phpz.closure.createFromFn(fail, ctx.retval);
     } else if (std.mem.eql(u8, kind, "value")) {
-        phpz.closure.fromFn(value, ctx.retval);
+        phpz.closure.createFromFn(value, ctx.retval);
     } else if (std.mem.eql(u8, kind, "narrow")) {
-        phpz.closure.fromFn(narrow, ctx.retval);
+        phpz.closure.createFromFn(narrow, ctx.retval);
     } else if (std.mem.eql(u8, kind, "with_context")) {
-        phpz.closure.fromFn(withContext, ctx.retval);
+        phpz.closure.createFromFn(withContext, ctx.retval);
     } else if (std.mem.eql(u8, kind, "nullable_string")) {
-        phpz.closure.fromFn(nullableString, ctx.retval);
+        phpz.closure.createFromFn(nullableString, ctx.retval);
     } else if (std.mem.eql(u8, kind, "optional_callable")) {
-        phpz.closure.fromFn(optionalCallable, ctx.retval);
+        phpz.closure.createFromFn(optionalCallable, ctx.retval);
     } else if (std.mem.eql(u8, kind, "echo_bytes")) {
-        phpz.closure.fromFn(echoBytes, ctx.retval);
+        phpz.closure.createFromFn(echoBytes, ctx.retval);
     } else if (std.mem.eql(u8, kind, "owned_string")) {
-        phpz.closure.fromFn(ownedString, ctx.retval);
+        phpz.closure.createFromFn(ownedString, ctx.retval);
     } else if (std.mem.eql(u8, kind, "borrowed_string")) {
-        phpz.closure.fromFn(borrowedString, ctx.retval);
+        phpz.closure.createFromFn(borrowedString, ctx.retval);
     } else if (std.mem.eql(u8, kind, "array_length")) {
-        phpz.closure.fromFn(arrayLength, ctx.retval);
+        phpz.closure.createFromFn(arrayLength, ctx.retval);
     } else if (std.mem.eql(u8, kind, "new_array")) {
-        phpz.closure.fromFn(newArray, ctx.retval);
+        phpz.closure.createFromFn(newArray, ctx.retval);
     } else if (std.mem.eql(u8, kind, "shared_array")) {
-        phpz.closure.fromFn(sharedArray, ctx.retval);
+        phpz.closure.createFromFn(sharedArray, ctx.retval);
     } else if (std.mem.eql(u8, kind, "copy_mixed")) {
-        phpz.closure.fromFn(copyMixed, ctx.retval);
+        phpz.closure.createFromFn(copyMixed, ctx.retval);
     } else if (std.mem.eql(u8, kind, "maybe")) {
-        phpz.closure.fromFn(maybe, ctx.retval);
+        phpz.closure.createFromFn(maybe, ctx.retval);
     } else if (std.mem.eql(u8, kind, "narrow_float")) {
-        phpz.closure.fromFn(narrowFloat, ctx.retval);
+        phpz.closure.createFromFn(narrowFloat, ctx.retval);
     } else if (std.mem.eql(u8, kind, "too_large")) {
-        phpz.closure.fromFn(tooLarge, ctx.retval);
+        phpz.closure.createFromFn(tooLarge, ctx.retval);
     } else if (std.mem.eql(u8, kind, "mixed")) {
-        phpz.closure.fromFn(mixed, ctx.retval);
+        phpz.closure.createFromFn(mixed, ctx.retval);
     } else if (std.mem.eql(u8, kind, "optional_mixed")) {
-        phpz.closure.fromFn(optionalMixed, ctx.retval);
+        phpz.closure.createFromFn(optionalMixed, ctx.retval);
     } else if (std.mem.eql(u8, kind, "guard_value")) {
-        phpz.closure.fromFn(@import("guard.zig").value, ctx.retval);
+        phpz.closure.createFromFn(@import("guard.zig").value, ctx.retval);
     } else if (std.mem.eql(u8, kind, "named")) {
-        phpz.closure.fromFn(named_arguments.collectAll, ctx.retval);
+        phpz.closure.createFromFn(named_arguments.collectAll, ctx.retval);
     } else if (std.mem.eql(u8, kind, "checked_named")) {
-        phpz.closure.fromFn(named_arguments.checkedNamedArguments, ctx.retval);
+        phpz.closure.createFromFn(named_arguments.checkedNamedArguments, ctx.retval);
     } else if (std.mem.eql(u8, kind, "parse")) {
-        phpz.closure.fromFn(named_arguments.parsedSum, ctx.retval);
+        phpz.closure.createFromFn(named_arguments.parsedSum, ctx.retval);
     } else if (std.mem.eql(u8, kind, "parse_variadic")) {
-        phpz.closure.fromFn(named_arguments.parsedVariadicCount, ctx.retval);
+        phpz.closure.createFromFn(named_arguments.parsedVariadicCount, ctx.retval);
     } else return error.UnknownClosureKind;
 }
 
@@ -185,5 +185,5 @@ pub fn wrapClosure(ctx: phpz.Ctx, function_name: []const u8, object_arg: ?phpz.N
         phpz.zend.Function.findMethod(ce, function_name)
     else
         phpz.zend.Function.fetch(function_name)) orelse return error.FunctionNotFound;
-    try function.toClosure(ctx.retval, .{ .object = object, .called_scope = scope });
+    try function.createClosure(ctx.retval, .{ .object = object, .called_scope = scope });
 }

@@ -62,7 +62,7 @@ extension patterns that tend to break in real projects:
 
 `MyPHPExt\Test\GcNode` demonstrates keeping a callable in Zig backing after its
 creating function returns. The constructor parses a borrowed `Callable`, calls
-`addref()`, and stores it. The `deinit` hook calls `delref()`, while the `gc` hook
+`addref()`, and stores it. The `deinit` hook calls `release()`, while the `gc` hook
 reports the retained references with `GcBuffer.addCallable()`.
 
 ```php

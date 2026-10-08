@@ -12,7 +12,7 @@ pub fn __construct(ctx: phpz.Ctx, id: i64) !void {
 pub fn getId(ctx: phpz.Ctx) !i64 {
     const entity = ctx.call.this().?;
     var scratch = phpz.Zval.raw.undef;
-    defer phpz.Zval.raw.tryRelease(&scratch);
+    defer phpz.Zval.raw.release(&scratch);
 
     const id = try entity.property("id", false, &scratch);
     return phpz.Zval.raw.asUnchecked(id.ptr(), .int);

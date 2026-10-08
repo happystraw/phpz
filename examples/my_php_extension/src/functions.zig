@@ -34,7 +34,7 @@ pub fn mapValues(ctx: phpz.Ctx, values: *phpz.zend.Array, mapper: *phpz.zend.Cal
     var iterator = values.fastIterator();
     while (iterator.next()) |entry| {
         var mapped = Zval.raw.undef;
-        errdefer Zval.raw.tryRelease(&mapped);
+        errdefer Zval.raw.release(&mapped);
 
         try mapper.call(&mapped, .{entry.value.*}, null);
         switch (entry.key) {

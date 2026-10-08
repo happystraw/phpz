@@ -87,12 +87,12 @@ pub const Function = opaque {
     /// Create a native PHP Closure, preserving the function's signature and static variables.
     /// Instance methods require an object; method visibility is not checked.
     /// Argument metadata must outlive the closure. Zend bailouts must terminate the request.
-    pub fn toClosure(
+    pub fn createClosure(
         self: *Function,
-        result: *Zval,
+        destination: *Zval,
         options: struct { object: ?*Object = null, called_scope: ?*ClassEntry = null },
     ) ClosureError!void {
-        std.debug.assert(result.is(.undef) or result.is(.null));
+        std.debug.assert(destination.is(.undef) or destination.is(.null));
         const func = self.ptr();
         const flags = func.common.fn_flags;
         if ((self.kind() != .internal and self.kind() != .user) or
@@ -118,7 +118,7 @@ pub const Function = opaque {
         }
 
         var object: ?c.zval = if (options.object) |obj| Zval.raw.init(.object, obj) else null;
-        c.zend_create_fake_closure(result.ptr(), func, scope, called_scope, if (object) |*value| value else null);
+        c.zend_create_fake_closure(destination.ptr(), func, scope, called_scope, if (object) |*value| value else null);
     }
 
     /// Call as a global function (no object, no scope).

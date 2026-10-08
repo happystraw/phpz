@@ -9,7 +9,7 @@ fn sum(a: i64, b: i64) i64 {
 /// PHP: MyPHPExt\makeSumClosure(): Closure
 pub fn makeSumClosure(ctx: phpz.Ctx) !void {
     try ctx.call.expectNoArgs();
-    phpz.closure.fromFn(sum, ctx.retval);
+    phpz.closure.createFromFn(sum, ctx.retval);
 }
 
 const Counter = struct {
@@ -50,7 +50,7 @@ pub fn makeCounter(ctx: phpz.Ctx, start: ?i64, held: ?*Zval) !void {
     backing.value = start orelse 0;
     if (held) |value| Zval.raw.copy(&backing.held, value.ptr());
     const invoke = phpz.zend.Function.findMethod(CounterClass.entry, "__invoke").?;
-    try invoke.toClosure(ctx.retval, .{ .object = owner.object() });
+    try invoke.createClosure(ctx.retval, .{ .object = owner.object() });
 }
 
 const Reference = struct {
@@ -92,7 +92,7 @@ pub fn makeReference(ctx: phpz.Ctx) !void {
     defer owner.object().release();
     Zval.raw.copy(&owner.backing().?.value, args[0].ptr());
     const invoke = phpz.zend.Function.findMethod(ReferenceClass.entry, "__invoke").?;
-    try invoke.toClosure(ctx.retval, .{ .object = owner.object() });
+    try invoke.createClosure(ctx.retval, .{ .object = owner.object() });
 }
 
 pub const classes = .{ CounterClass, ReferenceClass };

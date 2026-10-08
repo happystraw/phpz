@@ -43,7 +43,7 @@ pub fn __construct(ctx: phpz.Ctx) !void {
 pub fn label(ctx: phpz.Ctx) !*phpz.zend.String {
     const user = ctx.call.this().?;
     var scratch = phpz.Zval.raw.undef;
-    defer phpz.Zval.raw.tryRelease(&scratch);
+    defer phpz.Zval.raw.release(&scratch);
 
     const name = try user.property("name", false, &scratch);
     return name.asUnchecked(.str).copy();

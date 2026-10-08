@@ -115,6 +115,7 @@ pub fn checkStringArguments(ctx: phpz.Ctx) !bool {
 
 /// The fixture object has a public string `value` and static string `shared`.
 pub fn checkZvalStrings(ctx: phpz.Ctx, text: []const u8, object: *phpz.zend.Object) !*phpz.zend.String {
+    try @import("zval.zig").checkRefcounts();
     const str = phpz.zend.String.init(text, false);
     var storage = Zval.raw.init(.str, str);
     const source = Zval.from(&storage);

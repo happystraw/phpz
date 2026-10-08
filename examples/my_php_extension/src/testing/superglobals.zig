@@ -26,7 +26,7 @@ pub fn superglobalsSnapshot(ctx: phpz.Ctx) !void {
 }
 
 fn setBorrowed(result: *Zval.Array, key: []const u8, value: *Zval.Array) void {
-    value.zval().addref();
+    value.zval().tryAddref();
     result.set(.mixed, key, value.ptr());
 }
 
