@@ -364,25 +364,34 @@ pub const Zval = opaque {
     }
 
     /// Increment the refcount of this zval's refcounted payload.
+    /// Requires a refcounted value; preserves PHP reference wrappers.
     ///
-    /// Ownership: caller owns the added reference and must `release()`/delref it.
+    /// Ownership: caller owns the added reference and must call `release()` when done.
     pub inline fn addref(self: *Zval) void {
         raw.addref(self.ptr());
     }
 
     /// Increment the refcount only when this zval contains a refcounted value.
     ///
-    /// Ownership: caller owns the added reference and must `release()`/delref it.
+    /// Ownership: caller owns the added reference and must call `release()` when done.
     pub inline fn tryAddref(self: *Zval) void {
         raw.tryAddref(self.ptr());
     }
 
+    /// Decrement the refcount of a refcounted value without destroying it.
+    /// Requires a refcounted value; use release() for cleanup.
+    pub inline fn delref(self: *Zval) void {
+        raw.delref(self.ptr());
+    }
+
     /// Decrement the refcount only when this zval contains a refcounted value.
+    /// Does not destroy the payload when the count reaches zero; use release() for cleanup.
     pub inline fn tryDelref(self: *Zval) void {
         raw.tryDelref(self.ptr());
     }
 
     /// Release one owned zval value.
+    /// Accepts any initialized value, including .undef; does not clear the zval.
     pub inline fn release(self: *Zval) void {
         raw.release(self.ptr());
     }
@@ -413,7 +422,7 @@ pub const Zval = opaque {
         /// Initialize a raw zval value.
         ///
         /// Ownership: caller owns the returned zval contents and must call
-        /// `release()`/`tryRelease()` when the value is refcounted and not transferred.
+        /// `release()` when the value is refcounted and not transferred.
         pub fn init(comptime zk: Kind, val: Type(zk)) c.zval {
             var z: c.zval = undefined;
             raw.set(&z, zk, val);
@@ -650,30 +659,33 @@ pub const Zval = opaque {
         /// addrefs the source payload; `dtor_src=true` destroys the source zval.
         pub const setZval = c.phpz_zval_zval;
         /// Increment the refcount of a raw zval's refcounted payload.
+        /// Corresponds to Z_ADDREF_P; requires a refcounted value and preserves references.
         ///
-        /// Ownership: caller owns the added reference and must `dtor`/delref it.
-        pub const addref = c.zval_add_ref;
+        /// Ownership: caller owns the added reference and must call `release()` when done.
+        pub inline fn addref(z: *c.zval) void {
+            _ = c.zval_addref_p(z);
+        }
+        /// Decrement a refcount without destroying the payload, like Z_DELREF_P.
+        /// Requires a refcounted value; use release() for cleanup.
+        pub inline fn delref(z: *c.zval) void {
+            _ = c.zval_delref_p(z);
+        }
         /// Release one owned raw zval value using PHP's `zval_ptr_dtor`.
+        /// Accepts any initialized value, including .undef; does not clear the zval.
         pub const release = c.zval_ptr_dtor;
         pub const refcount = c.zval_refcount_p;
-        /// Release a scratch/optional zval only if it was initialized.
+        /// Increment the refcount only when the zval is refcounted, like Z_TRY_ADDREF_P.
         ///
-        /// Ownership: caller-provided scratch cleanup helper.
-        pub inline fn tryRelease(z: *c.zval) void {
-            if (!raw.is(z, .undef)) raw.release(z);
-        }
-        /// Increment the refcount only when the zval is refcounted.
-        ///
-        /// Ownership: caller owns the added reference and must `tryDelref()` or
-        /// otherwise release it.
+        /// Ownership: caller owns the added reference and must call `release()` when done.
         pub inline fn tryAddref(z: *c.zval) void {
             // if Z_REFCOUNTED_P
-            if (z.u1.v.type_flags != 0) _ = c.zval_addref_p(z);
+            if (z.u1.v.type_flags != 0) raw.addref(z);
         }
-        /// Decrement a refcount only when the zval is refcounted.
+        /// Decrement a refcount only when the zval is refcounted, like Z_TRY_DELREF_P.
+        /// Does not destroy the payload when the count reaches zero; use release() for cleanup.
         pub inline fn tryDelref(z: *c.zval) void {
             // if Z_REFCOUNTED_P
-            if (z.u1.v.type_flags != 0) _ = c.zval_delref_p(z);
+            if (z.u1.v.type_flags != 0) raw.delref(z);
         }
     };
 };

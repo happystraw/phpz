@@ -293,7 +293,7 @@ pub const Headers = opaque {
     pub fn setStatus(self: *Headers, value: Status) void {
         self.ptr().http_response_code = @intCast(@backingInt(value));
     }
-    pub fn sendDefaultContentType(self: *Headers) bool {
+    pub fn shouldSendDefaultContentType(self: *Headers) bool {
         return self.ptr().send_default_content_type != 0;
     }
     pub fn mimetype(self: *Headers) ?[]const u8 {

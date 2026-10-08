@@ -20,10 +20,10 @@ const handler_arginfo = [_]c.zend_internal_arg_info{
 /// GuardCtx. The handler parses PHP parameters and writes non-void Zig results;
 /// void/!void preserves a manually set result.
 /// Uses phpz.function's error and bailout handling.
-/// See fromHandler for the closure's signature and creation constraints.
-pub fn fromFn(comptime func: anytype, result: *Zval) void {
+/// See createFromHandler for the closure's signature and creation constraints.
+pub fn createFromFn(comptime func: anytype, destination: *Zval) void {
     const handler = functions.createHandler("{closure}()", func);
-    fromHandler(handler, result);
+    createFromHandler(handler, destination);
 }
 
 /// Create an unbound Closure from a zif_handler without registering a PHP function.
@@ -31,8 +31,8 @@ pub fn fromFn(comptime func: anytype, result: *Zval) void {
 /// Read extra named arguments with CallFrame.extraNamedArgs(); expectArgs() rejects them.
 /// The handler must remain valid for the closure's lifetime.
 /// Creation may trigger a Zend bailout, which must terminate the request.
-pub fn fromHandler(handler: *const Handler, result: *Zval) void {
-    std.debug.assert(result.is(.undef) or result.is(.null));
+pub fn createFromHandler(handler: *const Handler, destination: *Zval) void {
+    std.debug.assert(destination.is(.undef) or destination.is(.null));
     const name = String.init("{closure}", false);
     defer name.release();
     var function: c.zend_function = .{ .internal_function = std.mem.zeroes(c.zend_internal_function) };
@@ -41,7 +41,7 @@ pub fn fromHandler(handler: *const Handler, result: *Zval) void {
     function.internal_function.function_name = name.ptr();
     function.internal_function.arg_info = @constCast(&handler_arginfo[1]);
     function.internal_function.handler = handler;
-    c.zend_create_fake_closure(result.ptr(), &function, null, null, null);
+    c.zend_create_fake_closure(destination.ptr(), &function, null, null, null);
 }
 
 test {

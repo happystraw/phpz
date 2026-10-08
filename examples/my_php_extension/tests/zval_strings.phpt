@@ -1,5 +1,5 @@
 --TEST--
-Zval string/str borrowing, transfers, conversions, array and property ownership
+Zval refcounts, scalar cleanup, string borrowing, transfers and property ownership
 --EXTENSIONS--
 my_php_extension
 --FILE--

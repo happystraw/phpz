@@ -50,7 +50,7 @@ pub const Callable = struct {
     /// (a PHP error may be pending in `err`).
     /// On success the `fci` and `fcc` fields are populated and ready for `call()`.
     /// The callable is borrowed; its source must remain alive during use.
-    /// Use addref()/delref() to retain it beyond the source lifetime.
+    /// Use addref()/release() to retain it beyond the source lifetime.
     /// Release any previous cache and owned references before parsing into this value.
     ///
     /// `err` optionally receives the error message from `zend_fcall_info_init`
@@ -100,7 +100,7 @@ pub const Callable = struct {
         fci.params = if (n == 0) null else @ptrCast(&params);
         fci.named_params = if (named_params) |values| values.ptr() else null;
         const result = c.zend_call_function(&fci, &self.fcc);
-        if (retval == null) Zval.raw.tryRelease(&discard);
+        if (retval == null) Zval.raw.release(&discard);
         if (result == c.FAILURE) return error.CallFailed;
         if (errors.hasException()) return error.PhpException;
     }
@@ -119,7 +119,7 @@ pub const Callable = struct {
     }
 
     /// Increment refcounts on `function_name` and `fcc.object`.
-    /// Retains a successfully parsed callable; pair each call with delref().
+    /// Retains a successfully parsed callable; pair each call with release().
     pub inline fn addref(self: *Callable) void {
         Zval.raw.tryAddref(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.addref(.from(obj));
@@ -127,7 +127,7 @@ pub const Callable = struct {
 
     /// Release references previously acquired by addref(), not borrowed references.
     /// This value must not be used after its referenced callable is destroyed.
-    pub inline fn delref(self: *Callable) void {
+    pub inline fn release(self: *Callable) void {
         Zval.raw.release(&self.fci.function_name);
         if (self.fcc.object) |obj| Object.release(.from(obj));
     }

@@ -37,7 +37,7 @@ const GcNode = struct {
         Zval.raw.release(&self.second);
         if (self.callback.fci.size != 0) {
             // Balance the reference acquired by the constructor.
-            self.callback.delref();
+            self.callback.release();
         }
     }
 

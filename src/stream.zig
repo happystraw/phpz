@@ -93,8 +93,8 @@ pub const Stream = opaque {
 
     /// Transfer an owned resource reference to an undefined/null zval without addref.
     /// PHP then owns the stream; do not close it or transfer it again.
-    pub fn toZval(self: *Stream, result: *Zval) void {
-        c.phpz_stream_to_zval(self.ptr(), result.ptr());
+    pub fn toZval(self: *Stream, destination: *Zval) void {
+        c.phpz_stream_to_zval(self.ptr(), destination.ptr());
     }
 
     /// Open without a context; owns a request resource reference, even when reusing a stream.

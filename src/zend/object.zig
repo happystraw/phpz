@@ -220,7 +220,7 @@ pub const Object = opaque {
     ///
     /// Ownership: returned pointer is either borrowed from the object/runtime or
     /// points at caller-provided scratch. Never dtor the returned pointer
-    /// directly; use `Zval.raw.tryRelease(scratch)` for scratch cleanup.
+    /// directly; use `Zval.raw.release(scratch)` for scratch cleanup.
     ///
     /// Returns `error.PhpException` if a magic `__get` handler throws.
     pub fn readStdProperty(
@@ -357,7 +357,7 @@ pub const Object = opaque {
     ///
     /// Ownership: returned pointer is either borrowed from the object/runtime
     /// or points at caller-provided scratch. Never dtor the returned pointer
-    /// directly; use `Zval.raw.tryRelease(scratch)` for scratch cleanup.
+    /// directly; use `Zval.raw.release(scratch)` for scratch cleanup.
     ///
     /// Returns `error.PhpException` if a magic `__get` handler throws.
     ///
