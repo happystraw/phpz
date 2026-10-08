@@ -10,6 +10,9 @@ on:
       - "tools/**"
       - "build.zig"
       - "build.zig.zon"
+      - ".github/actions/test-variant/**"
+      - ".github/scripts/ci.mjs"
+      - ".github/scripts/ci.test.mjs"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-windows.yml"
   pull_request:
@@ -21,97 +24,58 @@ on:
       - "tools/**"
       - "build.zig"
       - "build.zig.zon"
+      - ".github/actions/test-variant/**"
+      - ".github/scripts/ci.mjs"
+      - ".github/scripts/ci.test.mjs"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-windows.yml"
   workflow_dispatch:
 
-jobs:
-  matrix:
-    name: Generate Windows test matrix
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-    steps:
-      - name: Generate matrix
-        id: generate
-        uses: php/php-windows-builder/extension-matrix@v1
-        with:
-          php-version-list: "8.2,8.3,8.4,8.5"
-          arch-list: "x64"
-          ts-list: "nts,ts"
+permissions:
+  contents: read
 
+jobs:
+  # PHP 8.2-8.5 all map to windows-2022 in php/php-windows-builder v1.
   test:
-    name: test (PHP ${{ matrix['php-version'] }}, ${{ matrix.arch }}, ${{ matrix.ts }})
-    needs: matrix
-    runs-on: ${{ matrix.os }}
+    name: test (PHP ${{ matrix.php }}, x64)
+    runs-on: windows-2022
+    timeout-minutes: 180
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+      matrix:
+        php: ["8.2", "8.3", "8.4", "8.5"]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - uses: mlugg/setup-zig@v2
+      - name: Setup Zig
+        id: zig
+        uses: mlugg/setup-zig@v2
+      - name: Test CI orchestration
+        run: node --test .github/scripts/ci.test.mjs
       - name: Install pkg-config
+        id: dependencies
         shell: pwsh
         run: |
           choco install pkgconfiglite --no-progress -y
           where.exe pkg-config
-      - name: Setup PHP runtime and development files
-        shell: pwsh
-        run: |
-          .\.github\scripts\setup-php-windows.ps1 `
-            -PhpVersion "${{ matrix['php-version'] }}" `
-            -Arch "${{ matrix.arch }}" `
-            -ThreadSafety "${{ matrix.ts }}" `
-            -Destination (Join-Path $env:RUNNER_TEMP "php-sdk")
-      - name: Verify PHP installation
-        shell: pwsh
-        run: |
-          php -n -v
-          php -n -r 'printf("PHP %s (%s, PHP_DEBUG=%d)\n", PHP_VERSION, PHP_ZTS ? "ZTS" : "NTS", PHP_DEBUG);'
-          Get-ChildItem -LiteralPath $env:PHP_LIB_DIR -Filter "php8*.lib"
-          if (!(Test-Path -LiteralPath $env:LIBC_FILE)) {
-            throw "Missing libc file $env:LIBC_FILE"
-          }
-          Get-Content -LiteralPath $env:LIBC_FILE
-          zig libc -target $env:LIBC_TARGET $env:LIBC_FILE
-          Write-Host "PHP Visual Studio: $env:PHP_VS_VERSION"
-          Write-Host "MSVC toolset: $env:MSVC_TOOLSET"
-      - name: Run unit tests
-        shell: pwsh
-        run: |
-          zig build test `
-            -Dtarget=native-native-msvc `
-            "-Dlibc-file=$env:LIBC_FILE" `
-            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
-            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
-            "-Dwindows-zts=$env:WINDOWS_ZTS"
-      - name: Run example tests
-        shell: pwsh
-        run: |
-          zig build test-examples `
-            -Dtarget=native-native-msvc `
-            "-Dlibc-file=$env:LIBC_FILE" `
-            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
-            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
-            "-Dwindows-zts=$env:WINDOWS_ZTS"
-      - name: Run example tests (ReleaseSafe)
-        shell: pwsh
-        run: |
-          zig build test-examples `
-            -Dtarget=native-native-msvc `
-            "-Dlibc-file=$env:LIBC_FILE" `
-            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
-            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
-            "-Dwindows-zts=$env:WINDOWS_ZTS" `
-            -Doptimize=ReleaseSafe
-      - name: Run example tests (ReleaseFast)
-        shell: pwsh
-        run: |
-          zig build test-examples `
-            -Dtarget=native-native-msvc `
-            "-Dlibc-file=$env:LIBC_FILE" `
-            "-Dphp-include-dir=$env:PHP_INCLUDE_DIR" `
-            "-Dphp-lib-dir=$env:PHP_LIB_DIR" `
-            "-Dwindows-zts=$env:WINDOWS_ZTS" `
-            -Doptimize=ReleaseFast
+      - name: Test NTS PHP release
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: nts
+          debug: 'false'
+      - name: Test TS PHP release
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: ts
+          debug: 'false'
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-php-${{ matrix.php }}-logs
+          path: build/ci-results/
+          if-no-files-found: ignore
