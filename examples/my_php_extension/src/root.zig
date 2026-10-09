@@ -24,7 +24,6 @@ fn info(m: *phpz.ModuleEntry) void {
 }
 
 comptime {
-    @setEvalBranchQuota(10_000);
     const extension = @import("extension_info");
 
     phpz.namedFunctions(.{

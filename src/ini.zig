@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
+const stub = @import("stub.zig");
 const globals = @import("globals.zig");
 const zend = @import("zend.zig");
 
@@ -311,6 +312,7 @@ pub fn custom(
 /// `entries` may also contain raw `c.zend_ini_entry_def` values for low-level
 /// integrations.
 pub fn collect(comptime entries: anytype) [entries.len + 1]c.zend_ini_entry_def {
+    @setEvalBranchQuota(comptime stub.declarationQuota(entries.len));
     var result: [entries.len + 1]c.zend_ini_entry_def = undefined;
     inline for (entries, 0..) |entry, i| {
         result[i] = entryDef(entry);

@@ -1,5 +1,6 @@
 const std = @import("std");
 const errors = @import("../errors.zig");
+const stub = @import("../stub.zig");
 const phpz = @import("../root.zig");
 const c = phpz.c;
 const globals = phpz.globals;
@@ -183,6 +184,7 @@ pub const Function = opaque {
             @compileError("params must be a tuple, e.g. .{} or .{a, b}");
 
         const n = info.@"struct".field_types.len;
+        @setEvalBranchQuota(comptime stub.declarationQuota(n));
         switch (n) {
             0 => c.zend_call_known_function(self.ptr(), obj, scope, retval, 0, null, if (named_params) |args| args.ptr() else null),
             else => {
@@ -207,6 +209,7 @@ pub const Function = opaque {
             @compileError("params must be a tuple, e.g. .{} or .{a, b}");
 
         const n = info.@"struct".field_types.len;
+        @setEvalBranchQuota(comptime stub.declarationQuota(n));
         switch (n) {
             0 => {
                 const Context = struct {

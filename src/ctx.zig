@@ -2,6 +2,7 @@
 const std = @import("std");
 
 const c = @import("root.zig").c;
+const stub = @import("stub.zig");
 const errors = @import("errors.zig");
 const resource_guard = @import("guard.zig");
 const GuardScope = resource_guard.Scope;
@@ -166,6 +167,7 @@ pub const CallFrame = opaque {
 
     fn ExpectArgResults(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
+            @setEvalBranchQuota(stub.declarationQuota(specs.len));
             var types: [specs.len]type = undefined;
             for (specs, 0..) |spec, i| {
                 types[i] = ExpectArgResult(spec);
@@ -178,6 +180,7 @@ pub const CallFrame = opaque {
     /// otherwise a tuple with one Runtime(spec) entry per argument, including void entries.
     pub fn ExpectArgsRuntime(comptime specs: []const ExpectArgKind.Spec) type {
         comptime {
+            @setEvalBranchQuota(stub.declarationQuota(specs.len));
             var types: [specs.len]type = undefined;
             var is_all_void = true;
             for (specs, 0..) |spec, i| {
@@ -256,6 +259,7 @@ pub const CallFrame = opaque {
         comptime specs: []const ExpectArgKind.Spec,
         runtime: ExpectArgsRuntime(specs),
     ) ExpectArgsError!ExpectArgResults(specs) {
+        @setEvalBranchQuota(comptime stub.declarationQuota(specs.len));
         const min = comptime min: {
             var count: u32 = 0;
             var seen_optional = false;

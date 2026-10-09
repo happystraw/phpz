@@ -1,6 +1,49 @@
-//! Naming rules shared with php-src `build/gen_stub.php`.
+//! Compile-time declaration tables and naming rules shared with `gen_stub.php`.
 
 const std = @import("std");
+
+/// Stub-order metadata with enum lookups to avoid StaticStringMap's comptime cost.
+pub fn DeclarationTable(comptime Value: type) type {
+    return struct {
+        const Self = @This();
+
+        entries: []const Value,
+        Name: type,
+
+        /// Build from .{ name, value } pairs, e.g. .{ .{ "foo", value } }.
+        pub fn initComptime(comptime pairs: anytype) Self {
+            var field_names: [pairs.len][]const u8 = undefined;
+            var entries: [pairs.len]Value = undefined;
+            for (pairs, 0..) |pair, i| {
+                field_names[i] = pair[0];
+                entries[i] = pair[1];
+            }
+            const final_entries = entries;
+            return .{
+                .entries = &final_entries,
+                .Name = if (pairs.len == 0) enum {} else @Enum(usize, .exhaustive, &field_names, &std.simd.iota(usize, pairs.len)),
+            };
+        }
+
+        pub fn names(comptime self: Self) []const []const u8 {
+            return @typeInfo(self.Name).@"enum".field_names;
+        }
+
+        pub fn getIndex(comptime self: Self, comptime name: []const u8) ?usize {
+            if (!@hasField(self.Name, name)) return null;
+            return @backingInt(@field(self.Name, name));
+        }
+
+        pub fn has(comptime self: Self, comptime name: []const u8) bool {
+            return @hasField(self.Name, name);
+        }
+    };
+}
+
+/// Estimate 512 branches per declaration, plus Zig's default 1000.
+pub fn declarationQuota(comptime count: usize) u32 {
+    return @intCast(1_000 + count * 512);
+}
 
 /// Convert a canonical PHP qualified name to gen_stub's declaration fragment.
 ///

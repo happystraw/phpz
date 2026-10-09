@@ -14,12 +14,12 @@ const Stream = @import("stream.zig").Stream;
 
 pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
-const FunctionMap = std.StaticStringMap(void);
+const FunctionTable = stub.DeclarationTable(void);
 const required_functions = blk: {
-    @setEvalBranchQuota(10_000);
-    if (!@hasDecl(c, "ext_functions")) break :blk FunctionMap.initComptime(.{});
+    if (!@hasDecl(c, "ext_functions")) break :blk FunctionTable.initComptime(.{});
 
     const table = c.ext_functions;
+    @setEvalBranchQuota(stub.declarationQuota(table.len));
     const Pair = struct { []const u8, void };
     var pairs: [table.len]Pair = undefined;
     var len: usize = 0;
@@ -33,7 +33,7 @@ const required_functions = blk: {
         len += 1;
     }
 
-    break :blk FunctionMap.initComptime(pairs[0..len]);
+    break :blk FunctionTable.initComptime(pairs[0..len]);
 };
 
 /// Export the complete set of concrete PHP functions from the generated stub table.
@@ -58,7 +58,8 @@ pub fn namedFunctions(comptime bindings: anytype) void {
             @compileError("namedFunctions bindings must be a named struct literal such as .{ .hello = hello }");
         }
 
-        var bound: [required_functions.keys().len]bool = @splat(false);
+        @setEvalBranchQuota(stub.declarationQuota(required_functions.entries.len + info.@"struct".field_names.len));
+        var bound: [required_functions.entries.len]bool = @splat(false);
         var message: []const u8 = "namedFunctions bindings do not match the generated C 'ext_functions' table:";
         var mismatch = false;
 
@@ -71,7 +72,7 @@ pub fn namedFunctions(comptime bindings: anytype) void {
             bound[index] = true;
         }
 
-        for (required_functions.keys(), bound) |func_name, is_bound| {
+        for (required_functions.names(), bound) |func_name, is_bound| {
             if (!is_bound) {
                 mismatch = true;
                 message = message ++ "\n  missing Zig binding: " ++ func_name;
@@ -80,7 +81,7 @@ pub fn namedFunctions(comptime bindings: anytype) void {
         if (mismatch) @compileError(message);
 
         for (info.@"struct".field_names) |func_name| {
-            function(func_name, @field(bindings, func_name));
+            exportFunction(func_name, @field(bindings, func_name));
         }
     }
 }
@@ -111,7 +112,8 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
             @compileError("functions expects a struct or imported Zig file namespace");
         }
 
-        var bound: [required_functions.keys().len]bool = @splat(false);
+        @setEvalBranchQuota(stub.declarationQuota(required_functions.entries.len + std.meta.declarations(T).len));
+        var bound: [required_functions.entries.len]bool = @splat(false);
         var message: []const u8 = "functions for Zig type '" ++ @typeName(T) ++ "' does not match the generated C 'ext_functions' table:";
         var mismatch = false;
 
@@ -131,7 +133,7 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
             bound[index] = true;
         }
 
-        for (required_functions.keys(), bound) |func_name, is_bound| {
+        for (required_functions.names(), bound) |func_name, is_bound| {
             if (!is_bound) {
                 mismatch = true;
                 message = message ++ "\n  missing Zig binding: " ++ func_name;
@@ -147,7 +149,7 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
                 func_name
             else
                 options.namespace ++ "\\" ++ func_name;
-            function(php_name, func);
+            exportFunction(php_name, func);
         }
     }
 }
@@ -215,10 +217,14 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
             @compileError("PHP function '" ++ func_name ++ "' was not declared as a concrete function in the generated C 'ext_functions' table");
         }
 
-        const symbol = stub.functionSymbolName(func_name);
-        const handler = createHandler(func_name ++ "()", func);
-        @export(&handler, .{ .name = symbol });
+        exportFunction(func_name, func);
     }
+}
+
+fn exportFunction(comptime func_name: [:0]const u8, comptime func: anytype) void {
+    const symbol = stub.functionSymbolName(func_name);
+    const handler = createHandler(func_name ++ "()", func);
+    @export(&handler, .{ .name = symbol });
 }
 
 /// Export a Zig function as a PHP class method handler without a backing receiver.
@@ -313,6 +319,7 @@ fn ResultType(comptime func: anytype) type {
 
 pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!ResultType(func) {
     const param_types = @typeInfo(@TypeOf(func)).@"fn".param_types;
+    @setEvalBranchQuota(comptime stub.declarationQuota(param_types.len));
     const has_receiver = @TypeOf(receiver) != void;
     const context_idx: usize = if (has_receiver) 1 else 0;
     const has_context = param_types.len > context_idx and (param_types[context_idx] == Ctx or param_types[context_idx] == GuardCtx);

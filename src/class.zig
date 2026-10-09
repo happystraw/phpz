@@ -62,7 +62,7 @@ pub const Comparison = enum(i32) { less = -1, equal = 0, greater = 1 };
 const Layout = enum { std, backed };
 const MethodKind = enum { instance, static };
 const Method = struct { name: [:0]const u8, kind: MethodKind };
-const MethodMap = std.StaticStringMap(Method);
+const MethodTable = stub.DeclarationTable(Method);
 const BindingStrategy = enum { automatic, explicit };
 fn Resolved(comptime T: type) type {
     return struct {
@@ -71,7 +71,7 @@ fn Resolved(comptime T: type) type {
         /// Zend's standard layout or a class carrying Zig backing data.
         layout: Layout,
         /// Stub methods that require Zig bindings.
-        required_methods: MethodMap,
+        required_methods: MethodTable,
         /// Whether methods are discovered from `T` or supplied explicitly.
         binding_strategy: BindingStrategy,
         /// Fallible adapter around the stub-generated class registration.
@@ -120,9 +120,10 @@ fn Resolved(comptime T: type) type {
 
             const required_methods = blk: {
                 const table_name = stub.classMethodsSymbolName(class_name);
-                if (!@hasDecl(c, table_name)) break :blk MethodMap.initComptime(.{});
+                if (!@hasDecl(c, table_name)) break :blk MethodTable.initComptime(.{});
 
                 const table = @field(c, table_name);
+                @setEvalBranchQuota(stub.declarationQuota(table.len));
                 const Pair = struct { []const u8, Method };
                 const symbol_prefix = stub.methodSymbolPrefix(class_name);
                 var pairs: [table.len]Pair = undefined;
@@ -143,7 +144,7 @@ fn Resolved(comptime T: type) type {
                     len += 1;
                 }
 
-                break :blk MethodMap.initComptime(pairs[0..len]);
+                break :blk MethodTable.initComptime(pairs[0..len]);
             };
 
             const binding_strategy: BindingStrategy = if (!@hasField(Options, "methods"))
@@ -209,6 +210,7 @@ fn Resolved(comptime T: type) type {
 
             if (layout == .backed) {
                 const init = if (@hasField(Options, "init")) options.init else blk: {
+                    @setEvalBranchQuota(stub.declarationQuota(@typeInfo(T).@"struct".field_attrs.len));
                     for (@typeInfo(T).@"struct".field_attrs) |attrs| {
                         if (attrs.default_value_ptr == null) break :blk .none;
                     }
@@ -605,9 +607,10 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             entry = try resolved.register();
 
             const serializable = comptime blk: {
+                @setEvalBranchQuota(stub.declarationQuota(resolved.required_methods.entries.len));
                 var has_serialize = false;
                 var has_unserialize = false;
-                for (resolved.required_methods.keys()) |name| {
+                for (resolved.required_methods.names()) |name| {
                     if (std.ascii.eqlIgnoreCase(name, "__serialize")) has_serialize = true;
                     if (std.ascii.eqlIgnoreCase(name, "__unserialize")) has_unserialize = true;
                 }
@@ -827,6 +830,11 @@ fn bindMethods(
     comptime options: anytype,
     comptime resolved: Resolved(T),
 ) void {
+    const binding_count = switch (resolved.binding_strategy) {
+        .automatic => if (T == void) 0 else std.meta.declarations(T).len,
+        .explicit => @typeInfo(@TypeOf(options.methods)).@"struct".field_names.len,
+    };
+    @setEvalBranchQuota(stub.declarationQuota(resolved.required_methods.entries.len + binding_count));
     switch (resolved.binding_strategy) {
         .automatic => bindAutomatic(class_name, T, ClassType, resolved.layout, resolved.required_methods),
         .explicit => bindExplicit(class_name, T, ClassType, resolved.layout, resolved.required_methods, options.methods),
@@ -838,23 +846,25 @@ fn bindExplicit(
     comptime T: type,
     comptime ClassType: type,
     comptime class_layout: Layout,
-    comptime methods: MethodMap,
+    comptime methods: MethodTable,
     comptime bindings: anytype,
 ) void {
     const info = @typeInfo(@TypeOf(bindings)).@"struct";
-    var bound: [methods.values().len]bool = @splat(false);
+    var bound: [methods.entries.len]bool = @splat(false);
+    var indices: [info.field_names.len]usize = undefined;
     comptime var message: []const u8 = "Class " ++ class_name ++ " .methods from Zig type '" ++ @typeName(@TypeOf(bindings)) ++ "' does not match the generated stub method table:";
     comptime var mismatch = false;
 
-    inline for (info.field_names) |field_name| {
+    inline for (info.field_names, 0..) |field_name, i| {
         const index = methods.getIndex(field_name) orelse {
             mismatch = true;
             message = message ++ "\n  not declared in generated stub: " ++ field_name;
             continue;
         };
         bound[index] = true;
+        indices[i] = index;
     }
-    inline for (methods.values(), bound) |method, is_bound| {
+    inline for (methods.entries, bound) |method, is_bound| {
         if (!is_bound) {
             mismatch = true;
             message = message ++ "\n  missing Zig binding: " ++ method.name;
@@ -862,9 +872,8 @@ fn bindExplicit(
     }
     if (mismatch) @compileError(message);
 
-    inline for (info.field_names) |field_name| {
-        const index = methods.getIndex(field_name).?;
-        bind(class_name, T, ClassType, class_layout, methods.values()[index], @field(bindings, field_name));
+    inline for (info.field_names, indices) |field_name, index| {
+        bind(class_name, T, ClassType, class_layout, methods.entries[index], @field(bindings, field_name));
     }
 }
 
@@ -873,14 +882,14 @@ fn bindAutomatic(
     comptime T: type,
     comptime ClassType: type,
     comptime class_layout: Layout,
-    comptime methods: MethodMap,
+    comptime methods: MethodTable,
 ) void {
     if (T == void) {
-        if (methods.values().len != 0) @compileError("Class " ++ class_name ++ " requires methods but T is void");
+        if (methods.entries.len != 0) @compileError("Class " ++ class_name ++ " requires methods but T is void");
         return;
     }
 
-    var bound: [methods.values().len]bool = @splat(false);
+    var bound: [methods.entries.len]bool = @splat(false);
     inline for (std.meta.declarations(T)) |decl_name| {
         const func = @field(T, decl_name);
         if (@typeInfo(@TypeOf(func)) != .@"fn") continue;
@@ -888,10 +897,10 @@ fn bindAutomatic(
         const index = methods.getIndex(decl_name) orelse
             @compileError("Class " ++ class_name ++ " has unexpected public method '" ++ decl_name ++ "'");
         bound[index] = true;
-        bind(class_name, T, ClassType, class_layout, methods.values()[index], func);
+        bind(class_name, T, ClassType, class_layout, methods.entries[index], func);
     }
 
-    inline for (methods.values(), bound) |method, is_bound| {
+    inline for (methods.entries, bound) |method, is_bound| {
         if (!is_bound) {
             @compileError("Class " ++ class_name ++ " does not implement required stub method '" ++ method.name ++ "'");
         }
@@ -962,7 +971,7 @@ test "concrete Zig class public declarations compile" {
     }.call;
     const TestClass = BackedClass("TestClass", Backing, .{}, .{
         .layout = .backed,
-        .required_methods = MethodMap.initComptime(.{}),
+        .required_methods = MethodTable.initComptime(.{}),
         .binding_strategy = .automatic,
         .register = register,
         .init = null,

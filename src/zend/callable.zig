@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const errors = @import("../errors.zig");
+const stub = @import("../stub.zig");
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
 const Object = @import("object.zig").Object;
@@ -94,6 +95,7 @@ pub const Callable = struct {
         fci.retval = retval orelse &discard;
 
         const n = info.@"struct".field_types.len;
+        @setEvalBranchQuota(comptime stub.declarationQuota(n));
         var params: [n]c.zval = undefined;
         inline for (0..n) |i| params[i] = args[i];
         fci.param_count = @intCast(n);

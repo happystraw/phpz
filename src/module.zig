@@ -7,6 +7,7 @@ pub const ModuleEntry = c.zend_module_entry;
 const errors = @import("errors.zig");
 const guard = @import("guard.zig");
 const ini_helper = @import("ini.zig");
+const stub = @import("stub.zig");
 const observer = @import("observer.zig");
 
 /// Configuration for creating a PHP extension module.
@@ -136,6 +137,7 @@ fn makePhpModuleStartupFn(
                 }
             }
             if (comptime classes) |items| {
+                @setEvalBranchQuota(comptime stub.declarationQuota(items.len));
                 inline for (items) |Class| {
                     Class.register() catch |err| {
                         errors.warning("Class registration failed: %s", .{@errorName(err).ptr});
@@ -197,6 +199,7 @@ fn makePhpInfoFn(comptime info_fn: PhpInfoFn) *const fn ([*c]ModuleEntry) callco
 /// Create a module entry without exporting symbols. The caller owns its storage.
 /// Keep the entry alive through PHP module shutdown.
 pub fn initModuleEntry(comptime cfg: Config) ModuleEntry {
+    @setEvalBranchQuota(comptime stub.declarationQuota(cfg.ini.len));
     inline for (cfg.ini) |Entry| {
         if (@hasDecl(Entry, "Globals")) {
             if (Entry.Globals) |G| {
@@ -280,6 +283,7 @@ pub fn ModuleGlobals(comptime T: type) type {
                 comptime {
                     if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
                     const info = @typeInfo(T).@"struct";
+                    @setEvalBranchQuota(stub.declarationQuota(info.field_names.len));
                     if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
                     for (info.field_names, info.field_attrs) |name, attrs| {
                         if (std.mem.eql(u8, name, field) and attrs.@"comptime")
@@ -335,6 +339,7 @@ pub fn ModuleGlobals(comptime T: type) type {
             comptime {
                 if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
                 const info = @typeInfo(T).@"struct";
+                @setEvalBranchQuota(stub.declarationQuota(info.field_names.len));
                 if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
                 for (info.field_names, info.field_attrs) |name, attrs| {
                     if (std.mem.eql(u8, name, field) and attrs.@"comptime")
