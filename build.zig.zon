@@ -6,8 +6,8 @@
     .minimum_php_version = "8.2",
     .dependencies = .{
         .translate_c = .{
-            .url = "https://codeberg.org/ziglang/translate-c/archive/2.0.0.tar.gz",
-            .hash = "translate_c-2.0.0-Q_BUWltOBwA0229IE8wwSxxGzOxyRso3hvcb1nN8oJX_",
+            .url = "https://codeberg.org/ziglang/translate-c/archive/2.0.2.tar.gz",
+            .hash = "translate_c-2.0.2-Q_BUWvBNBwBgPKQJPblip6M7AHNK_IPNPmyv4rSIQMQc",
         },
     },
     .paths = .{
