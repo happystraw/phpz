@@ -9,8 +9,20 @@ void phpz_stream_to_zval(php_stream *stream, zval *value) {
 }
 
 #if defined(ZTS) && defined(PHPZ_STATIC_TSRMLS_CACHE)
+#ifdef ZEND_COMPILE_DL_EXT
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
+
 void *phpz_tsrm_ls_cache(void) {
-    return TSRMLS_CACHE;
+    return ZEND_TSRMLS_CACHE;
+}
+
+void phpz_tsrm_ls_cache_update(void) {
+    ZEND_TSRMLS_CACHE_UPDATE();
+}
+
+void phpz_tsrm_ls_cache_clear(void) {
+    ZEND_TSRMLS_CACHE = NULL;
 }
 #endif
 

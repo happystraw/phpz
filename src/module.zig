@@ -9,6 +9,7 @@ const guard = @import("guard.zig");
 const ini_helper = @import("ini.zig");
 const stub = @import("stub.zig");
 const observer = @import("observer.zig");
+const tsrm = @import("tsrm.zig");
 
 /// Configuration for creating a PHP extension module.
 ///
@@ -113,6 +114,17 @@ fn makePhpHookFn(comptime hook_fn: PhpHookFn) *const fn (c_int, c_int) callconv(
     }.handle;
 }
 
+fn makePhpRequestStartupFn(comptime hook_fn: ?PhpHookFn) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
+    if (hook_fn == null and (c.USING_ZTS == 0 or !phpz_options.shared)) return null;
+    return struct {
+        fn handle(module_type: c_int, module_number: c_int) callconv(.c) c.zend_result {
+            tsrm.updateCache();
+            if (comptime hook_fn) |f| return makePhpHookFn(f)(module_type, module_number);
+            return c.SUCCESS;
+        }
+    }.handle;
+}
+
 fn makePhpModuleStartupFn(
     comptime module_name: [:0]const u8,
     comptime hook_fn: ?PhpHookFn,
@@ -126,6 +138,7 @@ fn makePhpModuleStartupFn(
         fn handle(module_type: c_int, module_number: c_int) callconv(.c) c.zend_result {
             _ = module_type;
 
+            tsrm.updateCache();
             guard.ScopeObject.register(module_number);
 
             if (comptime has_symbols) {
@@ -228,7 +241,7 @@ pub fn initModuleEntry(comptime cfg: Config) ModuleEntry {
     entry.functions = if (@hasDecl(c, "ext_functions")) &c.ext_functions else null;
     entry.module_startup_func = makePhpModuleStartupFn(cfg.name, cfg.module_startup_fn, registered_ini_defs, cfg.classes, cfg.observer);
     entry.module_shutdown_func = makePhpModuleShutdownFn(cfg.module_shutdown_fn, registered_ini_defs, cfg.observer);
-    entry.request_startup_func = if (cfg.request_startup_fn) |f| makePhpHookFn(f) else null;
+    entry.request_startup_func = makePhpRequestStartupFn(cfg.request_startup_fn);
     entry.request_shutdown_func = if (cfg.request_shutdown_fn) |f| makePhpHookFn(f) else null;
     entry.info_func = if (cfg.info_fn) |f| makePhpInfoFn(f) else null;
     entry.version = cfg.version;
@@ -310,6 +323,7 @@ pub fn ModuleGlobals(comptime T: type) type {
             }
 
             fn construct(raw: ?*anyopaque) callconv(.c) void {
+                tsrm.updateCache();
                 const value: *T = @ptrCast(@alignCast(raw orelse unreachable));
                 value.* = .{};
                 if (comptime @hasDecl(T, "init")) value.init();

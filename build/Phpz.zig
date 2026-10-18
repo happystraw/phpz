@@ -99,11 +99,14 @@ pub fn initInner(b: *Build, options: Options) Phpz {
         },
         else => {},
     }
-    if (!options.shared) {
-        mod.addCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
-        mod.addCMacro("ZEND_ENABLE_STATIC_TSRMLS_CACHE", "1");
-    }
-    mod.addCSourceFile(.{ .file = b.path("build/phpz_wrapper.c") });
+    mod.addCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
+    mod.addCMacro("ZEND_ENABLE_STATIC_TSRMLS_CACHE", "1");
+    if (options.shared) mod.addCMacro("ZEND_COMPILE_DL_EXT", "1");
+    mod.addCSourceFile(.{
+        .file = b.path("build/phpz_wrapper.c"),
+        // Each shared extension owns its TLS cache; do not interpose PHP's cache.
+        .flags = if (options.shared) &.{"-fvisibility=hidden"} else &.{},
+    });
 
     const mod_opts = b.addOptions();
     mod_opts.addOption(bool, "shared", options.shared);
@@ -124,8 +127,8 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     // phpz.h
     c.addIncludePath(b.path("build"));
     c.defineCMacro("PHPZ_TRANSLATE_C", "1");
+    c.defineCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
     if (translator_options.target.result.abi.isMusl()) c.defineCMacro("PHPZ_MUSL", "1");
-    if (!options.shared) c.defineCMacro("PHPZ_STATIC_TSRMLS_CACHE", "1");
 
     // Configure PHP include paths for the C preprocessor
     if (options.php_include_dir) |root| {
@@ -190,6 +193,13 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
             else => {},
         }
     }
+
+    if (b.option(bool, "lto", "Enable link time optimization for the extension")) |enabled| {
+        lib.lto = if (enabled) .full else .none;
+    } else if (self.options.shared and (lib.root_module.optimize orelse .debug) != .debug) {
+        lib.lto = .full;
+    }
+
     if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub (default: true)") orelse true) {
         lib.step.dependOn(addArginfoCheckStep(self, b, options.name));
     }

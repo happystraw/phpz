@@ -22,6 +22,8 @@ static zend_always_inline const char *phpz_module_build_id(void) {
 
 #if defined(ZTS) && defined(PHPZ_STATIC_TSRMLS_CACHE)
 void *phpz_tsrm_ls_cache(void);
+void phpz_tsrm_ls_cache_update(void);
+void phpz_tsrm_ls_cache_clear(void);
 #endif
 
 static zend_always_inline zend_executor_globals *phpz_executor_globals(void) {
