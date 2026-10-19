@@ -59,8 +59,11 @@ struct timespec { time_t tv_sec; long tv_nsec; };
 
 #if PHP_VERSION_ID >= 80400 && PHP_VERSION_ID < 80500 \
  && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+/* Load the compiler definition before temporarily overriding max_align_t. */
+#include <stddef.h>
 /* PHP 8.4 assumes C11 stddef.h provides max_align_t, but Windows UCRT does not.
  * Match PHP 8.5 by making zend_max_align_t use the Windows fallback union. */
+#define PHPZ_UNDEF_MAX_ALIGN_T
 #define max_align_t union { \
     char c; short s; int i; long l; long long ll; \
     float f; double d; long double ld; void *p; void (*fun)(void); \
@@ -74,6 +77,11 @@ struct timespec { time_t tv_sec; long tv_nsec; };
 #define __clang__
 #else
 #include "Zend/zend_portability.h"
+#endif
+
+#ifdef PHPZ_UNDEF_MAX_ALIGN_T
+#undef max_align_t
+#undef PHPZ_UNDEF_MAX_ALIGN_T
 #endif
 
 // FIXME: regression in translate_c
