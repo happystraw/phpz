@@ -186,18 +186,18 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
     }
     lib.root_module.addImport("phpz", self.mod);
     if (self.options.libc_file) |libc_file| lib.setLibCFile(libc_file);
-    if (lib.root_module.resolved_target) |target| {
-        switch (target.result.os.tag) {
-            // macOS: allows undefined symbols to be resolved at runtime by PHP
-            .macos => lib.linker_allow_shlib_undefined = true,
-            else => {},
-        }
+    switch (lib.rootModuleTarget().os.tag) {
+        // macOS: allows undefined symbols to be resolved at runtime by PHP
+        .macos => lib.linker_allow_shlib_undefined = true,
+        else => {},
     }
 
     if (b.option(bool, "lto", "Enable link time optimization for the extension")) |enabled| {
         lib.lto = if (enabled) .full else .none;
     } else if (self.options.shared and (lib.root_module.optimize orelse .debug) != .debug) {
-        lib.lto = .full;
+        // Zig 0.17's Mach-O linker does not support LTO, and its LLD integration
+        // does not support Mach-O. Keep default LTO disabled until support is available.
+        lib.lto = if (lib.rootModuleTarget().ofmt == .macho) .none else .full;
     }
 
     if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub (default: true)") orelse true) {
