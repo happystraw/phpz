@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 43904c90ae8598827c9477d46150dfff5a87bd36 */
+ * Stub hash: 2688e9ba2c726cd81723018056fcc7b3faa08ea6 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -144,6 +144,31 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_arrayToList, 0, 1,
 	ZEND_ARG_TYPE_INFO(0, source, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_iterateArray, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, values, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_lookupKey, 0, 3, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, values, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, symtable, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_storeKey, 0, 3, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, values, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_iterateWhileMutating, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_buildList, 0, 3, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, count, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, capacity, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkObjectPropertyHandlers, 0, 0, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, lazy, IS_OBJECT, 1, "null")
 ZEND_END_ARG_INFO()
@@ -152,9 +177,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkObjectCreatio
 	ZEND_ARG_TYPE_INFO(0, stage, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_separateArray, 0, 1, IS_ARRAY, 0)
-	ZEND_ARG_TYPE_INFO(0, values, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_MyPHPExt_Test_separateArray arginfo_MyPHPExt_Test_iterateArray
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_compareArrays, 0, 4, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, left, IS_ARRAY, 0)
@@ -288,8 +311,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_Test_wrapClosure, 0, 1, 
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_allocatorBailout, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_MyPHPExt_Test_allocatorBailout arginfo_MyPHPExt_Test_iterateWhileMutating
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_guardResources, 0, 2, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, label, IS_STRING, 0)
@@ -297,7 +319,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_guardResources, 0,
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, fail, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
-#define arginfo_MyPHPExt_Test_superglobalsSnapshot arginfo_MyPHPExt_Test_allocatorBailout
+#define arginfo_MyPHPExt_Test_superglobalsSnapshot arginfo_MyPHPExt_Test_iterateWhileMutating
 
 #define arginfo_MyPHPExt_Test_mutateSuperglobals arginfo_hello
 
@@ -382,7 +404,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Collection___construct, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, values, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_Collection_toArray arginfo_MyPHPExt_Test_allocatorBailout
+#define arginfo_class_MyPHPExt_Collection_toArray arginfo_MyPHPExt_Test_iterateWhileMutating
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Collection_offsetExists, 0, 1, _IS_BOOL, 0)
 	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
@@ -423,7 +445,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Config_mode arginfo_class_MyPHPExt_Entity_label
 
-#define arginfo_class_MyPHPExt_Metrics_snapshot arginfo_MyPHPExt_Test_allocatorBailout
+#define arginfo_class_MyPHPExt_Metrics_snapshot arginfo_MyPHPExt_Test_iterateWhileMutating
 
 #define arginfo_class_MyPHPExt_Metrics_reset arginfo_hello
 
@@ -433,7 +455,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Test_NewValue___construct, 0, 0, 1
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, fail, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_Test_NewValue_values arginfo_MyPHPExt_Test_allocatorBailout
+#define arginfo_class_MyPHPExt_Test_NewValue_values arginfo_MyPHPExt_Test_iterateWhileMutating
 
 #define arginfo_class_MyPHPExt_Test_NewValue___destruct arginfo_class_MyPHPExt_ClosureCounter___construct
 
@@ -443,7 +465,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Test_SerializableValue_value arginfo_class_MyPHPExt_Identifiable_getId
 
-#define arginfo_class_MyPHPExt_Test_SerializableValue___serialize arginfo_MyPHPExt_Test_allocatorBailout
+#define arginfo_class_MyPHPExt_Test_SerializableValue___serialize arginfo_MyPHPExt_Test_iterateWhileMutating
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Test_SerializableValue___unserialize, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, data, IS_ARRAY, 0)
@@ -495,6 +517,11 @@ ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayHashTable);
 ZEND_FUNCTION(MyPHPExt_Test_isArrayList);
 ZEND_FUNCTION(MyPHPExt_Test_arrayToList);
+ZEND_FUNCTION(MyPHPExt_Test_iterateArray);
+ZEND_FUNCTION(MyPHPExt_Test_lookupKey);
+ZEND_FUNCTION(MyPHPExt_Test_storeKey);
+ZEND_FUNCTION(MyPHPExt_Test_iterateWhileMutating);
+ZEND_FUNCTION(MyPHPExt_Test_buildList);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectPropertyHandlers);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectCreation);
 ZEND_FUNCTION(MyPHPExt_Test_separateArray);
@@ -740,6 +767,31 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "arrayToList"), zif_MyPHPExt_Test_arrayToList, arginfo_MyPHPExt_Test_arrayToList, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "arrayToList"), zif_MyPHPExt_Test_arrayToList, arginfo_MyPHPExt_Test_arrayToList, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateArray"), zif_MyPHPExt_Test_iterateArray, arginfo_MyPHPExt_Test_iterateArray, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateArray"), zif_MyPHPExt_Test_iterateArray, arginfo_MyPHPExt_Test_iterateArray, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "lookupKey"), zif_MyPHPExt_Test_lookupKey, arginfo_MyPHPExt_Test_lookupKey, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "lookupKey"), zif_MyPHPExt_Test_lookupKey, arginfo_MyPHPExt_Test_lookupKey, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "storeKey"), zif_MyPHPExt_Test_storeKey, arginfo_MyPHPExt_Test_storeKey, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "storeKey"), zif_MyPHPExt_Test_storeKey, arginfo_MyPHPExt_Test_storeKey, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateWhileMutating"), zif_MyPHPExt_Test_iterateWhileMutating, arginfo_MyPHPExt_Test_iterateWhileMutating, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateWhileMutating"), zif_MyPHPExt_Test_iterateWhileMutating, arginfo_MyPHPExt_Test_iterateWhileMutating, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "buildList"), zif_MyPHPExt_Test_buildList, arginfo_MyPHPExt_Test_buildList, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "buildList"), zif_MyPHPExt_Test_buildList, arginfo_MyPHPExt_Test_buildList, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectPropertyHandlers"), zif_MyPHPExt_Test_checkObjectPropertyHandlers, arginfo_MyPHPExt_Test_checkObjectPropertyHandlers, 0, NULL, NULL)

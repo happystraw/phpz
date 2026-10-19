@@ -31,7 +31,7 @@ pub const String = opaque {
 
     /// Allocate owned storage with uninitialized bytes and a trailing NUL.
     /// Fill the bytes before use; release() when done.
-    pub fn alloc(length: usize, persistent: bool) *String {
+    pub inline fn alloc(length: usize, persistent: bool) *String {
         const result: *c.zend_string = c.zend_string_alloc(length, persistent);
         result.val()[length] = 0;
         return .from(result);

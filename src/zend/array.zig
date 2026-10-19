@@ -89,7 +89,8 @@ pub const Array = opaque {
         return @ptrCast(c.zend_array_to_list(self.ptr()));
     }
 
-    /// Add or update a value by string key.
+    /// Add or update a value by raw string key. Numeric strings stay string keys,
+    /// unlike PHP's `$array["1"]`; use symtableUpdate() for PHP key semantics.
     ///
     /// Ownership: the array takes ownership of `value`'s zval contents. If
     /// `value` is borrowed and must remain independently owned, addref/copy it
@@ -186,12 +187,30 @@ pub const Array = opaque {
         return if (result != null) @ptrCast(@alignCast(result)) else null;
     }
 
-    /// Find a value by string key.
+    /// Find a value by raw string key. "1" does not match the integer key 1 that
+    /// PHP stores for `$array["1"]`; use symtableFind() for PHP key semantics.
     ///
     /// Ownership: borrowed zval pointer owned by the array; addref/copy before
     /// storing it beyond the array or mutating the table.
     pub fn find(self: *Array, key: []const u8) ?*c.zval {
         return c.zend_hash_str_find(self.ptr(), key.ptr, key.len);
+    }
+
+    /// Find a value like PHP's `$array[$key]`: canonical integer strings such as
+    /// "42" or "-1" address integer keys. Ownership follows find().
+    pub fn symtableFind(self: *Array, key: []const u8) ?*c.zval {
+        return c.zend_symtable_str_find(self.ptr(), key.ptr, key.len);
+    }
+
+    /// Add or update like PHP's `$array[$key] = $value`. Ownership follows update().
+    /// Requires mutable, uniquely owned storage.
+    pub fn symtableUpdate(self: *Array, key: []const u8, value: *c.zval) *c.zval {
+        return c.zend_symtable_str_update(self.ptr(), key.ptr, key.len, value).?;
+    }
+
+    /// Delete like PHP's `unset($array[$key])`, destroying the stored value.
+    pub fn symtableDelete(self: *Array, key: []const u8) Error!void {
+        if (c.zend_symtable_str_del(self.ptr(), key.ptr, key.len) != c.SUCCESS) return Error.NotFound;
     }
 
     /// Like find(), with a borrowed Zend string key; no numeric-string conversion.
@@ -242,7 +261,7 @@ pub const Array = opaque {
         return if (value != null) @ptrCast(@alignCast(value)) else null;
     }
 
-    /// Check if a string key exists
+    /// Check if a raw string key exists; see find() for numeric strings.
     pub fn has(self: *Array, key: []const u8) bool {
         return self.find(key) != null;
     }
@@ -257,7 +276,7 @@ pub const Array = opaque {
         return self.findIndex(index) != null;
     }
 
-    /// Delete a value by string key
+    /// Delete a value by raw string key; see find() for numeric strings.
     pub fn delete(self: *Array, key: []const u8) Error!void {
         if (c.zend_hash_str_del(self.ptr(), key.ptr, key.len) != c.SUCCESS) {
             return Error.NotFound;
@@ -445,6 +464,107 @@ pub const Array = opaque {
         value: *c.zval,
     };
 
+    inline fn isPacked(ht: *c.HashTable) bool {
+        return (ht.u.flags & c.HASH_FLAG_PACKED) != 0;
+    }
+
+    inline fn packedValues(ht: *c.HashTable) [*]c.zval {
+        return @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
+    }
+
+    inline fn buckets(ht: *c.HashTable) [*]c.Bucket {
+        return @ptrCast(@alignCast(c.phpz_hash_table_get_ar_packed(ht)));
+    }
+
+    inline fn valueAt(ht: *c.HashTable, pos: u32) *c.zval {
+        return if (isPacked(ht)) &packedValues(ht)[pos] else &buckets(ht)[pos].val;
+    }
+
+    inline fn keyAt(ht: *c.HashTable, pos: u32) Key {
+        if (isPacked(ht)) return .{ .int = @intCast(pos) };
+        const bucket = &buckets(ht)[pos];
+        return if (bucket.key) |k| .{ .string = k.*.val()[0..k.*.len] } else .{ .int = @bitCast(bucket.h) };
+    }
+
+    /// First used slot at or after `pos`, or nNumUsed. Mirrors _zend_hash_get_valid_pos().
+    inline fn validPos(ht: *c.HashTable, start: u32) u32 {
+        var pos = start;
+        while (pos < ht.nNumUsed and Zval.raw.is(valueAt(ht, pos), .undef)) pos += 1;
+        return pos;
+    }
+
+    /// Next position after the current valid one, like zend_hash_move_forward_ex().
+    inline fn moveForward(ht: *c.HashTable, pos: u32) u32 {
+        const current_pos = validPos(ht, pos);
+        return if (current_pos < ht.nNumUsed) validPos(ht, current_pos + 1) else pos;
+    }
+
+    /// Builds a list (keys 0..n-1) without hashing, like ZEND_HASH_FILL_PACKED.
+    /// The builder owns the array: append, then finish() before any other use.
+    /// A Zend bailout while building leaks the unfinished entries until request shutdown.
+    pub const ListBuilder = struct {
+        ht: *c.HashTable,
+        cursor: [*]c.zval,
+        end: [*]c.zval,
+
+        /// Reserve `capacity` slots; the array still grows past it when needed.
+        pub fn init(capacity: u32) ListBuilder {
+            const ht: *c.HashTable = c.zend_new_array(capacity);
+            c.zend_hash_real_init_packed(ht);
+            return at(ht, 0);
+        }
+
+        fn at(ht: *c.HashTable, used: u32) ListBuilder {
+            const values = packedValues(ht);
+            return .{ .ht = ht, .cursor = values + used, .end = values + ht.nTableSize };
+        }
+
+        /// Append the next element; ownership follows `Zval.raw.set`.
+        pub inline fn append(self: *ListBuilder, comptime zk: Zval.Kind, value: Zval.Type(zk)) void {
+            if (self.cursor == self.end) self.* = grow(self.*);
+            Zval.raw.set(&self.cursor[0], zk, value);
+            self.cursor += 1;
+        }
+
+        /// Like append(), for builders created with enough capacity for every element.
+        pub inline fn appendAssumeCapacity(self: *ListBuilder, comptime zk: Zval.Kind, value: Zval.Type(zk)) void {
+            std.debug.assert(self.cursor != self.end);
+            Zval.raw.set(&self.cursor[0], zk, value);
+            self.cursor += 1;
+        }
+
+        /// Append an initialized zval, transferring its contents without addref.
+        pub inline fn appendValue(self: *ListBuilder, value: *const c.zval) void {
+            if (self.cursor == self.end) self.* = grow(self.*);
+            Zval.raw.copyValue(&self.cursor[0], value);
+            self.cursor += 1;
+        }
+
+        // By value, so the builder's address never escapes and it stays in registers.
+        noinline fn grow(builder: ListBuilder) ListBuilder {
+            @branchHint(.cold);
+            const used = builder.publish();
+            c.zend_hash_packed_grow(builder.ht);
+            return at(builder.ht, used);
+        }
+
+        fn publish(self: ListBuilder) u32 {
+            const ht = self.ht;
+            const used: u32 = @intCast(self.cursor - packedValues(ht));
+            ht.nNumOfElements += used - ht.nNumUsed;
+            ht.nNumUsed = used;
+            ht.nNextFreeElement = used;
+            ht.nInternalPointer = 0;
+            return used;
+        }
+
+        /// Ownership: the caller owns the returned array; the builder must not be reused.
+        pub fn finish(self: *ListBuilder) *Array {
+            _ = self.publish();
+            return .from(self.ht);
+        }
+    };
+
     // The iterator supplies the first callback argument (value or entry).
     fn EachArgs(comptime Callback: type, comptime First: type) type {
         const Args = std.meta.ArgsTuple(Callback);
@@ -479,22 +599,24 @@ pub const Array = opaque {
         comptime callback: anytype,
         args: EachArgs(@TypeOf(callback), *c.zval),
     ) void {
+        // Separate loops give each layout a constant element stride.
         const ht = self.ptr();
-        const count = ht.nNumUsed;
-        const stride: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var cursor: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
-
-        var i: u32 = 0;
-        while (i < count) : (i += 1) {
-            const zv: *c.zval = @ptrCast(@alignCast(cursor));
-            cursor += stride;
-
-            // IS_UNDEF check in same scope as body → compiler can eliminate redundancy
-            if (Zval.raw.is(zv, .undef)) {
-                @branchHint(.unlikely);
-                continue;
+        if (isPacked(ht)) {
+            for (packedValues(ht)[0..ht.nNumUsed]) |*zv| {
+                if (Zval.raw.is(zv, .undef)) {
+                    @branchHint(.unlikely);
+                    continue;
+                }
+                @call(.always_inline, callback, .{zv} ++ args);
             }
-            @call(.always_inline, callback, .{zv} ++ args);
+        } else {
+            for (buckets(ht)[0..ht.nNumUsed]) |*bucket| {
+                if (Zval.raw.is(&bucket.val, .undef)) {
+                    @branchHint(.unlikely);
+                    continue;
+                }
+                @call(.always_inline, callback, .{&bucket.val} ++ args);
+            }
         }
     }
 
@@ -503,7 +625,6 @@ pub const Array = opaque {
     /// Ownership: callback entries contain borrowed keys and values from the array.
     ///
     /// Equivalent to C's `ZEND_HASH_FOREACH`. Walks the bucket array directly.
-    /// Key extraction follows C semantics (before IS_UNDEF check).
     /// The callback receives an `Entry` (`.key` and `.value`).
     /// Additional callback parameters are supplied by the typed `args` tuple.
     /// Pass `.{}` without extra parameters.
@@ -525,42 +646,25 @@ pub const Array = opaque {
         args: EachArgs(@TypeOf(callback), Entry),
     ) void {
         const ht = self.ptr();
-        const count = ht.nNumUsed;
-        const is_packed = (ht.u.flags & c.HASH_FLAG_PACKED) != 0;
-        const stride: usize = c.ZEND_HASH_ELEMENT_SIZE(ht);
-        var cursor: [*]u8 = @ptrCast(c.phpz_hash_table_get_ar_packed(ht));
-
-        if (is_packed) {
-            // Packed
-            var idx: u32 = 0;
-            var i: u32 = 0;
-            while (i < count) : (i += 1) {
-                const zv: *c.zval = @ptrCast(@alignCast(cursor));
-                cursor += stride;
-                const key: Key = .{ .int = @as(isize, @intCast(idx)) };
-                idx += 1;
+        if (isPacked(ht)) {
+            for (packedValues(ht)[0..ht.nNumUsed], 0..) |*zv, index| {
                 if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
-                    continue; // IS_UNDEF check
+                    continue;
                 }
-                @call(.always_inline, callback, .{Entry{ .key = key, .value = zv }} ++ args);
+                @call(.always_inline, callback, .{Entry{ .key = .{ .int = @intCast(index) }, .value = zv }} ++ args);
             }
         } else {
-            // Hash
-            var i: u32 = 0;
-            while (i < count) : (i += 1) {
-                const bucket: *c.Bucket = @ptrCast(@alignCast(cursor));
-                const zv: *c.zval = &bucket.val;
-                cursor += stride;
+            for (buckets(ht)[0..ht.nNumUsed]) |*bucket| {
+                if (Zval.raw.is(&bucket.val, .undef)) {
+                    @branchHint(.unlikely);
+                    continue;
+                }
                 const key: Key = if (bucket.key) |k|
                     .{ .string = k.*.val()[0..k.*.len] }
                 else
                     .{ .int = @bitCast(bucket.h) };
-                if (Zval.raw.is(zv, .undef)) {
-                    @branchHint(.unlikely);
-                    continue; // IS_UNDEF check
-                }
-                @call(.always_inline, callback, .{Entry{ .key = key, .value = zv }} ++ args);
+                @call(.always_inline, callback, .{Entry{ .key = key, .value = &bucket.val }} ++ args);
             }
         }
     }
@@ -580,7 +684,7 @@ pub const Array = opaque {
 
         /// Reset the internal pointer to the first element.
         pub fn reset(self: *Iterator) void {
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.pos = validPos(self.ht, 0);
         }
 
         /// Return the current key without advancing, or null if exhausted.
@@ -615,7 +719,7 @@ pub const Array = opaque {
 
         /// Move the internal pointer forward without returning a value.
         pub fn advance(self: *Iterator) void {
-            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            self.pos = moveForward(self.ht, self.pos);
         }
 
         /// Unsafe: peek key + value without bounds check. Prefer `current()`.
@@ -629,24 +733,18 @@ pub const Array = opaque {
         ///
         /// Ownership: borrowed key view owned by the array.
         pub fn peekKey(self: *Iterator) Key {
-            var str_key: ?*c.zend_string = null;
-            var num_key: c.zend_ulong = undefined;
-            return switch (c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos)) {
-                c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
-                c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
-                else => unreachable,
-            };
+            return keyAt(self.ht, validPos(self.ht, self.pos));
         }
 
         /// Unsafe: peek the current value without bounds check. Prefer `currentValue()`.
         ///
         /// Ownership: borrowed zval pointer owned by the array.
         pub fn peekValue(self: *Iterator) *c.zval {
-            return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+            return valueAt(self.ht, validPos(self.ht, self.pos));
         }
 
         inline fn hasMore(self: *Iterator) bool {
-            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
+            return validPos(self.ht, self.pos) < self.ht.nNumUsed;
         }
     };
 
@@ -665,7 +763,7 @@ pub const Array = opaque {
 
         /// Reset the iterator to the first element.
         pub fn reset(self: *KeyIterator) void {
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.pos = validPos(self.ht, 0);
         }
 
         /// Return the current key without advancing, or null if exhausted.
@@ -686,24 +784,18 @@ pub const Array = opaque {
 
         /// Move the internal pointer forward without returning a value.
         pub fn advance(self: *KeyIterator) void {
-            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            self.pos = moveForward(self.ht, self.pos);
         }
 
         /// Unsafe: peek without bounds check. Prefer `current()`.
         ///
         /// Ownership: borrowed key view owned by the array.
         pub fn peek(self: *KeyIterator) Key {
-            var str_key: ?*c.zend_string = null;
-            var num_key: c.zend_ulong = undefined;
-            return switch (c.zend_hash_get_current_key_ex(self.ht, @ptrCast(&str_key), &num_key, &self.pos)) {
-                c.HASH_KEY_IS_STRING => .{ .string = str_key.?.*.val()[0..str_key.?.*.len] },
-                c.HASH_KEY_IS_LONG => .{ .int = @bitCast(num_key) },
-                else => unreachable,
-            };
+            return keyAt(self.ht, validPos(self.ht, self.pos));
         }
 
         inline fn hasMore(self: *KeyIterator) bool {
-            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
+            return validPos(self.ht, self.pos) < self.ht.nNumUsed;
         }
     };
 
@@ -722,7 +814,7 @@ pub const Array = opaque {
 
         /// Reset the iterator to the first element.
         pub fn reset(self: *ValueIterator) void {
-            c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+            self.pos = validPos(self.ht, 0);
         }
 
         /// Return the current value without advancing, or null if exhausted.
@@ -743,18 +835,18 @@ pub const Array = opaque {
 
         /// Move the internal pointer forward without returning a value.
         pub fn advance(self: *ValueIterator) void {
-            _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+            self.pos = moveForward(self.ht, self.pos);
         }
 
         /// Unsafe: peek without bounds check. Prefer `current()`.
         ///
         /// Ownership: borrowed zval pointer owned by the array.
         pub fn peek(self: *ValueIterator) *c.zval {
-            return c.zend_hash_get_current_data_ex(self.ht, &self.pos).?;
+            return valueAt(self.ht, validPos(self.ht, self.pos));
         }
 
         inline fn hasMore(self: *ValueIterator) bool {
-            return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
+            return validPos(self.ht, self.pos) < self.ht.nNumUsed;
         }
     };
 
@@ -955,7 +1047,7 @@ pub const Array = opaque {
 
             /// Reset the iterator to the first element.
             pub fn reset(self: *Self) void {
-                c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos);
+                self.pos = validPos(self.ht, 0);
             }
 
             /// Return the current element as a typed pointer without advancing.
@@ -976,34 +1068,36 @@ pub const Array = opaque {
 
             /// Move the internal pointer forward without returning a value.
             pub fn advance(self: *Self) void {
-                _ = c.zend_hash_move_forward_ex(self.ht, &self.pos);
+                self.pos = moveForward(self.ht, self.pos);
             }
 
             /// Unsafe: peek without bounds check. Prefer `current()`.
             ///
             /// Ownership: borrowed pointer owned by the array.
             pub fn peek(self: *Self) *T {
-                const info = c.zend_hash_get_current_data_ptr_ex(self.ht, &self.pos).?;
+                const info = valueAt(self.ht, validPos(self.ht, self.pos)).value.ptr.?;
                 return @ptrCast(@alignCast(info));
             }
 
             inline fn hasMore(self: *Self) bool {
-                return c.zend_hash_has_more_elements_ex(self.ht, &self.pos) == c.SUCCESS;
+                return validPos(self.ht, self.pos) < self.ht.nNumUsed;
             }
         };
     }
 
-    /// Create a C-API iterator (key + value). Prefer `fastIterator` for read-only access.
+    /// Create a HashPosition iterator (key + value). It re-validates its position
+    /// against the table on every step, like zend_hash_*_ex(), so it tolerates
+    /// deletions and reallocation between steps. Prefer `fastIterator` for read-only loops.
     pub fn iterator(self: *Array) Iterator {
         return Iterator.init(self);
     }
 
-    /// Create a C-API key-only iterator.
+    /// Create a HashPosition key-only iterator; see iterator().
     pub fn keyIterator(self: *Array) KeyIterator {
         return KeyIterator.init(self);
     }
 
-    /// Create a C-API value-only iterator.
+    /// Create a HashPosition value-only iterator; see iterator().
     pub fn valueIterator(self: *Array) ValueIterator {
         return ValueIterator.init(self);
     }

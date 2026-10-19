@@ -1,0 +1,123 @@
+--TEST--
+@PREFIX@ benchmark functions produce the reference results
+--EXTENSIONS--
+@EXT@
+--FILE--
+<?php
+$p = '@PREFIX@';
+$call = fn (string $name, ...$args) => ($p . '_' . $name)(...$args);
+$obj = new stdClass();
+
+$call('empty');
+$call('parse_multi', 42, 'hello', 3.14, true, [1, 2, 3], $obj, 'mixed');
+$call('parse_multi', 42, 'hello', 3.14, true, [1, 2, 3], $obj, 'mixed', 99);
+$call('parse_multi_pp', 42, 'hello', 3.14, true, [1, 2, 3], $obj, 'mixed', null);
+var_dump($call('array_sum_fast', range(1, 1000)));
+var_dump($call('array_sum_parse', [1, 'x', 2, 3.5, 4]));
+var_dump($call('add', 40, 2), $call('add', PHP_INT_MAX, 1) === PHP_INT_MIN);
+var_dump($call('muladd', 1.5, 2.0, 0.25));
+var_dump($call('str_len', "a\0b"));
+var_dump($call('int_to_string', -1234567890), $call('int_to_string', 7));
+var_dump(bin2hex($call('str_upper', "hello, World\xff!")), $call('str_upper', ''));
+var_dump($call('array_sum_assoc', ['ab' => 1, 'cde' => 2, 5 => 10, 'f' => 'skip']));
+var_dump($call('array_build', 5), $call('array_build', 0));
+try { $call('array_build', -1); } catch (ValueError $e) { echo $e->getMessage(), "\n"; }
+$map = ['k1' => 'one', 'k2' => [2]];
+var_dump($call('hash_lookup', $map, 'k2'), $call('hash_lookup', $map, 'missing'));
+$source = [1, 2, 3];
+$same = $call('array_identity', $source);
+$same[] = 4;
+var_dump($source, $same);
+try { $call('throw', 7); } catch (Exception $e) { var_dump($e->getMessage(), $e->getCode()); }
+var_dump($call('split', 'a,,b,c', ','), $call('split', 'abc', '::'), $call('split', '', ','));
+try { $call('split', 'abc', ''); } catch (ValueError $e) { echo $e->getMessage(), "\n"; }
+
+var_dump($call('counter'), $call('counter'));
+var_dump($call('invoke', fn ($x) => $x * 2, 21));
+try { $call('invoke', function () { throw new LogicException('from callback'); }, 1); } catch (LogicException $e) { echo $e->getMessage(), "\n"; }
+
+$class = '@CLASS@';
+$point = new $class(3.0, 4.0);
+var_dump($point->length());
+$point->translate(1.0, -1.0);
+var_dump($point->length());
+echo "done\n";
+?>
+--EXPECT--
+int(500500)
+int(7)
+int(42)
+bool(true)
+float(3.25)
+int(3)
+string(11) "-1234567890"
+string(1) "7"
+string(28) "48454c4c4f2c20574f524c44ff21"
+string(0) ""
+int(19)
+array(5) {
+  [0]=>
+  int(0)
+  [1]=>
+  int(1)
+  [2]=>
+  int(2)
+  [3]=>
+  int(3)
+  [4]=>
+  int(4)
+}
+array(0) {
+}
+@PREFIX@_array_build(): Argument #1 ($n) must be between 0 and 16777216
+array(1) {
+  [0]=>
+  int(2)
+}
+NULL
+array(3) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+  [2]=>
+  int(3)
+}
+array(4) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+  [2]=>
+  int(3)
+  [3]=>
+  int(4)
+}
+string(4) "boom"
+int(7)
+array(4) {
+  [0]=>
+  string(1) "a"
+  [1]=>
+  string(0) ""
+  [2]=>
+  string(1) "b"
+  [3]=>
+  string(1) "c"
+}
+array(1) {
+  [0]=>
+  string(3) "abc"
+}
+array(1) {
+  [0]=>
+  string(0) ""
+}
+@PREFIX@_split(): Argument #2 ($separator) cannot be empty
+int(1)
+int(2)
+int(42)
+from callback
+float(5)
+float(5)
+done

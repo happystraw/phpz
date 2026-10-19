@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 9d7f9d7c842acd648e9590147a3f339d930fd933 */
+ * Stub hash: fb970ecd5f25b497e65640aad7560497bac4226d */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_empty, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -23,13 +23,95 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_bench_c_array_sum_parse arginfo_bench_c_array_sum_fast
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_add, 0, 2, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, a, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, b, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_muladd, 0, 3, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, a, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, b, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, c, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_str_len, 0, 1, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, s, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_int_to_string, 0, 1, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, n, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_str_upper, 0, 1, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, s, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_bench_c_array_sum_assoc arginfo_bench_c_array_sum_fast
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_array_build, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, n, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_hash_lookup, 0, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, arr, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_array_identity, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, arr, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_throw, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, code, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_split, 0, 2, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, s, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, separator, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_counter, 0, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_bench_c_invoke, 0, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, callback, IS_CALLABLE, 0)
+	ZEND_ARG_TYPE_INFO(0, arg, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_BenchCPoint___construct, 0, 0, 2)
+	ZEND_ARG_TYPE_INFO(0, x, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, y, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_BenchCPoint_length, 0, 0, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_BenchCPoint_translate, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, dx, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, dy, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
 
 ZEND_FUNCTION(bench_c_empty);
 ZEND_FUNCTION(bench_c_parse_multi);
 ZEND_FUNCTION(bench_c_parse_multi_pp);
 ZEND_FUNCTION(bench_c_array_sum_fast);
 ZEND_FUNCTION(bench_c_array_sum_parse);
-
+ZEND_FUNCTION(bench_c_add);
+ZEND_FUNCTION(bench_c_muladd);
+ZEND_FUNCTION(bench_c_str_len);
+ZEND_FUNCTION(bench_c_int_to_string);
+ZEND_FUNCTION(bench_c_str_upper);
+ZEND_FUNCTION(bench_c_array_sum_assoc);
+ZEND_FUNCTION(bench_c_array_build);
+ZEND_FUNCTION(bench_c_hash_lookup);
+ZEND_FUNCTION(bench_c_array_identity);
+ZEND_FUNCTION(bench_c_throw);
+ZEND_FUNCTION(bench_c_split);
+ZEND_FUNCTION(bench_c_counter);
+ZEND_FUNCTION(bench_c_invoke);
+ZEND_METHOD(BenchCPoint, __construct);
+ZEND_METHOD(BenchCPoint, length);
+ZEND_METHOD(BenchCPoint, translate);
 
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(bench_c_empty, arginfo_bench_c_empty)
@@ -37,5 +119,35 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(bench_c_parse_multi_pp, arginfo_bench_c_parse_multi_pp)
 	ZEND_FE(bench_c_array_sum_fast, arginfo_bench_c_array_sum_fast)
 	ZEND_FE(bench_c_array_sum_parse, arginfo_bench_c_array_sum_parse)
+	ZEND_FE(bench_c_add, arginfo_bench_c_add)
+	ZEND_FE(bench_c_muladd, arginfo_bench_c_muladd)
+	ZEND_FE(bench_c_str_len, arginfo_bench_c_str_len)
+	ZEND_FE(bench_c_int_to_string, arginfo_bench_c_int_to_string)
+	ZEND_FE(bench_c_str_upper, arginfo_bench_c_str_upper)
+	ZEND_FE(bench_c_array_sum_assoc, arginfo_bench_c_array_sum_assoc)
+	ZEND_FE(bench_c_array_build, arginfo_bench_c_array_build)
+	ZEND_FE(bench_c_hash_lookup, arginfo_bench_c_hash_lookup)
+	ZEND_FE(bench_c_array_identity, arginfo_bench_c_array_identity)
+	ZEND_FE(bench_c_throw, arginfo_bench_c_throw)
+	ZEND_FE(bench_c_split, arginfo_bench_c_split)
+	ZEND_FE(bench_c_counter, arginfo_bench_c_counter)
+	ZEND_FE(bench_c_invoke, arginfo_bench_c_invoke)
 	ZEND_FE_END
 };
+
+static const zend_function_entry class_BenchCPoint_methods[] = {
+	ZEND_ME(BenchCPoint, __construct, arginfo_class_BenchCPoint___construct, ZEND_ACC_PUBLIC)
+	ZEND_ME(BenchCPoint, length, arginfo_class_BenchCPoint_length, ZEND_ACC_PUBLIC)
+	ZEND_ME(BenchCPoint, translate, arginfo_class_BenchCPoint_translate, ZEND_ACC_PUBLIC)
+	ZEND_FE_END
+};
+
+static zend_class_entry *register_class_BenchCPoint(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_CLASS_ENTRY(ce, "BenchCPoint", class_BenchCPoint_methods);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+
+	return class_entry;
+}

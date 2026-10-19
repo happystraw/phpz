@@ -3,3 +3,5 @@ zig-out
 modules
 zig-pkg
 run-tests.php
+results
+*_ext/tests/

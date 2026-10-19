@@ -1,34 +1,26 @@
 #!/usr/bin/env bash
+# Build all benchmark extensions, then run bench.php with them loaded.
+# Extra arguments go to bench.php, e.g. ./run.sh --samples=21 --filter=array
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PHP_INCLUDE_DIR="$(php-config --include-dir)"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PHP="${PHP:-php}"
+CC="${CC:-cc}"
+CXX="${CXX:-c++}"
+ZIG="${ZIG:-zig}"
 
-echo "=== Building C extension ==="
-(
-    cd "$SCRIPT_DIR/c_ext"
-    git clean -fdX
-    phpize
-    CFLAGS="-O3" ./configure --with-php-config="$(which php-config)"
-    make
-    echo "  C extension built"
-    php run-tests.php -d "extension=$SCRIPT_DIR/c_ext/modules/bench_c.so" --show-diff -q
-)
+"$DIR/build.sh"
 
-echo ""
-echo "=== Building Zig extension ==="
-(
-    cd "$SCRIPT_DIR/zig_ext"
-    git clean -fdX
-    zig build -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
-    echo "  Zig extension built"
-    zig build run-tests -Doptimize=ReleaseFast -Dphp-include-dir="$PHP_INCLUDE_DIR"
-)
+mkdir -p "$DIR/results"
+stamp="$(date +%Y%m%d-%H%M%S)"
+export BENCH_CC_VERSION="$("$CC" --version | head -1)"
+export BENCH_CXX_VERSION="$("$CXX" --version | head -1)"
+export BENCH_ZIG_VERSION="$("$ZIG" version)"
+export BENCH_CFLAGS="${CFLAGS:--O3}"
+export BENCH_ZIG_OPTIMIZE="${ZIG_OPTIMIZE:-ReleaseFast}"
 
-echo ""
-echo "=== Running benchmarks ==="
-exec php \
-    -d "extension=$SCRIPT_DIR/c_ext/modules/bench_c.so" \
-    -d "extension=$SCRIPT_DIR/zig_ext/modules/bench_zig.so" \
-    "$SCRIPT_DIR/run.php" \
-    "$@"
+exec "$PHP" -n \
+    -d "extension=$DIR/c_ext/modules/bench_c.so" \
+    -d "extension=$DIR/cpp_ext/modules/bench_cpp.so" \
+    -d "extension=$DIR/zig_ext/modules/bench_zig.so" \
+    "$DIR/bench.php" --json="$DIR/results/$stamp.json" "$@"

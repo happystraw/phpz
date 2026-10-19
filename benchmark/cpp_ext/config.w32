@@ -1,0 +1,7 @@
+ARG_ENABLE('bench_cpp', 'bench_cpp support', 'no');
+
+if (PHP_BENCH_CPP != 'no') {
+	AC_DEFINE('HAVE_BENCH_CPP', 1, 'bench_cpp support enabled');
+
+	EXTENSION('bench_cpp', 'bench_cpp.cpp', null, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 /std:c++17');
+}
