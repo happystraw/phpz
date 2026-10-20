@@ -36,6 +36,16 @@ pub const FunctionEntry = opaque {
     pub inline fn isSentinel(self: *const FunctionEntry) bool {
         return self.ptr().fname == null;
     }
+
+    /// Whether Zend registers the entry as variadic, judging by its last arginfo
+    /// slot like zend_register_functions(). Only variadic functions can receive
+    /// extra named arguments; Zend rejects unknown names for all others.
+    pub inline fn isVariadic(self: *const FunctionEntry) bool {
+        const entry = self.ptr();
+        if (entry.arg_info == null) return false;
+        const variadic_bit: u32 = @intCast(c._ZEND_IS_VARIADIC_BIT);
+        return (entry.arg_info[entry.num_args].type.type_mask & variadic_bit) != 0;
+    }
 };
 
 test {

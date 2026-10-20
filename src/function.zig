@@ -14,13 +14,14 @@ const Stream = @import("stream.zig").Stream;
 
 pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
-const FunctionTable = stub.DeclarationTable(void);
+// Values record whether Zend registers the function as variadic.
+const FunctionTable = stub.DeclarationTable(bool);
 const required_functions = blk: {
     if (!@hasDecl(c, "ext_functions")) break :blk FunctionTable.initComptime(.{});
 
     const table = c.ext_functions;
     @setEvalBranchQuota(stub.declarationQuota(table.len));
-    const Pair = struct { []const u8, void };
+    const Pair = struct { []const u8, bool };
     var pairs: [table.len]Pair = undefined;
     var len: usize = 0;
 
@@ -29,7 +30,7 @@ const required_functions = blk: {
         const name = entry.name() orelse continue;
         const handler_symbol = stub.functionSymbolName(name);
         if (!@hasDecl(c, handler_symbol)) continue;
-        pairs[len] = .{ name, {} };
+        pairs[len] = .{ name, entry.isVariadic() };
         len += 1;
     }
 
@@ -223,7 +224,8 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
 
 fn exportFunction(comptime func_name: [:0]const u8, comptime func: anytype) void {
     const symbol = stub.functionSymbolName(func_name);
-    const handler = createHandler(func_name ++ "()", func);
+    const variadic = required_functions.entries[required_functions.getIndex(func_name).?];
+    const handler = createHandlerFor(func_name ++ "()", func, variadic);
     @export(&handler, .{ .name = symbol });
 }
 
@@ -233,8 +235,13 @@ fn exportFunction(comptime func_name: [:0]const u8, comptime func: anytype) void
 /// This is the low-level adapter selected by `phpz.Class` for all methods on
 /// standard-layout classes and for static methods on backed classes.
 pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype) void {
+    methodFor(class_name, func_name, func, true);
+}
+
+/// Like method(), with the stub's variadic flag; see createHandlerFor().
+pub fn methodFor(comptime class_name: [:0]const u8, comptime func_name: [:0]const u8, comptime func: anytype, comptime variadic: bool) void {
     comptime {
-        const handler = createHandler(class_name ++ "::" ++ func_name ++ "()", func);
+        const handler = createHandlerFor(class_name ++ "::" ++ func_name ++ "()", func, variadic);
         @export(&handler, .{ .name = stub.methodSymbolName(class_name, func_name) });
     }
 }
@@ -317,7 +324,8 @@ fn ResultType(comptime func: anytype) type {
     return if (@typeInfo(R) == .error_union) @typeInfo(R).error_union.payload else R;
 }
 
-pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!ResultType(func) {
+/// `variadic` is false only when the arginfo proves Zend cannot pass extra named arguments.
+pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype, comptime variadic: bool) anyerror!ResultType(func) {
     const param_types = @typeInfo(@TypeOf(func)).@"fn".param_types;
     @setEvalBranchQuota(comptime stub.declarationQuota(param_types.len));
     const has_receiver = @TypeOf(receiver) != void;
@@ -346,9 +354,12 @@ pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!
         }
         break :blk arg_specs;
     };
-    var resolved_callables: [callable_count]zend.Callable = @splat(.nil);
+    // Filled by a successful parse before any pointer reaches the handler.
+    var resolved_callables: [callable_count]zend.Callable = undefined;
     if (comptime php_params_count == 0) {
-        if (comptime !has_context) try ctx.call.expectNoArgs();
+        if (comptime !has_context) {
+            if (comptime variadic) try ctx.call.expectNoArgs() else if (ctx.call.argCount() != 0) return errors.wrongParametersNone();
+        }
     } else {
         var runtime: CallFrame.ExpectArgsRuntime(&specs) = undefined;
         if (comptime @TypeOf(runtime) != void) {
@@ -360,7 +371,10 @@ pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!
                 } else runtime[i] = {};
             }
         } else runtime = {};
-        const values = try ctx.call.expectArgs(&specs, runtime);
+        const values = if (comptime variadic)
+            try ctx.call.expectArgs(&specs, runtime)
+        else
+            try ctx.call.expectArgsAllowExtraNamed(&specs, runtime);
         inline for (specs, 0..) |spec, i| {
             const ParamType = param_types[php_params_offset + i].?;
             params[php_params_offset + i] = if (comptime spec == .callable)
@@ -415,10 +429,16 @@ pub fn setReturnValue(retval: *Zval, value: anytype) anyerror!void {
 }
 
 pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) Handler {
+    return createHandlerFor(func_desc, func, true);
+}
+
+/// Like createHandler(). Pass `variadic = false` only when the function's arginfo
+/// is not variadic, which lets typed parameters skip the extra named argument check.
+pub fn createHandlerFor(comptime func_desc: [:0]const u8, comptime func: anytype, comptime variadic: bool) Handler {
     const Context = ContextType(func, false);
     return struct {
         fn call(ctx: Context) anyerror!void {
-            const value = try invoke(func, ctx, {});
+            const value = try invoke(func, ctx, {}, variadic);
             try setReturnValue(ctx.retval, value);
         }
 

@@ -61,7 +61,7 @@ pub const Comparison = enum(i32) { less = -1, equal = 0, greater = 1 };
 
 const Layout = enum { std, backed };
 const MethodKind = enum { instance, static };
-const Method = struct { name: [:0]const u8, kind: MethodKind };
+const Method = struct { name: [:0]const u8, kind: MethodKind, variadic: bool };
 const MethodTable = stub.DeclarationTable(Method);
 const BindingStrategy = enum { automatic, explicit };
 fn Resolved(comptime T: type) type {
@@ -78,6 +78,8 @@ fn Resolved(comptime T: type) type {
         register: fn () anyerror!*zend.ClassEntry,
         /// Initializer for the Zig backing value.
         init: ?fn () anyerror!T,
+        /// Whether every object reachable by PHP code has an initialized backing.
+        backing_guaranteed: bool = false,
         /// Destructor for the Zig backing value.
         deinit: ?fn (*T) void,
         /// Cloner for the Zig backing value.
@@ -139,7 +141,7 @@ fn Resolved(comptime T: type) type {
 
                     pairs[len] = .{
                         name,
-                        .{ .name = name, .kind = if (method.isStatic()) .static else .instance },
+                        .{ .name = name, .kind = if (method.isStatic()) .static else .instance, .variadic = method.isVariadic() },
                     };
                     len += 1;
                 }
@@ -203,6 +205,7 @@ fn Resolved(comptime T: type) type {
             };
 
             var initializer: ?fn () anyerror!T = null;
+            var backing_guaranteed = false;
             var deinitializer: ?fn (*T) void = null;
             var cloner: ?fn (*const T) anyerror!T = null;
             var gc_callback: ?fn (*T, *GcBuffer) void = null;
@@ -220,13 +223,15 @@ fn Resolved(comptime T: type) type {
                     .enum_literal => if (init == .none)
                         null
                     else if (init == .default) blk: {
+                        backing_guaranteed = true;
                         break :blk struct {
                             fn call() anyerror!T {
                                 return .{};
                             }
                         }.call;
                     } else @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
-                    .@"fn" => blk: {
+                    .@"fn" => |fn_info| blk: {
+                        backing_guaranteed = @typeInfo(fn_info.return_type.?) != .error_union;
                         break :blk struct {
                             fn call() anyerror!T {
                                 return @call(.auto, init, .{});
@@ -327,6 +332,7 @@ fn Resolved(comptime T: type) type {
                 .binding_strategy = binding_strategy,
                 .register = register,
                 .init = initializer,
+                .backing_guaranteed = backing_guaranteed,
                 .deinit = deinitializer,
                 .clone = cloner,
                 .gc = gc_callback,
@@ -708,13 +714,22 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             }
         }
 
-        fn receiver(call: *CallFrame) ?*Self {
-            const obj = call.this() orelse {
-                errors.throwError(null, class_name ++ " must be called on an object", .{}) catch {};
+        /// Zend only dispatches instance methods with an object `$this`.
+        inline fn receiver(call: *CallFrame) ?*Self {
+            const this = &call.ptr().This;
+            std.debug.assert(Zval.raw.is(this, .object));
+            return fromObject(.from(this.value.obj)) catch {
+                @branchHint(.cold);
+                errors.throwError(null, "invalid object layout for " ++ class_name, .{}) catch {};
                 return null;
             };
-            return fromObject(obj) catch {
-                errors.throwError(null, "invalid object layout for " ++ class_name, .{}) catch {};
+        }
+
+        inline fn receiverBacking(self: *Self) ?*T {
+            if (comptime resolved.backing_guaranteed) return &self.backingStorage().*.?;
+            return self.backing() orelse {
+                @branchHint(.cold);
+                errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{}) catch {};
                 return null;
             };
         }
@@ -746,14 +761,13 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
 
         pub const FromError = error{ NotObject, InvalidObjectLayout };
 
-        /// Borrow this class wrapper after checking its handlers and class.
+        /// Borrow this class wrapper after checking its handlers.
         /// Compatible subclasses are accepted; backing may still be null.
         /// Does not change reference counts or throw a PHP exception.
         /// `register()` must have succeeded before calling this function.
         pub fn fromObject(obj: *zend.Object) FromError!*Self {
-            if (obj.ptr().handlers != &handlers or !obj.instanceof(entry)) {
-                return error.InvalidObjectLayout;
-            }
+            // Only create_object and clone_obj of this class or its subclasses install these handlers.
+            if (obj.ptr().handlers != &handlers) return error.InvalidObjectLayout;
             return .fromStdUnchecked(obj.ptr());
         }
 
@@ -920,49 +934,46 @@ fn bind(
     comptime func: anytype,
 ) void {
     if (class_layout == .std) {
-        functions.method(class_name, method.name, func);
+        functions.methodFor(class_name, method.name, func, method.variadic);
         return;
     }
     if (std.mem.eql(u8, method.name, "__construct")) {
-        bindConstructor(class_name, T, ClassType, func);
+        bindConstructor(class_name, T, ClassType, func, method.variadic);
         return;
     }
     switch (method.kind) {
-        .static => functions.method(class_name, method.name, func),
-        .instance => bindInstanceMethod(class_name, T, ClassType, method.name, func),
+        .static => functions.methodFor(class_name, method.name, func, method.variadic),
+        .instance => bindInstanceMethod(class_name, T, ClassType, method.name, func, method.variadic),
     }
 }
 
-fn bindConstructor(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime func: anytype) void {
+fn bindConstructor(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime func: anytype, comptime variadic: bool) void {
     const Context = functions.ContextType(func, false);
-    const handler = functions.createHandler(class_name ++ "::__construct()", struct {
+    const handler = functions.createHandlerFor(class_name ++ "::__construct()", struct {
         fn invoke(ctx: Context) anyerror!void {
             const self = ClassType.receiver(ctx.call) orelse return;
-            const value: T = try functions.invoke(func, ctx, {});
+            const value: T = try functions.invoke(func, ctx, {}, variadic);
             self.commitBacking(value);
         }
-    }.invoke);
+    }.invoke, variadic);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, "__construct") });
 }
 
-fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime method_name: [:0]const u8, comptime func: anytype) void {
+fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, comptime ClassType: type, comptime method_name: [:0]const u8, comptime func: anytype, comptime variadic: bool) void {
     const func_desc = class_name ++ "::" ++ method_name ++ "()";
     const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
     if (params.len == 0 or (params[0] != *T and params[0] != *const T)) {
         @compileError("instance method " ++ func_desc ++ " must take *" ++ @typeName(T) ++ " or *const " ++ @typeName(T) ++ " as its first parameter");
     }
     const Context = functions.ContextType(func, true);
-    const handler = functions.createHandler(func_desc, struct {
+    const handler = functions.createHandlerFor(func_desc, struct {
         fn invoke(ctx: Context) anyerror!void {
             const self = ClassType.receiver(ctx.call) orelse return;
-            const backing = self.backing() orelse {
-                errors.throwError(null, class_name ++ " object is not initialized; call its constructor first", .{}) catch {};
-                return;
-            };
-            const value = try functions.invoke(func, ctx, backing);
+            const backing = self.receiverBacking() orelse return;
+            const value = try functions.invoke(func, ctx, backing, variadic);
             try functions.setReturnValue(ctx.retval, value);
         }
-    }.invoke);
+    }.invoke, variadic);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, method_name) });
 }
 
