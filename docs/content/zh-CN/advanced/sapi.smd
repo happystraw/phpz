@@ -1,0 +1,117 @@
+---
+.title = "自定义 SAPI（实验性）",
+.date = .date("2026-10-07T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/sapi",
+.custom = { "section": "进阶主题" },
+---
+
+**SAPI 为实验性支持**，接口可能调整。它让 Zig 可执行程序承载 PHP 引擎并提供输入、输出和请求信息。示例支持脚本和 `-r` 代码，不包含 HTTP 服务器或线程调度器。
+
+# [构建独立宿主]($heading.id('build'))
+
+从仓库根目录进入示例，提供匹配的 PHP embed 库和头文件：
+
+```sh
+cd examples/custom_sapi
+zig build install run-tests \
+  -Dphp-include-dir=/path/to/php/include/php \
+  -Dphp-lib-dir=/path/to/php/lib
+./zig-out/bin/custom-sapi hello.php
+./zig-out/bin/custom-sapi -r 'echo custom_sapi_greeting(), PHP_EOL;'
+```
+
+示例默认静态链接 PHP：Unix 使用 `libphp.a`，Windows 使用 `php8embed.lib`。可用 SPC v3 构建 embed 库，完整准备命令见 [custom_sapi 示例](https://github.com/happystraw/phpz/tree/dev/examples/custom_sapi)。`run-tests` 需要 PATH 中的 PHP CLI 来启动宿主测试。
+
+| 构建选项 | 用途 |
+| --- | --- |
+| `-Dshared=true` | 链接共享 PHP 库；Unix PHP 可通过 `--enable-embed=shared` 构建 |
+| `-Dlink-lib=NAME` | 添加传递依赖库，可重复 |
+| `-Dlink-framework=NAME` | 添加 macOS framework，可重复 |
+| `-Dforce-undefined-symbol=NAME` | 保留静态库符号，可重复 |
+| `-Dtarget=...` | 匹配 PHP 库的目标架构与 libc |
+| `-Dwindows-zts=true` / `-Dwindows-debug=true` | 匹配 Windows PHP 的线程与 Debug 配置 |
+| `-Dlibc-file=...` | 指定 libc/SDK 路径配置 |
+
+底层 `Phpz.addSapiExecutable()` 将 `phpz` 模块接入可执行程序并链接 PHP。`Phpz.Options.shared` 默认 true，而此示例的 `build.zig` 将默认值设为 false；静态与动态链接不会互相回退。静态链接 PHP 不等于整个可执行文件完全静态。Windows 共享模式还需提供匹配的运行时 DLL。
+
+扩展与宿主应使用不同的 `Phpz` 实例。头文件、库、架构、libc、NTS/ZTS、Debug 配置必须一致，宿主链接依赖见 [test-sapi.sh](https://github.com/happystraw/phpz/blob/dev/.github/scripts/test-sapi.sh)。
+
+# [后端与回调]($heading.id('backend'))
+
+`phpz.sapi.Sapi(T, options)` 按编译期回调生成 SAPI 类型。后端定义片段（已导入 `std` 和 `phpz`）：
+
+```zig
+const Backend = struct {
+    output: std.ArrayList(u8) = .empty,
+    allocator: std.mem.Allocator,
+
+    fn write(self: *Backend, bytes: []const u8) !void {
+        try self.output.appendSlice(self.allocator, bytes);
+    }
+};
+
+const Sapi = phpz.sapi.Sapi(Backend, .{
+    .name = "custom_sapi",
+    .ub_write = Backend.write,
+});
+```
+
+`name` 和 `ub_write` 必填。`Sapi.setContext(&backend)` 把当前线程的 `SG(server_context)` 绑定到 `T`，回调通过该指针访问后端。后端由宿主管理，必须保持绑定并存活到请求关闭结束；请求启动前就要准备好 body 和 cookie 数据。
+
+| 回调 | 约定 |
+| --- | --- |
+| `ub_write(*T, []const u8) !void` | 写完全部字节或报错；切片只在回调内有效 |
+| `flush(*T) !void` | 刷出后端缓冲区；与写入失败一样，错误将连接标记为中断，PHP 是否终止取决于 `ignore_user_abort` |
+| `send_headers(*T, *Headers) !void` | 借用响应头视图；迭代时保留顺序和重复字段，错误报告给 PHP |
+| `read_post(*T, []u8) !usize` | 除 body 结束外必须填满；短读表示 EOF，传输短读需内部处理，不能用 0 表示 EAGAIN |
+| `read_cookies(*T) !?[:0]u8` | 返回借用的 cookie 文本，保持到请求关闭结束 |
+| `register_server_variables(*T, *ServerVars) !void` | 填充服务器变量，可能在访问 `$_SERVER` 时延迟执行 |
+| `activate(*T) !void` | POST 预读取和 cookie 读取之后调用 |
+| `deactivate(*T) !void` | 输入、输出清理后的通知，响应头已释放；可能被跳过，错误仅记录日志 |
+| `log_message(*T, []const u8, i32) void` | 接收借用的消息和 PHP syslog 级别；phpz 回调错误使用 -1 |
+
+`read_post`、cookie、服务器变量和 activate 的错误可能引发 bailout。`deactivate` 不是可靠析构器；宿主必须在 PHP bailout 边界外拥有并释放必需的资源。
+
+`send_headers` 中用 `Headers.status()` 和 `iterator()` 读取状态码与头字段；`shouldSendDefaultContentType()` 查询默认 Content-Type 标记，本身不发送头。
+
+# [进程与请求生命周期]($heading.id('lifecycle'))
+
+完整可运行代码以示例 `src/main.zig` 为准，顺序如下：
+
+1. `try phpz.tsrm.startup()`，再 `phpz.zend.signal.startup()`。
+2. `var host = Sapi.init(config)` 初始化 SAPI；成功启动 PHP 模块后才安排模块 shutdown。
+3. `try host.startup(&addon_module)`；没有附加模块时传 null。
+4. `Sapi.setContext(&backend)`，设置请求元数据，再 `try phpz.sapi.request.startup()`。
+5. 在当前请求执行 PHP，释放脚本句柄和临时 PHP 值，再在同一线程执行 `phpz.sapi.request.shutdown()`。
+6. 请求关闭仍可执行 PHP shutdown 函数并产生输出；完成后读取最终退出状态、清除上下文，再释放后端资源。
+7. 所有请求与工作线程结束后，依次 `host.shutdown()`、`host.deinit()`、`phpz.tsrm.shutdown()`。
+
+每个进程只能有一个活动 SAPI。SAPI 实例存活到 `deinit()`；INI 文本和附加模块条目保持到模块关闭结束。不要在持有 `host.ptr()` 时移动实例。
+
+只有请求 startup 成功后才安排 request shutdown。请求启动失败可能留下部分 PHP 状态，应结束宿主并清理模块、SAPI、TSRM，清理期间保持借用资源有效；不能重试或继续服务后续请求。
+
+NTS 下 TSRM 包装为空操作。ZTS 工作线程在访问 PHP 前调用 `tsrm.initThread()`，结束其请求并释放线程资源后调用 `tsrm.freeThread()`。ZTS 不允许共享请求内的 zval 或让请求跨线程迁移，也不自动提供调度。
+
+# [请求信息与响应]($heading.id('request-and-response'))
+
+通过 `phpz.globals.sapi().requestInfo()` 取得请求视图，设置 method、URI、脚本路径、query string、content type 和 length。字符串 setter **只借用**，不复制或释放存储，需保持到请求关闭结束。
+
+PHP 激活请求时会重置部分字段：`setProtocol()` 应在 activate 回调中调用；`setNoHeaders()` 在 activate 或请求 startup 完成后设置。
+
+当前请求可使用 `sapi.addHeader()`、`replaceHeader()`、`deleteHeader()`、`deleteAllHeaders()`、`setResponseCode()`、`sendHeaders()` 和 `requestTime()`。头操作复制输入字节，可能触发 bailout；`sapi.flush()` 只调用 SAPI flush 钩子，不负责清空 PHP 输出缓冲。
+
+`ServerVars.registerVariableSafe()` 复制字符串并遵循 PHP 变量名规范化；`registerVariableEx()` 和 `registerKnownVariable()` 消耗输入 zval 内容但不清空源槽。后者要求名称合法且不能用于 cookie 数组，完整约束见源码注释。
+
+# [附加模块与执行结果]($heading.id('module-and-execution'))
+
+`phpz.initModuleEntry()` 创建模块条目，不导出共享扩展的加载入口；在 PHP 模块 startup 时传入它，可注册宿主内置函数和类。常规共享扩展仍使用 `phpz.module()`。
+
+执行代码使用 `tryEval()`，脚本使用 `tryExecuteScript()`。两者的异常、bailout 和 `exit(0)` 行为不同，且 shutdown 还可能失败，详见[执行 PHP 代码与脚本]($link.page('reference/runtime/scripts'))。本例测试覆盖文件和 `-r` 执行、异常、致命错误、exit 与 shutdown，不代表 HTTP 后端已经验证。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/sapi.zig](https://github.com/happystraw/phpz/blob/dev/src/sapi.zig)
+- [src/tsrm.zig](https://github.com/happystraw/phpz/blob/dev/src/tsrm.zig)
+- [build/Phpz.zig](https://github.com/happystraw/phpz/blob/dev/build/Phpz.zig)
+- [examples/custom_sapi/src/main.zig](https://github.com/happystraw/phpz/blob/dev/examples/custom_sapi/src/main.zig)

@@ -1,0 +1,68 @@
+---
+.title = "PHPT 测试",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/testing",
+.custom = { "section": "构建与测试" },
+---
+
+PHPT 将 PHP 测试代码和预期输出放在同一个 `.phpt` 文件中，由 `run-tests.php` 执行并比较结果。完整格式与运行选项见 PHP 官方文档：[Writing Tests](https://php.github.io/php-src/miscellaneous/writing-tests.html) 和 [Running Tests](https://php.github.io/php-src/miscellaneous/running-tests.html)。
+
+# [最小测试]($heading.id('minimal-test'))
+
+以骨架提供的 `hello()` 为例，`tests/hello.phpt` 可以写成：
+
+```
+--TEST--
+hello() prints a greeting
+--FILE--
+<?php
+hello();
+?>
+--EXPECT--
+Hello from Zig!
+```
+
+`TEST` 是测试说明，`FILE` 是执行的 PHP 代码，`EXPECT` 是预期输出。`.phpt` 文件交给测试运行器，不直接作为 PHP 脚本执行。
+
+# [运行测试]($heading.id('run-tests'))
+
+在生成的扩展工程目录执行：
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+该步骤复制随包提供的 `run-tests.php` 到工程根目录，构建并加载扩展，然后执行测试。Windows 复用[Windows 章节]($link.page('development/windows').ref('windows-msvc'))中的 PowerShell 构建命令，在 `zig build` 后加上 `run-tests`，保留目标、PHP 头文件及库目录等参数。
+
+完成上述步骤后，可单独重跑一个测试：
+
+```sh
+php run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/hello.phpt
+```
+
+Windows 将扩展路径替换为 `modules/php_my_php_extension.dll`。修改 Zig 实现后先重新构建；修改 Stubs 后还需先运行 `zig build gen-stub`。
+
+# [查看结果]($heading.id('results'))
+
+`PASS` 表示通过，`FAIL` 表示实际输出与预期不符。失败时先查看终端差异，以及测试旁生成的 `.out`（实际输出）、`.exp`（预期输出）和 `.diff`（差异）文件。
+
+输出包含变化的路径或行号时可使用 `EXPECTF`；需要按环境跳过或设置测试专用 INI 时使用 `SKIPIF`、`INI`。这些区段的格式与示例见上述官方编写文档。
+
+# [仓库 CI]($heading.id('repository-ci'))
+
+共享扩展工作流配置 PHP 8.2–8.5，各 ABI 组合使用独立源码目录、本地构建缓存和临时目录：
+
+| 平台 | PHP 配置 |
+| --- | --- |
+| Linux x86_64 / aarch64 | NTS、ZTS；PHP release |
+| macOS aarch64 | NTS、ZTS；PHP release / debug |
+| Windows x64 | NTS、ZTS；PHP release |
+
+每组先核对运行时与头文件 ABI，再运行单元测试及两个示例的 PHPT。PHP debug 配置使用 Zig Debug、ReleaseSafe；PHP release 配置再测 ReleaseFast，Unix 还测 ReleaseSmall。PHP debug 配置与 Zig 优化模式是两回事。
+
+内置扩展工作流默认 PHP 8.5，可手动选择 8.2–8.5；覆盖 Linux、Windows、macOS 的 NTS/ZTS 和 PHP release/debug。实验性 SAPI 使用独立工作流。
+
+共享与内置扩展的日志、PHPT 差异和结果汇总保存在 `build/ci-results/`，由工作流上传为 artifacts。以上是仓库配置，具体通过情况以对应 Actions 运行结果为准。
+
+实现见 [ci.mjs](https://github.com/happystraw/phpz/blob/dev/.github/scripts/ci.mjs) 和 [test-variant](https://github.com/happystraw/phpz/blob/dev/.github/actions/test-variant/action.yml)。

@@ -1,0 +1,41 @@
+---
+.title = "Introduction",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "index",
+.custom = { "section": "phpz Documentation" },
+---
+
+phpz is a Zig library for writing PHP extensions. It provides bindings to the PHP extension API and wrappers for common Zend operations. Declare the public interface in PHP Stubs, implement the functionality in Zig, and build an extension that PHP can load.
+
+Use it to bring native computation, existing C libraries, or functionality that needs direct access to PHP values into PHP.
+
+# [Features]($heading.id('features'))
+
+- **Separate interfaces from implementation**: PHP Stubs describe functions, classes, and type information. Tools generate arginfo and registration declarations, while Zig implements the behavior.
+- **Wrappers for common operations**: Use `Ctx`, `Zval`, and Zend type interfaces to handle arguments, return values, strings, arrays, objects, and references.
+- **Compile-time bindings**: Zig's compile-time capabilities connect functions, classes, and modules, with extension metadata and lifecycle hooks declared together.
+- **Access to low-level APIs**: Use the PHP C API when you need finer control, and integrate with existing C libraries.
+- **Development tools**: Generate a skeleton, regenerate Stubs, and run PHPT tests. Documentation examples consistently use `my_php_extension` as the extension name.
+
+# [Goals]($heading.id('goals'))
+
+phpz aims to reduce repetitive work in PHP extension development so developers can focus on interface design and implementation.
+
+Common interfaces handle argument parsing, value conversion, and registration while keeping ownership, reference counting, and object lifetimes explicit. Extensions run in the PHP process, so developers still need to understand the memory and exception contracts of the interfaces they use.
+
+# [Documentation]($heading.id('documentation'))
+
+- [Requirements and installation]($link.page('getting-started/installation')): prepare the Zig and PHP development environment.
+- [Hello World]($link.page('getting-started/hello-world')): create, build, and run your first extension.
+- [How it works]($link.page('getting-started/how-it-works')): understand how Stubs, build files, and the Zig implementation work together.
+- [Development tools]($link.page('getting-started/tools')): generate arginfo, build extensions, and run PHPT tests.
+- **API Reference** in the top navigation: look up Zig types, functions, and declarations.
+
+The reference and advanced chapters are currently available in Simplified Chinese.
+
+# [Source and examples]($heading.id('source-and-examples'))
+
+- [phpz source](https://github.com/happystraw/phpz): interface implementations and build support.
+- [Minimal example project](https://github.com/happystraw/phpz/tree/dev/examples/skeleton): a complete extension skeleton.
+- [my_php_extension](https://github.com/happystraw/phpz/tree/dev/examples/my_php_extension): more feature examples and PHPT tests.

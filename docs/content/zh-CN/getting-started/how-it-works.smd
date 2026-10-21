@@ -1,0 +1,64 @@
+---
+.title = "工作原理",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/how-it-works",
+.custom = { "section": "入门" },
+---
+
+Stubs 声明 PHP API，`gen_stub.php` 生成元数据，Zig 提供实现：
+
+```
+.stub.php → gen-stub → _arginfo.h → translate-c → PHP C 绑定
+Zig 实现 + PHP C 绑定 → 编译、链接 → 扩展库
+PHP 加载扩展库 → MINIT 注册 → 调用 Zig 处理器
+```
+
+# [构建：生成 API 元数据]($heading.id('build-api-metadata'))
+
+`gen_stub.php` 读取 `.stub.php`，生成 `_arginfo.h`，其中包含：
+
+| 内容 | 作用 |
+| --- | --- |
+| arginfo | 描述参数名、类型、默认值和返回类型 |
+| `ext_functions` | 将 PHP 函数名关联到对应处理器 |
+| `register_class_*` | 注册类及其方法、属性等元数据 |
+| `register_{name}_symbols` | 注册 Stubs 中声明的常量等符号（如有） |
+
+修改 Stubs 后运行：
+
+```sh
+zig build gen-stub
+```
+
+扩展头文件包含 `phpz.h` 和生成的 arginfo；`Phpz.init()` 通过 `translate-c` 将 C 声明转换为 Zig 绑定。
+
+普通 `zig build` 使用并校验已有 arginfo，不自动执行 `gen-stub`。修改 Stubs 后须重新生成。
+
+# [编译：连接 Zig 实现]($heading.id('compile-zig-implementation'))
+
+Zig 在编译期读取生成的声明，为扩展导出 PHP 所需的处理器和模块入口：
+
+| Zig 声明 | 编译结果 |
+| --- | --- |
+| `phpz.functions(functions, .{})` / `namedFunctions(...)` | 检查全部具体函数绑定，导出 `zif_*` 处理器 |
+| `phpz.Class("Counter", Counter, .{})` | 创建对象包装并导出 `zim_*` 方法处理器 |
+| `phpz.module(...)` | 创建模块信息，并为共享扩展导出 `get_module()` 入口 |
+
+例如，Stubs 的 `greet` 条目引用 `zif_greet`，函数绑定为 Zig 实现导出该符号。构建脚本中的 `Phpz` 实例通过 `addExtension()` 编译、链接扩展库。
+
+# [运行：加载与调用]($heading.id('runtime-loading-and-calls'))
+
+PHP 通过 `get_module()` 加载共享扩展，安装函数表并执行 MINIT。phpz 依次注册 Stubs 符号、INI、类和观察器，再调用 `module_startup_fn`。`module.classes` 中的接口和父类须排在依赖它们的类之前。
+
+当 PHP 执行 `greet("World")` 时，调用过程如下：
+
+```
+PHP 调用 greet("World")
+    → zif_greet 处理器
+    → 包装器根据 Zig 签名解析参数
+    → Zig functions.greet(name)
+    → 包装器按返回类型写入 PHP 返回槽
+```
+
+类方法通过同样的处理器机制调用，框架还会将 PHP 对象关联的 Zig 数据传给方法的 `self` 参数。

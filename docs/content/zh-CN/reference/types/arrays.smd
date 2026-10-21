@@ -1,0 +1,163 @@
+---
+.title = "数组",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/arrays",
+.custom = { "section": "类型与值" },
+---
+
+phpz 提供两层数组包装：
+
+- `phpz.zend.Array` 包装底层 Zend HashTable，适合创建、查找、遍历和修改已有 `zend_array`。
+- `phpz.Zval.Array` 包装持有数组的 zval，适合需要写时复制、或数组必须附着在 zval 槽位的场景。
+
+`Zval.Array.empty()` / `init()` 要求调用者提供 zval 存储。向 PHP 返回数组时，通常直接使用 `ctx.retval.ptr()`。
+
+# [创建返回数组]($heading.id('create-return-array'))
+
+```zig
+/// PHP: function buildArray(): array
+pub fn buildArray(ctx: phpz.Ctx) !void {
+    const result = phpz.Zval.Array.empty(ctx.retval.ptr());
+    result.set(.string, "name", "phpz");
+    result.set(.int, "version", 1);
+    try result.append(.bool, true);
+    // return ["name" => "phpz", "version" => 1, 0 => true]
+}
+```
+
+返回槽拥有该数组，成功返回时不再释放它。`set` 接受字符串键，`setAt` 接受整数键，`append` 使用下一个整数索引。`set` 不返回错误；`setAt` / `append` 失败时由调用者保留并清理传入值。
+
+# [批量构建列表]($heading.id('list-builder'))
+
+只需要从 0 开始的连续整数键时，可使用 `zend.Array.ListBuilder` 直接填充 packed 数组：
+
+```zig
+/// PHP: function buildList(): array
+pub fn buildList() *phpz.zend.Array {
+    var builder = phpz.zend.Array.ListBuilder.init(3);
+    builder.appendAssumeCapacity(.int, 42);
+    builder.appendAssumeCapacity(.string, "phpz");
+    builder.appendAssumeCapacity(.null, {});
+    return builder.finish();
+}
+```
+
+该函数返回 `[42, "phpz", null]`，包装器接管数组的一份引用。
+
+- `append(kind, value)` 在容量不足时扩容；`appendAssumeCapacity` 不扩容，调用者必须保证剩余容量足够。
+- 两者遵循 `Zval.raw.set` 的所有权规则：`.string` 复制字节，包装指针转移引用，`.mixed` 复制解引用后的值并保留源槽所有权。
+- `appendValue(raw)` 转移原始 zval 内容，不增加引用，也不清空源槽；借用值应先复制一份拥有的引用。
+- 不允许写入 `IS_UNDEF`，包括 `.mixed` 解引用后和 `appendValue` 的输入；空值使用 `.null`。
+- 构建器持有数组，`finish()` 后才能读取或交给 PHP；返回值由调用者拥有，构建器不能再使用。构建期间发生 bailout 时，未完成的元素可能留到请求结束才回收。
+
+已有数组可用 `isList()` 检查连续整数键，或用 `toList()` 按遍历顺序浅复制为列表；后者返回拥有的数组，并解开仅一个所有者的 PHP 引用。`extend(capacity)` 只扩充容量，不增加元素，要求数组可写且独占。
+
+# [修改输入的副本]($heading.id('modify-input-copy'))
+
+```zig
+/// PHP: function addCount(array $values): array
+pub fn addCount(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .array = .{ .as = .zval } },
+    }, {});
+    ctx.ret(.mixed, args[0].ptr());
+
+    const result = try ctx.retval.array();
+    result.separate();
+    result.set(.int, "count", 1);
+    try result.setAt(.int, 0, 2);
+    try result.append(.int, 3);
+}
+```
+
+先把输入复制到返回槽，再 `separate()` 分离共享或不可变数组，最后修改。写入方法不会自动执行分离。分离后必须重新获取元素指针；分离是浅复制，元素中的 PHP 引用仍可能共享。
+
+# [查询与删除]($heading.id('lookup-and-delete'))
+
+查询和删除使用 `zend.Array`。若当前持有 `Zval.Array`，先通过 `zendArray()` 取得底层数组：
+
+| 操作 | 字符串键 | 整数键 |
+| --- | --- | --- |
+| 查询元素，未找到时返回 `null` | `find(key)` | `findIndex(index)` |
+| 检查键是否存在 | `has(key)` | `hasIndex(index)` |
+| 删除元素，未找到时返回 `error.NotFound` | `delete(key)` | `deleteIndex(index)` |
+
+以下处理器区分键不存在和元素值为 PHP `null`：
+
+```zig
+/// PHP: function nameState(array $values): string
+pub fn nameState(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+    const raw = args[0].find("name") orelse return ctx.ret(.string, "missing");
+    const value = phpz.Zval.from(raw);
+    ctx.ret(.string, if (value.is(.null)) "null" else "present");
+}
+```
+
+`nameState([])` 返回 `"missing"`，`nameState(['name' => null])` 返回 `"null"`；后者的 `has("name")` 仍为 `true`。`find` 返回借用的原始 `*c.zval`，读取前需要检查类型。
+
+上表接口直接使用 HashTable 键，不执行 PHP 下标表达式的数字字符串转换。例如 PHP 数组 `["123" => "value"]` 的键是整数，应使用 `findIndex(123)` 或 `symtableFind("123")`；`find("123")` 只查字符串键。
+
+| PHP 字符串下标语义 | 接口 |
+| --- | --- |
+| 读取 `$array[$key]`，未找到返回 `null` | `symtableFind(key)` |
+| 写入 `$array[$key] = $value` | `symtableUpdate(key, value)` |
+| 删除 `unset($array[$key])`，未找到返回 `error.NotFound` | `symtableDelete(key)` |
+
+这些接口把 `"123"`、`"-1"` 等有效整数键字符串转换成整数键；`"01"`、`"+1"`、空字符串和超出 `zend_long` 范围的字符串仍保留为字符串键。写入与删除前同样需要可写且独占的数组。
+
+`findStr` / `hasStr` / `deleteStr` 接受借用的 `*zend.String` 键，不转换数字字符串；`findDeref` / `findStrDeref` / `findIndexDeref` 返回解引用后的借用值。`lookupStr` / `lookupIndex` 则会在缺键时插入 PHP null，属于写操作；覆盖返回槽前需先释放其中原有的值。
+
+删除输入数组中的元素前，也应复制并分离数组。以下函数体片段返回删除 `"name"` 后的副本；键不存在时保持原样：
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{ .as = .zval } }}, {});
+ctx.ret(.mixed, args[0].ptr());
+const result = try ctx.retval.array();
+result.separate();
+result.zendArray().delete("name") catch {};
+```
+
+删除会释放数组持有的元素值，不需要另外释放之前借用的元素指针；删除后该指针不再有效。
+
+# [遍历]($heading.id('iteration'))
+
+从参数取得的 `*zend.Array` 是借用值，可用以下接口遍历；它们都会跳过 `IS_UNDEF` 空槽：
+
+| 接口 | 适用场景 |
+| --- | --- |
+| `iterator()` / `keyIterator()` / `valueIterator()` | 用表和位置索引逐项读取，每次从当前存储取值 |
+| `fastIterator()` / `fastValueIterator()` | 创建时缓存底层存储和遍历上限，要求结构保持不变 |
+| `each(callback, args)` / `eachValue(callback, args)` | 内联编译期回调，首参分别为 `Array.Entry` / `*c.zval`，额外参数用元组传入 |
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+var iterator = args[0].fastIterator();
+while (iterator.next()) |entry| {
+    switch (entry.key) {
+        .int => |index| _ = index,
+        .string => |key| _ = key,
+    }
+    // entry.value 是借用 zval，需要延长生命周期时先 copy/addref。
+}
+```
+
+普通迭代器也直接读取 packed 或 mixed 存储，不逐项调用 Zend 的 C 迭代函数。其位置不是会随结构变化自动修正的 PHP `foreach` 游标；删除、重排或 rehash 可能跳项。遍历期间不要修改数组结构；fast 迭代器和回调遍历尤其不能插入、删除或扩容，否则缓存的指针或边界可能失效。
+
+# [写入与所有权]($heading.id('iteration-and-ownership'))
+
+数组 `set(.mixed, key, &value)` 会转移一个 zval 值的所有权，保留引用包装，且不清空源槽。成功后不能再释放这份引用。借用值先 `copy` 或增加引用；失败的 `append` / `setAt` 仍由调用者清理。
+
+底层 `zend.Array.update` / `updateStr` / `updateIndex` / `symtableUpdate` 转移输入 zval 内容并返回非可空的借用槽 `*c.zval`；内存不足会 bailout。`add` / `addStr` / `addIndex` 在键已存在时返回 `null`，底层 `append` 也可能返回 `null`；失败时输入值仍归调用者。这些方法不会清空源槽，也不执行写时复制。
+
+`updatePtr` / `addPtr` / `findPtr` 及其 Str、Index 变体用于内部 `IS_PTR` 表。它们不持有指针指向的资源，`updatePtr` 返回传入的 `*T`；由 `Array.init` / `empty` 创建的表不会释放该资源。不要把含 `IS_PTR` 的表返回给 PHP。
+
+从数组取出的值同样是借用值；在数组被修改或释放后不得继续使用。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zval/array.zig)
+- [src/zend/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/array.zig)
+- [examples/my_php_extension/src/testing/arrays.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/testing/arrays.zig)
+- [examples/my_php_extension/src/functions.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/functions.zig)

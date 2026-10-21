@@ -1,0 +1,60 @@
+---
+.title = "构建与加载",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/build",
+.custom = { "section": "构建与测试" },
+---
+
+在扩展工程目录构建，使用版本、架构、NTS/ZTS 和 Debug 配置匹配的 PHP 加载。Windows 构建与交叉编译见 [Windows]($link.page('development/windows'))。
+
+# [Linux 与 macOS]($heading.id('unix'))
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+php -n -dextension=./modules/my_php_extension.so -r 'hello();'
+```
+
+骨架输出 `modules/my_php_extension.so`。`-n` 不读取 `php.ini`，`-dextension` 为当前 PHP 进程加载扩展；示例调用骨架中的 `hello()`。
+
+默认 Debug 构建便于定位错误；需要优化且保留 Zig 运行时安全检查时使用：
+
+```sh
+zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+# [LTO 与 TSRM 缓存]($heading.id('lto-and-tsrm-cache'))
+
+`Phpz.addExtension()` 支持 `-Dlto=true` / `-Dlto=false`，优先于 `Phpz.init` 的 `.lto` 选项。未指定时，非 Debug 的共享扩展默认启用完整 LTO；Mach-O 目标默认禁用，因为当前 Zig 链接器不支持该组合。Debug 和内置扩展不由 phpz 自动开启 LTO。
+
+例如关闭 ReleaseSafe 构建的 LTO：
+
+```sh
+zig build -Doptimize=ReleaseSafe -Dlto=false -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+`Phpz.init` 的 `.static_tsrmls_cache` 默认为 `true`：ZTS 共享扩展使用扩展自己的线程本地缓存，内置扩展使用 PHP 的缓存；NTS 忽略该选项。需要改用 TSRM 运行时查询时，在现有初始化选项中加入 `.static_tsrmls_cache = false`。骨架未提供对应命令行开关，不能直接传入 `-Dstatic-tsrmls-cache=false`。
+
+# [配置扩展加载]($heading.id('configure-loading'))
+
+单次加载验证通过后，在目标 PHP 的 INI 配置中添加 `extension=/absolute/path/to/my_php_extension.so`；Windows 改为实际 DLL 路径。CLI 可用 `php --ini` 查看配置位置，用 `php --ri my_php_extension` 检查加载结果。PHP-FPM、Apache 与 CLI 可能使用不同配置，服务进程需要重新加载或重启。
+
+# [问题排查]($heading.id('troubleshooting'))
+
+| 现象 | 检查项 |
+| --- | --- |
+| 找不到 PHP 头文件 | `php-config --include-dir` 是否指向目标 PHP 的开发头文件；多版本环境使用目标 `php-config` 的完整路径 |
+| 加载扩展失败或 ABI 不匹配 | 核对 `php -v`、`php-config --version`、目标架构、NTS/ZTS 与 Debug 配置；Windows 还需匹配导入库 |
+| 单次加载成功，配置后未生效 | 用 `php --ini` 确认当前 CLI 的配置文件，再单独检查服务 SAPI 的配置与进程是否已重载 |
+| 修改 Stubs 后签名或绑定仍是旧的 | 运行 `zig build gen-stub`，随后重新构建并加载新产物 |
+| `gen-stub` 失败 | 检查执行生成器的 PHP 是否启用 tokenizer，`build/` 是否可写，以及首次下载 PHP-Parser 时的网络和下载工具 |
+| `evaluation exceeded ... backwards branches` | phpz 已按声明或参数数量设置内部编译期分支额度；先按报错位置区分框架处理与项目自己的 `comptime` 计算 |
+
+函数和方法绑定、参数解析、INI 收集及模块注册等路径会自行调整额度，普通扩展无需在外层统一添加 `@setEvalBranchQuota`。自定义编译期计算仍由项目管理。
+
+构建后运行 [PHPT 测试]($link.page('development/testing'))。使用 `phpize` 或集成到 PHP 源码构建时，参见 [PHP 构建系统]($link.page('development/php-build-system'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [build/Phpz.zig](https://github.com/happystraw/phpz/blob/dev/build/Phpz.zig)

@@ -1,0 +1,46 @@
+---
+.title = "创建 PHP 闭包",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/closures",
+.custom = { "section": "运行时接口" },
+---
+
+闭包处理器复用[参数解析与返回值]($link.page('reference/registration/arguments'))规则。
+
+# [从 Zig 函数创建]($heading.id('create-from-zig-function'))
+
+```zig
+fn sum(a: i64, b: i64) i64 {
+    return a +| b;
+}
+
+pub fn makeSumClosure(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    phpz.closure.createFromFn(sum, ctx.retval);
+}
+```
+
+Stubs 为 `function makeSumClosure(): \Closure`。PHP 可以保存返回值并按 `$sum(1, 2)` 调用。
+
+`createFromFn` 支持类型化签名和前置 `Ctx` / `GuardCtx`。创建的 PHP 闭包签名为按值可变参数，无显式返回类型；参数检查由处理器完成，Reflection 不会显示 Zig 参数规格。目标槽须为 `undef` 或 `null`。
+
+# [使用已有函数元数据]($heading.id('use-function-metadata'))
+
+`zend.Function.createClosure(destination, options)` 将已注册函数或方法变为 Closure，保留签名和静态变量。实例方法须传 `.object`；目标槽须为 `undef` 或 `null`，函数元数据须在闭包存活期间有效。
+
+需要保存状态时，可以把状态放进有 `__invoke` 方法的 backing 对象，再将该方法绑定为闭包。示例 `makeCounter` 展示了这种做法。
+
+# [生命周期]($heading.id('lifecycle'))
+
+`createFromFn` 不捕获 Zig 局部变量。状态对象持有 PHP 值时须复制、释放并向 GC 报告；`makeReference` 示例展示引用保留与引用返回。
+
+`createFromHandler` 接收原生处理器，处理器须在闭包存活期间有效。创建闭包可能 bailout，须遵守[清理边界]($link.page('advanced/bailout'))。
+
+调用、请求、对象和模块全局变量的释放责任参见[生命周期边界]($link.page('reference/types/ownership').ref('lifetime-boundaries'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/closure.zig](https://github.com/happystraw/phpz/blob/dev/src/closure.zig)
+- [src/zend/function.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/function.zig)
+- [examples/my_php_extension/src/closures.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/closures.zig)

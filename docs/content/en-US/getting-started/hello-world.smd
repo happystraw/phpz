@@ -1,0 +1,70 @@
+---
+.title = "Hello World",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/hello-world",
+.custom = { "section": "Getting started" },
+---
+
+# [Generate an extension]($heading.id('generate-extension'))
+
+Run these commands in an empty working directory on Linux or macOS. Download the skeleton generator before running it; this also works with PHP 8.2:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php
+php phpz_skel.php --ext my_php_extension --with-php-config "$(command -v php-config)"
+cd my_php_extension
+```
+
+The generator calls `zig init`, adds the phpz dependency, and generates the templates. The target directory contains `my_php_extension.stub.php`, `my_php_extension.h`, and `src/root.zig`.
+
+# [Build and call]($heading.id('build-and-call'))
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+php -n -dextension=./modules/my_php_extension.so -r 'hello();'
+php -n -dextension=./modules/my_php_extension.so -r 'echo greet("World"), PHP_EOL;'
+```
+
+The two PHP commands print:
+
+```
+Hello from Zig!
+Hello, World!
+```
+
+The `-n` option skips php.ini for this CLI invocation. The `-dextension` option loads the extension for the current process.
+
+# [Connect the function]($heading.id('connect-the-function'))
+
+The Stub declares the PHP function signature:
+
+```php
+function hello(): void {}
+```
+
+Its Zig implementation lives in the `functions` container:
+
+```zig
+pub fn hello() void {
+    _ = phpz.printf("Hello from Zig!\n", .{});
+}
+```
+
+At compile time, `phpz.functions(functions, .{})` exports the handlers and `phpz.module(...)` exports the module. The function table generated from the Stub connects the PHP functions to these handlers.
+
+# [Run tests]($heading.id('run-tests'))
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+The skeleton includes tests for `hello`, `greet`, and `Counter`. After changing a PHP signature, run `zig build gen-stub` before rebuilding and testing.
+
+On Windows, the extension is `modules/php_my_php_extension.dll`. For build options, switch to 简体中文 and open Windows in the sidebar.
+
+# [Source and examples]($heading.id('source-and-examples'))
+
+- [tools/phpz_skel.php](https://github.com/happystraw/phpz/blob/dev/tools/phpz_skel.php)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)
+- [examples/skeleton/tests/hello.phpt](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/tests/hello.phpt)

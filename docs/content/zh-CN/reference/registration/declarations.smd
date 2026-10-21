@@ -1,0 +1,228 @@
+---
+.title = "继承、接口、枚举、特性与 Trait",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/declarations",
+.custom = { "section": "声明与注册" },
+---
+
+继承关系、接口、枚举、特性（Attribute）和 Trait 由 Stubs 声明。没有 Zig 实例数据（backing data）且没有需要绑定的具体方法时，使用 `phpz.ClassDecl("MyPHPExt\\Name", .{})` 注册；需要构造器或方法实现时改用 `phpz.Class`，并把包装类型放入 `module.classes`。方法绑定细节见[类、属性与方法]($link.page('reference/registration/classes'))。
+
+# [接口]($heading.id('interfaces'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+interface Identifiable {
+    public function getId(): int;
+}
+```
+
+```zig
+pub const IdentifiableClass = phpz.ClassDecl("MyPHPExt\\Identifiable", .{});
+```
+
+接口只声明方法，不需要 Zig 方法处理器时使用 `ClassDecl`。父类和接口必须放在依赖它们的类之前注册。
+
+# [继承与接口注册]($heading.id('inheritance'))
+
+以下声明接在 `Identifiable` 接口后。`Entity` 是抽象父类，`User` 实现接口要求的方法，状态保存在 PHP 属性中：
+
+```php
+abstract class Entity implements Identifiable {
+    public int $id = 0;
+}
+
+class User extends Entity {
+    public function getId(): int {}
+}
+```
+
+生成的注册函数需要父类和接口的类条目（class entry）。用 `.register` 提供这些参数；参数顺序以 `_arginfo.h` 中 `register_class_*` 的签名为准：
+
+```zig
+fn registerEntity(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{IdentifiableClass.entry.ptr()});
+}
+const EntityClass = phpz.ClassDecl("MyPHPExt\\Entity", .{
+    .register = registerEntity,
+});
+
+const User = struct {
+    pub fn getId(ctx: phpz.Ctx) !void {
+        try ctx.call.expectNoArgs();
+        var scratch = phpz.Zval.raw.undef;
+        defer phpz.Zval.raw.release(&scratch);
+        const id = try ctx.call.this().?.property("id", false, &scratch);
+        ctx.ret(.int, try id.as(.int));
+    }
+};
+
+fn registerUser(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{EntityClass.entry.ptr()});
+}
+const UserClass = phpz.Class("MyPHPExt\\User", User, .{
+    .register = registerUser,
+});
+
+comptime {
+    const extension = @import("extension_info");
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{ IdentifiableClass, EntityClass, UserClass },
+    });
+}
+```
+
+`.classes` 先注册接口，再注册父类，最后注册子类。`Entity` 没有需要绑定的具体方法，可以使用 `ClassDecl`；`User::getId` 则必须提供 Zig 实现。加载扩展后：
+
+```php
+$user = new MyPHPExt\User();
+$user->id = 42;
+echo $user->getId(), PHP_EOL; // 42
+var_dump($user instanceof MyPHPExt\Identifiable); // bool(true)
+```
+
+这里使用标准对象布局。继承带 backing 的类时，还需满足对象布局兼容性：`Class.fromObject()` 同时检查类继承关系和对象处理器。不能仅凭 `instanceof` 成立，就把子类对象转换为父类的 Zig 数据布局。
+
+# [枚举]($heading.id('enums'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+enum Status: int {
+    case Inactive = 0;
+    case Active = 1;
+}
+```
+
+```zig
+pub const StatusClass = phpz.ClassDecl("MyPHPExt\\Status", .{});
+```
+
+注册后可以获取 case：
+
+```zig
+const case = StatusClass.entry.getEnumCase("Active");
+```
+
+`getEnumCase()` 返回可选对象指针；枚举成员不存在时返回 `null`。`enumCaseName()` 返回成员名称，带标量值的枚举（backed enum）的 `enumCaseValue()` 返回借用的标量 zval；无关联标量值的枚举（unit enum）没有该值。取出的 case 由 PHP 枚举运行时持有，直接返回给 PHP 前需要按对象所有权规则处理。
+
+# [Trait]($heading.id('traits'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+trait Greets {
+    public function greet(): string {}
+}
+```
+
+Trait 方法需要 Zig 实现时，定义对应的 `pub fn`：
+
+```zig
+const Greets = struct {
+    pub fn greet(ctx: phpz.Ctx) !void {
+        ctx.ret(.string, "Hello");
+    }
+};
+
+const GreetsTrait = phpz.Class("MyPHPExt\\Greets", Greets, .{});
+```
+
+只有抽象方法或没有方法的 Trait 可以使用 `ClassDecl`；上述具体 `greet` 方法必须提供 Zig 绑定。将 `GreetsTrait` 加入 `module.classes` 后，PHP 用户类可以通过 `use MyPHPExt\Greets;` 混入该方法。
+
+Trait 混入不会为使用它的类分配 Zig backing。Trait 方法应像上例一样使用无字段的 Zig 容器，通过 `Ctx` 访问当前对象的 PHP 属性；不能通过给 Trait 的 Zig 容器添加字段来共享实例数据。
+
+# [特性（Attribute）]($heading.id('attributes'))
+
+```php
+<?php
+namespace MyPHPExt;
+require "Zend/zend_attributes.stub.php";
+
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_PARAMETER | \Attribute::IS_REPEATABLE)]
+final class Tag {
+    public string $name;
+    public ?string $description;
+
+    public function __construct(string $name, ?string $description = null) {}
+}
+```
+
+`Tag` 声明了具体构造器，因此使用 `Class` 绑定实现。即使构造器函数体不做任何操作，也不能省略绑定：
+
+```zig
+const Tag = struct {
+    pub fn __construct(ctx: phpz.Ctx) !void {
+        const name, const description = try ctx.call.expectArgs(&.{
+            .{ .string = .{} },
+            .{ .string = .{ .optional = true, .nullable = true } },
+        }, {});
+
+        const tag = ctx.call.this().?;
+        try tag.setProperty(.string, "name", name);
+
+        if (description) |provided| {
+            switch (provided) {
+                .null => try tag.setProperty(.null, "description", {}),
+                .value => |value| try tag.setProperty(.string, "description", value),
+            }
+        } else {
+            try tag.setProperty(.null, "description", {});
+        }
+    }
+};
+
+const TagClass = phpz.Class("MyPHPExt\\Tag", Tag, .{});
+```
+
+没有构造器和其他具体方法的标记特性可以使用 `ClassDecl`，例如在同一命名空间中声明：
+
+```php
+#[\Attribute(\Attribute::TARGET_CLASS)]
+final class Marker {}
+```
+
+```zig
+const MarkerClass = phpz.ClassDecl("MyPHPExt\\Marker", .{});
+```
+
+将 `TagClass` 和 `MarkerClass` 加入 `module.classes` 后，PHP 可以使用这些特性：
+
+```php
+#[MyPHPExt\Tag("model")]
+#[MyPHPExt\Marker]
+class Record {}
+
+$attribute = (new ReflectionClass(Record::class))
+    ->getAttributes(MyPHPExt\Tag::class)[0];
+echo $attribute->newInstance()->name, PHP_EOL; // model
+```
+
+特性示例有两项依赖：Stubs 中的 `require "Zend/zend_attributes.stub.php";` 供生成器解析内置特性常量；扩展头文件还需在 arginfo 之前包含特性的 C 声明：
+
+```c
+#include "phpz.h"
+#include "Zend/zend_attributes.h"
+#include "my_php_extension_arginfo.h"
+```
+
+如果 `zig build gen-stub` 提示找不到 `Zend/zend_attributes.stub.php`，可将目标 PHP 源码中的该文件放到扩展目录的 `Zend/` 下，或直接使用完整 php-src 源码树中的生成器，让它从源码树解析依赖：
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+特性元数据和实例是两回事：把 `#[Tag(...)]` 写在类或参数上只记录元数据，反射创建特性实例时才运行对应构造器。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/my_php_extension/src/api/user.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/api/user.zig)
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)
+- [src/stub.zig](https://github.com/happystraw/phpz/blob/dev/src/stub.zig)
+- [src/zend/class_entry.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/class_entry.zig)

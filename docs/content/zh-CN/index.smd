@@ -1,0 +1,42 @@
+---
+.title = "简介",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "index",
+.custom = { "section": "入门" },
+---
+
+phpz 是用于编写 PHP 扩展的 Zig 库：用 [PHP Stubs](https://php.github.io/php-src/miscellaneous/stubs.html) 声明接口，用 Zig 实现，再构建为 PHP 可加载的扩展。
+
+# [特点]($heading.id('features'))
+
+- **接口声明与绑定**：用官方 `gen_stub.php` 生成 arginfo，编译期绑定 Zig 函数、类和模块。
+- **参数与值**：类型化处理器、手动参数解析、`Zval`、字符串、数组、对象和引用。
+- **运行时接口**：PHP 回调、闭包、Stream、INI、输出及脚本执行。
+- **底层访问与工具**：可直接调用 PHP C API；提供骨架生成和 PHPT 测试步骤。
+
+# [功能状态]($heading.id('support-status'))
+
+扩展开发接口为正式功能；[自定义 SAPI]($link.page('advanced/sapi')) 为**实验性支持**，接口与宿主集成方式仍可能调整。
+
+# [目标]($heading.id('goals'))
+
+减少参数解析、注册和错误处理的重复代码，保留对内存、所有权和 PHP C API 的直接控制。
+
+# [阅读路径]($heading.id('documentation'))
+
+- **首次创建扩展**：[环境要求与安装]($link.page('getting-started/installation')) → [Hello World]($link.page('getting-started/hello-world')) → [PHPT 测试]($link.page('development/testing'))。
+- **编写函数和类**：[Stubs]($link.page('reference/registration/stub')) → [函数绑定]($link.page('reference/registration/functions')) / [类、属性与方法]($link.page('reference/registration/classes')) → [参数解析与返回值]($link.page('reference/registration/arguments'))。
+- **管理 PHP 值和原生资源**：[Zval]($link.page('reference/types/zval')) → [所有权与引用计数]($link.page('reference/types/ownership')) → [对象生命周期与垃圾回收]($link.page('advanced/objects')) / [Bailout 与清理边界]($link.page('advanced/bailout'))。
+- **访问文件和执行 PHP**：[PHP Stream]($link.page('reference/runtime/streams')) / [执行 PHP 代码与脚本]($link.page('reference/runtime/scripts'))。
+- **编写独立 PHP 宿主**：[自定义 SAPI（实验性）]($link.page('advanced/sapi'))。
+
+```=html
+<p>查找具体接口签名时，参见 <a href="/phpz/api/">API 参考</a>。</p>
+```
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [phpz 源码](https://github.com/happystraw/phpz)：接口实现及构建支持。
+- [skeleton](https://github.com/happystraw/phpz/tree/dev/examples/skeleton)：最小示例功能。
+- [my_php_extension](https://github.com/happystraw/phpz/tree/dev/examples/my_php_extension)：更多功能示例及 PHPT 测试。

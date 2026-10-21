@@ -1,0 +1,65 @@
+---
+.title = "函数绑定",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/functions",
+.custom = { "section": "声明与注册" },
+---
+
+# [绑定函数]($heading.id('bind-functions'))
+
+先在 Stubs 中声明 PHP 函数，文件头保留骨架提供的生成器注解：
+
+```php
+<?php
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ * @undocumentable
+ */
+namespace MyPHPExt;
+function greet(string $name): string {}
+```
+
+生成 arginfo 后，在 Zig 中定义实现容器。以下片段假定已经导入 `phpz`，并由工程完成模块注册：
+
+```zig
+const Api = struct {
+    pub fn greet(name: []const u8) []const u8 {
+        return name;
+    }
+};
+
+comptime {
+    phpz.functions(Api, .{ .namespace = "MyPHPExt" });
+}
+```
+
+`functions` 绑定容器中的全部公开函数，`.namespace` 指定 PHP 命名空间前缀。只有全局命名空间的函数才省略该选项。上例加载后可调用 `MyPHPExt\greet("Zig")`，返回 `"Zig"`。
+
+需要逐个映射、跨多个 Zig 容器或 PHP 名称与 Zig 名称不一致时，使用 `namedFunctions` 替换上面的 `comptime` 块：
+
+```zig
+comptime {
+    phpz.namedFunctions(.{
+        .@"MyPHPExt\\greet" = Api.greet,
+    });
+}
+```
+
+两种方式选其一，在一次调用中覆盖 Stubs 的全部具体函数；显式 `@alias` 无需重复绑定。名称须与完整 PHP 名称精确匹配，包括大小写。自动绑定时，辅助函数保持私有。
+
+绑定分散在多个 Zig 模块时，可用 `phpz.function("MyPHPExt\\greet", Api.greet)` 逐项导出。它只检查该函数是否已在 Stubs 声明，不检查其他函数是否遗漏；集中绑定优先使用前两种方式。
+
+# [处理器签名]($heading.id('handler-signatures'))
+
+处理器可以直接声明 PHP 参数对应的 Zig 类型，返回 `T` 或 `!T`；包装器负责参数解析和返回值写入。`Ctx` / `GuardCtx` 可省略，需要时必须放在 PHP 参数之前；带 backing 的实例方法先放 `self`，再放上下文。
+
+无上下文且没有类型化参数的函数会检查 PHP 实参为空。只接收上下文的处理器保留手动解析能力，需自行调用 `expectNoArgs()` 或 `expectArgs()`。返回 `void` / `!void` 时可手动写入 `ctx.ret()`；返回其他类型时以 Zig 返回值为准。Stubs 仍负责 PHP 签名与反射元数据，Zig 签名不会替代 Stubs，也没有完整的签名一致性校验。
+
+函数、方法和闭包共用[参数解析与返回值]($link.page('reference/registration/arguments'))规则。需要保护原生资源时使用 [GuardCtx]($link.page('advanced/bailout'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)
+- [examples/skeleton/src/root.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/src/root.zig)

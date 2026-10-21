@@ -1,0 +1,59 @@
+---
+.title = "调用 PHP 函数、方法与回调",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/calls",
+.custom = { "section": "运行时接口" },
+---
+
+# [从参数解析 Callable]($heading.id('parse-callable-argument'))
+
+类型化处理器直接接收 `*phpz.zend.Callable`：
+
+```zig
+pub fn invoke(ctx: phpz.Ctx, callback: *phpz.zend.Callable) !void {
+    try callback.call(ctx.retval.ptr(), .{}, null);
+}
+```
+
+手动解析的等价写法：
+
+```zig
+pub fn invoke(ctx: phpz.Ctx) !void {
+    var callback: phpz.zend.Callable = .nil;
+    _ = try ctx.call.expectArgs(
+        &.{.{ .callable = .{ .resolve = true } }},
+        .{.{ .out = &callback }},
+    );
+    try callback.call(ctx.retval.ptr(), .{}, null);
+}
+```
+
+对应 Stubs 为 `function invoke(callable $callback): mixed`。解析结果借用实参，本次调用内无需释放。若在同一请求中跨调用保存，将 `Callable` 结构复制到自己的存储并调用 `addref()`，用完后调用 `release()`；不要保留临时结构的指针。
+
+# [参数和返回值]($heading.id('arguments-and-return-values'))
+
+`call` 的位置参数是 `c.zval` 元组（tuple），例如 `.{arg1, arg2}`；最后一个参数是可选的 `*zend.Array` 命名参数表。
+
+```zig
+const number = phpz.Zval.raw.init(.int, 42);
+try callback.call(ctx.retval.ptr(), .{number}, null);
+```
+
+借用参数须在调用期间有效。返回槽由调用者拥有，接口不释放旧内容；传 null 则丢弃结果，可能执行析构器。
+
+命名参数表的字符串键对应参数名；整数键追加位置参数，并且在迭代顺序中必须先于字符串键。重复、未知参数和引用规则交给 Zend 处理。
+
+# [已知函数与方法]($heading.id('known-functions-and-methods'))
+
+`zend.Function.find` / `fetch` 查找函数，`findMethod` 查找类方法。根据调用对象使用 `call`、`callStatic` 或 `callMethod`。对象也提供 `call` 和 `callIfExists`。
+
+`find` / `fetch` 和 `findMethod` 使用函数表中的小写名称作为查找键；命名空间前缀也应转为小写。它们直接查询函数表，不会自动执行大小写转换。`callIfExists` 的位置参数使用 `[]c.zval`，与 `call` 的元组参数不同。
+
+`call` 返回 PHP 异常标记，但原生 bailout 会跨过 Zig 栈；需要捕获以完成原生清理时使用 `tryCall` 或 `GuardCtx`。捕获 bailout 后应传播并终止请求，不继续执行 PHP 逻辑。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/callable.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/callable.zig)
+- [src/zend/function.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/function.zig)
+- [src/zend/object.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/object.zig)

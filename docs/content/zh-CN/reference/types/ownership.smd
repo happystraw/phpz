@@ -1,0 +1,61 @@
+---
+.title = "所有权与引用计数",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/ownership",
+.custom = { "section": "类型与值" },
+---
+
+“拥有”表示负责释放一份引用，“借用”表示只能在原所有者存活期间使用。Zig 变量离开作用域不会自动释放 PHP 值，普通结构体赋值也不会自动增加 PHP 引用计数。
+
+# [常见接口的差异]($heading.id('interface-differences'))
+
+| 接口 | 对输入或结果的处理 |
+| --- | --- |
+| `Zval.from`、`ptr`、`as` | 借用，不增加引用 |
+| `Zval.raw.copy(dst, src)` | 复制并按需增加引用，保留引用包装 |
+| `Zval.set(.mixed, src)` | 复制解引用后的值，源槽仍然拥有原值 |
+| `Zval.set(.string, bytes)` | 复制字节 |
+| `Zval.set(.array/.object/..., ptr)` | 接收一份引用，不自动 `addref` |
+| `Zval.Array.set(.mixed, key, src)` | 转移一份值，源槽不自动清空 |
+| `zend.Object.setProperty(...)` | 借用输入，调用者保留原有引用 |
+| `Zval.Object.set(.array/.object/.resource, key, ptr)` | 消耗一份引用；`.mixed` 则借用输入，详见[对象]($link.page('reference/types/objects')) |
+| `String.copy()` | 增加引用，结果需要释放 |
+| `cast(.string/.array/.object)` | 返回拥有的结果 |
+
+对 zval，`addref()` 要求可计数值，`tryAddref()` 先检查；两者都保留 PHP 引用包装。清理拥有的值用 `release()`；`delref()` / `tryDelref()` 只减计数，归零也不析构。`release()` 接受 `undef`，但不清空槽位。完整操作见 [Zval]($link.page('reference/types/zval').ref('ownership-and-release'))。
+
+# [借用数组放入返回值]($heading.id('return-borrowed-array'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+if (!args[0].isImmutable()) args[0].addref();
+ctx.ret(.array, args[0]);
+```
+
+参数仍由调用帧持有，可计数数组的新增引用交给返回槽；不可变数组不修改引用计数。直接返回借用的 `*zend.Array` 时也遵循这条规则。也可以把规格改为 `.array = .{ .as = .zval }`，再通过 `ctx.ret(.mixed, args[0].ptr())` 复制值。
+
+# [转移临时值]($heading.id('transfer-temporary-value'))
+
+临时 zval 插入数组成功后，数组成为所有者。由于源槽还保留旧位模式，如需统一清理，应在成功转移后把临时槽重新赋为 `Zval.raw.undef`。有可能失败的写入必须在失败分支释放尚未转移的值。
+
+# [生命周期边界]($heading.id('lifetime-boundaries'))
+
+| 保存位置或使用阶段 | 所有权与释放责任 |
+| --- | --- |
+| 当前调用期间 | 参数槽、字符串切片、数组元素等借用视图只在其所有者和存储仍有效时使用；需要保留值时复制到自己的槽位 |
+| 同一请求中的跨调用状态 | 使用 `copy` 或 `addref` 持有 PHP 值，并在状态失效或请求结束前释放；`addref` 不会延长栈上 zval 槽位的寿命 |
+| PHP 返回槽 | 把拥有的引用转移或复制给返回槽后，由 PHP 调用方管理；不要再次释放已转移的引用 |
+| 对象的 Zig 实例数据 | 持有 PHP 值时增加引用，在 `.deinit` 释放，并用 `.gc` 报告可能形成循环的引用；对象可能先于请求结束而被释放 |
+| 模块全局变量实例 | 可持有生命周期匹配的原生资源，在实例 `deinit` 中释放；其中的请求资源仍须在 RSHUTDOWN 清理，不能保留请求内存或 PHP 值跨请求使用 |
+
+`defer` 适用于正常返回和 Zig 错误展开；Zend bailout 的 `longjmp` 会跳过被跨越栈帧中的清理。需要保护原生资源时使用 [GuardCtx]($link.page('advanced/bailout'))。
+
+生命周期不会自动赋予跨线程使用权限。模块全局变量的 NTS/ZTS 差异见[模块全局变量]($link.page('advanced/globals'))；请求内存的分配和失败行为见 [PHP 内存分配器]($link.page('advanced/memory'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zval.zig](https://github.com/happystraw/phpz/blob/dev/src/zval.zig)
+- [src/zval/array.zig](https://github.com/happystraw/phpz/blob/dev/src/zval/array.zig)
+- [src/zend/string.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/string.zig)
+- [src/guard.zig](https://github.com/happystraw/phpz/blob/dev/src/guard.zig)

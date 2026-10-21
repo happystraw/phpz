@@ -1,0 +1,78 @@
+---
+.title = "Development tools",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/tools",
+.custom = { "section": "Getting started" },
+---
+
+# [Skeleton generator]($heading.id('skeleton-generator'))
+
+```sh
+php tools/phpz_skel.php --help
+php tools/phpz_skel.php --ext my_php_extension --phpz 0.1.0
+```
+
+Run the second command from the phpz repository root. It creates `my_php_extension` in the current directory and pins the phpz dependency to the `0.1.0` tag.
+
+| Option | Purpose |
+| --- | --- |
+| `--ext` | Extension name; required |
+| `--dir` | Parent directory for the generated project |
+| `--phpz` | Package URL passed to `zig fetch --save=phpz`; a bare name is treated as a phpz tag |
+| `--zig` | Path to the Zig executable |
+| `--with-php-config` | Path to `php-config` for locating PHP development headers |
+| `--with-php-build-system` | Generate PHP build system integration files |
+| `--onlyunix` / `--onlywindows` | Generate support only for the selected platform |
+| `--force` | Overwrite generated template files in the target directory |
+
+# [Build]($heading.id('build'))
+
+Run these commands from the generated extension directory:
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+The default Debug mode helps locate errors during development. `ReleaseSafe` keeps Zig runtime safety checks enabled. The PHP runtime that loads the extension must match the headers used to compile it.
+
+# [Generate arginfo]($heading.id('generate-arginfo'))
+
+```sh
+zig build gen-stub
+```
+
+This step copies the php-src `gen_stub.php` supplied by the phpz package to `build/gen_stub.php`, then processes the extension's Stub. The first run may need to download PHP-Parser, so it needs a writable `build/` directory and the corresponding download tools. Do not keep custom changes in the tool copy that this step updates.
+
+Besides the bundled copy, you can run the script from a matching php-src checkout directly:
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+# [PHPT tests]($heading.id('phpt-tests'))
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+This step builds the extension, then updates the project's `run-tests.php` from the phpz package's `tools/php/run-tests.php` (from php-src), and runs the tests. To select a test, build the extension and invoke the project copy directly:
+
+```sh
+php run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/greet.phpt
+```
+
+You can also run the script from a matching php-src checkout directly:
+
+```sh
+php /path/to/php-src/run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/greet.phpt
+```
+
+Common PHPT sections include `--TEST--`, `--FILE--`, and `--EXPECT--`. For failures, read the actual output and diff. Record skips caused by a missing CGI binary separately from passing behavior tests.
+
+# [Source and examples]($heading.id('source-and-examples'))
+
+- [tools/phpz_skel.php](https://github.com/happystraw/phpz/blob/dev/tools/phpz_skel.php)
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [tools/php/README.md](https://github.com/happystraw/phpz/blob/dev/tools/php/README.md)

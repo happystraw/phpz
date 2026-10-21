@@ -1,0 +1,59 @@
+---
+.title = "模块全局变量",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/globals",
+.custom = { "section": "进阶主题" },
+---
+
+# [声明状态]($heading.id('declare-state'))
+
+```zig
+const State = struct {
+    calls: u64 = 0,
+};
+const Globals = phpz.ModuleGlobals(State);
+
+fn requestStartup() !void {
+    Globals.get().calls = 0;
+}
+```
+
+模块配置中加入 `.globals = Globals` 和 `.request_startup_fn = requestStartup`。通过 `Globals.get()` 访问当前实例，不使用全局裸指针缓存其地址。
+
+# [全局变量的构造与析构]($heading.id('globals-lifecycle'))
+
+`State` 必须是非零大小的结构体，且能够通过 `.{}` 初始化。可在类型中声明 `pub fn init(self: *State) void` 和 `pub fn deinit(self: *State) void`；框架先用默认值初始化实例，再调用 `init`，最后在销毁该实例时调用 `deinit`。两个钩子都不能返回 Zig 错误。
+
+| 钩子 | 生命周期 |
+| --- | --- |
+| `State.init` / `State.deinit` | 模块全局变量实例的构造与析构；NTS 使用直接存储，ZTS 由 TSRM 为线程管理实例 |
+| `module_startup_fn` / `module_shutdown_fn` | MINIT / MSHUTDOWN，负责模块注册和模块级资源 |
+| `request_startup_fn` / `request_shutdown_fn` | RINIT / RSHUTDOWN，负责每次请求的状态与资源 |
+
+`deinit` 适合释放该全局变量实例持有的持久原生资源。请求内分配的 PHP 值应在请求结束前释放，不能留到全局变量析构时处理。读取全局变量时也应处于 PHP 已完成相应实例初始化的生命周期内。
+
+# [线程与请求]($heading.id('threads-and-requests'))
+
+NTS 使用模块的直接存储；ZTS 通过 TSRM 获取当前线程的实例。`ModuleGlobals` 管理的是扩展生命周期的状态，字段不会天然在每次请求开始时全部重置。请求统计应在 RINIT 显式归零，请求资源在对应结束路径释放。
+
+ZTS 共享扩展默认使用扩展独立的线程本地 TSRM 缓存，模块启动和请求启动时刷新；内置扩展使用 PHP 的缓存。可通过[构建选项]($link.page('development/build').ref('lto-and-tsrm-cache'))关闭静态缓存。
+
+线程隔离不等于任意对象可以跨线程使用。PHP 值、对象、超全局变量和调用帧仍受引擎线程及请求生命周期约束。ZTS 不允许把这些借用值交给任意 Zig 工作线程执行 PHP 操作。
+
+# [INI 绑定]($heading.id('ini-bindings'))
+
+`Globals.iniField("field")` 可作为类型化 INI 的 `.bind`，配置读取和更新作用于当前全局变量实例。请求初始化时避免整体重置状态结构体，以免覆盖已设置的 INI 值；综合示例分别重置统计字段并保留 `mode`。
+
+# [验证范围]($heading.id('validation-scope'))
+
+使用相同的 PHP 头文件、运行时和 NTS/ZTS 配置构建。NTS CLI 上通过的测试不能证明 ZTS 的线程行为；需要对应 ZTS PHP 实际加载和运行验证。
+
+综合示例的 `tests/tsrm_native_threads.phpt` 在原生 Zig 线程中检查 TSRM 缓存与模块全局变量隔离，并重复执行 `tsrm.initThread()` / `freeThread()` 验证线程资源重建；NTS 下跳过。该测试不在线程中执行 PHP 请求，也不证明 PHP 值可以跨线程共享。
+
+调用、请求、对象和模块全局变量的释放责任参见[生命周期边界]($link.page('reference/types/ownership').ref('lifetime-boundaries'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/module.zig](https://github.com/happystraw/phpz/blob/dev/src/module.zig)
+- [src/globals.zig](https://github.com/happystraw/phpz/blob/dev/src/globals.zig)

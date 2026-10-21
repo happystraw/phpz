@@ -1,0 +1,24 @@
+.zine_version = "0.14.0",
+.supermd = .{ .headings_h2 = true },
+.site = .multilingual(.{
+    .host_url = "https://happystraw.github.io",
+    .i18n_dir_path = "i18n",
+    .layouts_dir_path = "layouts",
+    .assets_dir_path = "assets",
+    .locales = [
+        .{
+            .code = "en-US",
+            .name = "English",
+            .site_title = "phpz Documentation",
+            .content_dir_path = "content/en-US",
+            .output_prefix_override = "phpz",
+        },
+        .{
+            .code = "zh-CN",
+            .name = "简体中文",
+            .site_title = "phpz 中文文档",
+            .content_dir_path = "content/zh-CN",
+            .output_prefix_override = "phpz/zh-CN",
+        },
+    ],
+}),

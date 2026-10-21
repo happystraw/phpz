@@ -1,0 +1,60 @@
+---
+.title = "执行 PHP 代码与脚本",
+.date = .date("2026-10-07T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/scripts",
+.custom = { "section": "运行时接口" },
+---
+
+以下接口在**已经启动的 PHP 请求内**执行代码，不负责启动引擎或请求。扩展处理器可直接使用；独立宿主需要另行管理[实验性 SAPI]($link.page('advanced/sapi')) 生命周期。
+
+# [执行代码]($heading.id('eval'))
+
+| 接口 | 行为 |
+| --- | --- |
+| `phpz.eval(code, retval, name)` | 执行不带 `<?php` 的代码；失败返回 `CodeExecutionFailed` 或 `PhpException`，不捕获 bailout |
+| `phpz.tryEval(code, retval, name)` | 相同执行规则，额外把逃逸的 bailout 转为 `ZendBailout` |
+
+`retval = null` 按语句执行；传返回槽时，PHP 将代码包装为 `return <code>;`，因此应传表达式。`name` 是以 NUL 结尾的诊断名称。
+
+下面是完整处理器，对应 Stubs `function answer(): int`：
+
+```zig
+pub fn answer(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    try phpz.tryEval("6 * 7", ctx.retval, "my_php_extension answer");
+}
+```
+
+普通 PHP 异常会保留为引擎的待处理状态，并以 `PhpException` 返回。扩展处理器可直接 `try` 传播；独立宿主需在结束请求前处理或报告异常。异常报告可能调用 PHP 用户代码，需单独的 bailout 边界。
+
+# [执行脚本文件]($heading.id('execute-script'))
+
+`phpz.executeScript(file)` 使用 PHP 脚本执行器；`phpz.tryExecuteScript(file)` 再加一层 bailout 捕获。执行器会报告脚本异常，内部捕获的失败映射为 `ScriptExecutionFailed`，逃逸的 bailout 映射为 `ZendBailout`。
+
+以下函数适用于已启动请求的宿主；调用方仍负责请求关闭和退出状态判断：
+
+```zig
+fn runFile(path: [:0]const u8) !void {
+    const file = try phpz.zend.bailout.run(phpz.zend.FileHandle.init, .{path});
+    defer file.deinit();
+    file.setPrimaryScript(true);
+    try phpz.tryExecuteScript(file);
+}
+```
+
+`FileHandle.init()` 使用 PHP 分配器、复制文件名，文件延迟打开；初始化本身也可能 bailout。拥有的文件句柄必须在请求关闭前 `deinit()`。代码表达式的临时结果同样应在请求关闭前释放。
+
+# [异常、exit 与请求结束]($heading.id('exit-and-shutdown'))
+
+`try` 接口只覆盖该次调用的 bailout，不会补跑被跳过的 Zig `defer`，也不覆盖后续清理和异常报告。遇到 `ZendBailout` 后结束请求，不继续执行 PHP 代码。
+
+`errors.takeUnwindExit()` 只消费待处理的 `exit` / `die` 信号，返回 `?errors.ExitStatus`；`.ok` 表示 0，其他数值保留，普通异常不会被清除。脚本执行器可能对 `exit(0)` 也返回失败，不能把所有 `ScriptExecutionFailed` 都当成致命错误，也不能仅凭退出码 0 忽略致命错误。请求关闭函数还可能改变退出状态。
+
+完整的文件、`-r`、致命错误和 shutdown 处理组合见 [custom_sapi/src/main.zig](https://github.com/happystraw/phpz/blob/dev/examples/custom_sapi/src/main.zig)。它是实验性宿主示例；上述执行接口本身不提供进程或请求管理。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/root.zig](https://github.com/happystraw/phpz/blob/dev/src/root.zig)
+- [src/zend/file_handle.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/file_handle.zig)
+- [src/errors.zig](https://github.com/happystraw/phpz/blob/dev/src/errors.zig)

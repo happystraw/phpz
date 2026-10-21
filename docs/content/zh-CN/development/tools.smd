@@ -1,0 +1,55 @@
+---
+.title = "骨架与代码生成",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/tools",
+.custom = { "section": "构建与测试" },
+---
+
+`gen_stub.php` 与 `run-tests.php` 源自 php-src，由 phpz 随包提供；工具版本与更新方式见 [tools/php/README.md](https://github.com/happystraw/phpz/blob/dev/tools/php/README.md)。
+
+# [骨架生成器]($heading.id('skeleton-generator'))
+
+```sh
+php tools/phpz_skel.php --help
+php tools/phpz_skel.php --ext my_php_extension --phpz dev
+```
+
+第二条命令从 phpz 仓库根目录执行，在当前目录下创建使用 phpz `dev` 分支 的 `my_php_extension`。
+
+| 参数 | 作用 |
+| --- | --- |
+| `--ext` | 扩展名，必填 |
+| `--dir` | 生成目录的父目录 |
+| `--phpz` | 传给 `zig fetch --save=phpz` 的包地址；裸名称按 phpz Git 引用（分支或 tag）解释 |
+| `--zig` | Zig 可执行文件路径 |
+| `--with-php-config` | 查找 PHP 开发头文件的 `php-config` 路径 |
+| `--with-php-build-system` | 生成 [PHP 构建系统]($link.page('development/php-build-system'))集成文件 |
+| `--onlyunix` / `--onlywindows` | 只生成对应平台支持 |
+| `--force` | 覆盖目标目录中的生成模板文件 |
+
+# [生成 arginfo]($heading.id('generate-arginfo'))
+
+```sh
+zig build gen-stub
+```
+
+`zig build gen-stub` 将 phpz 随包提供的 `gen_stub.php` 复制到项目的 `build/gen_stub.php`，然后处理当前扩展 Stubs。首次解析可能需要下载 PHP-Parser，因此需要可写的 `build/` 和相应下载工具。
+
+除使用 phpz 捆绑的副本外，也可以直接使用与目标 PHP 版本匹配的 php-src 中的脚本：
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+扩展构建默认检查 Stubs 中的内容哈希；过期时应重新生成。`-Dcheck-arginfo=false` 可跳过检查，但不会更新头文件，也不验证 Zig 实现与 Stubs 的签名一致性。
+
+# [构建与测试]($heading.id('build-and-test'))
+
+生成工程或更新 arginfo 后，按[构建与加载]($link.page('development/build'))编译扩展，再运行 [PHPT 测试]($link.page('development/testing'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [tools/phpz_skel.php](https://github.com/happystraw/phpz/blob/dev/tools/phpz_skel.php)
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [tools/php/README.md](https://github.com/happystraw/phpz/blob/dev/tools/php/README.md)

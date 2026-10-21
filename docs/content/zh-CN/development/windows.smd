@@ -1,0 +1,53 @@
+---
+.title = "Windows",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/windows",
+.custom = { "section": "构建与测试" },
+---
+
+本章介绍 Windows 上的 MSVC 开发环境、DLL 构建与加载，以及从 Linux 交叉编译的流程。PHP 开发包、导入库和目标运行时的版本、架构、NTS/ZTS 与 Debug 配置需要一致。
+
+# [Windows MSVC]($heading.id('windows-msvc'))
+
+准备匹配运行时的 PHP 开发包，用 PowerShell 执行：
+
+```powershell
+zig build `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib
+```
+
+ZTS 包增加 `-Dwindows-zts=true`，debug 包增加 `-Dwindows-debug=true`。头文件根目录包含 `main`、`Zend`、`TSRM`、`ext`；库目录包含匹配的 `php8*.lib`。
+
+输出为 `modules/php_my_php_extension.dll`。使用匹配的 Windows PHP 单次加载：
+
+```powershell
+php -n -dextension=./modules/php_my_php_extension.dll -r 'hello();'
+```
+
+PHP for Windows 使用 MSVC ABI，不应使用 MinGW ABI 替代。
+
+# [从 Linux 交叉编译 Windows]($heading.id('cross-compile-windows-from-linux'))
+
+从扩展工程目录调用仓库提供的脚本：
+
+```sh
+/path/to/phpz/scripts/build-windows.sh --php-version 8.5.10 --nts
+```
+
+脚本准备 SDK 和 PHP 开发包，临时文件位于当前工程的 `build/windows/`。依赖 `zig`、`curl`、`tar`、`unzip` 等工具；通过 xwin 准备 Windows SDK 的过程包含接受 Microsoft 许可。
+
+成功交叉编译只能证明构建通过。DLL 仍需在对应 Windows PHP 上实际加载并运行 PHPT。
+
+# [测试与配置]($heading.id('testing-and-configuration'))
+
+在 Windows 上运行 PHPT 时，将上述 PowerShell 命令中的 `zig build` 改为 `zig build run-tests`，保留其余构建参数。测试文件格式和单个测试的运行方法见 [PHPT 测试]($link.page('development/testing'))。
+
+需要通过 INI 持续加载扩展时，使用 DLL 的实际路径；配置文件定位和加载失败排查见[构建与加载]($link.page('development/build').ref('configure-loading'))。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [examples/skeleton/build.zig](https://github.com/happystraw/phpz/blob/dev/examples/skeleton/build.zig)
+- [scripts/build-windows.sh](https://github.com/happystraw/phpz/blob/dev/scripts/build-windows.sh)

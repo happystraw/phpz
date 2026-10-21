@@ -1,0 +1,173 @@
+---
+.title = "Hello World",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/hello-world",
+.custom = { "section": "入门" },
+---
+
+创建、构建并运行你的第一个 PHP 扩展，了解 PHP Stubs 与 Zig 实现如何配合。
+
+# [快速开始]($heading.id('quick-start'))
+
+## [创建扩展]($heading.id('generate-extension'))
+
+```sh
+# PHP 8.3 及以上版本
+curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php \
+  | php -- --ext my_php_extension
+
+# PHP 8.2：先下载生成器，再执行
+curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php
+php phpz_skel.php --ext my_php_extension
+
+cd my_php_extension
+```
+
+生成的项目包含以下主要文件：
+
+```
+my_php_extension/
+├── build.zig                    # 构建配置
+├── build.zig.zon                # 项目信息与依赖
+├── my_php_extension.stub.php    # PHP API 声明
+├── my_php_extension_arginfo.h   # 生成的参数信息与注册代码
+├── my_php_extension.h           # 引入 phpz 和 arginfo 头文件
+├── src/
+│   └── root.zig                 # Zig 实现与模块注册
+└── tests/
+    ├── hello.phpt               # hello() 测试
+    ├── greet.phpt               # greet() 测试
+    └── counter.phpt             # Counter 类测试
+```
+
+## [构建与调用]($heading.id('build-and-call'))
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+
+php -n -dextension=./modules/my_php_extension.so -r 'hello();'
+php -n -dextension=./modules/my_php_extension.so -r 'echo greet("World"), PHP_EOL;'
+php -n -dextension=./modules/my_php_extension.so -r '$c = new Counter(5); $c->add(3); echo $c->value(), PHP_EOL;'
+```
+
+三次调用依次输出：
+
+```
+Hello from Zig!
+Hello, World!
+8
+```
+
+`-n` 不读取 `php.ini`，`-dextension` 为当前进程加载扩展。
+
+Windows 使用 `modules/php_my_php_extension.dll`，构建参数参见 [Windows]($link.page('development/windows').ref('windows-msvc'))。
+
+# [PHP API]($heading.id('php-api'))
+
+`my_php_extension.stub.php` 描述扩展对 PHP 暴露的函数、类和类型信息：
+
+```php
+<?php
+
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ * @undocumentable
+ */
+
+function hello(): void {}
+function greet(string $name): string {}
+
+class Counter
+{
+    public function __construct(int $n = 0) {}
+    public function add(int $n): void {}
+    public function dec(int $n): void {}
+    public function value(): int {}
+}
+```
+
+Stubs 定义 PHP 使用者看到的 API：函数名、参数名、参数类型、默认值和返回类型。例如，`greet(string $name): string` 表示它接收一个字符串并返回字符串；`Counter::__construct(int $n = 0)` 表示初始计数可省略，默认值为 `0`。
+
+这与 PHP 官方 C 扩展的开发流程一致：官方 `gen_stub.php` 读取 Stubs，生成 `my_php_extension_arginfo.h` 中的参数信息、函数表和类注册代码，Zig 提供实际处理逻辑。Stubs 中的空函数体不参与运行，生成的 arginfo 文件也不需要手动编辑。
+
+# [Zig 实现]($heading.id('zig-implementation'))
+
+`src/root.zig` 实现 Stubs 中声明的 API，下面先介绍模块注册与函数实现。
+
+## [注册模块]($heading.id('register-module'))
+
+```zig
+const std = @import("std");
+const phpz = @import("phpz");
+
+comptime {
+    const extension = @import("extension_info");
+    phpz.functions(functions, .{});
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{
+            phpz.Class("Counter", Counter, .{}),
+        },
+    });
+}
+```
+
+- `phpz.functions(functions, .{})` 为 `functions` 中的公开函数导出 PHP 处理器，与 Stubs 生成的函数表对应。
+- `phpz.Class("Counter", Counter, .{})` 将 PHP 的 `Counter` 类绑定到 Zig 的 `Counter` 结构体。
+- `phpz.module()` 导出模块入口，并在模块启动时注册列出的类。扩展名称和版本由 `build.zig` 提供。
+
+## [实现函数]($heading.id('implement-functions'))
+
+```zig
+const functions = struct {
+    pub fn hello() void {
+        _ = phpz.printf("Hello from Zig!\n", .{});
+    }
+
+    pub fn greet(name: []const u8) !*phpz.zend.String {
+        var buffer: [256]u8 = undefined;
+        const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
+        return .init(result, false);
+    }
+};
+```
+
+`hello()` 没有参数和返回值，可以直接通过 `phpz.printf()` 输出问候语。`greet()` 直接声明字符串参数和返回类型，由包装器解析 PHP 参数并写入返回槽：
+
+| PHP Stubs | Zig 实现 |
+| --- | --- |
+| `greet` | `functions.greet`，函数名对应 |
+| `string $name` | `name: []const u8` 接收借用的字符串切片 |
+| `: string` | 返回 `*phpz.zend.String`，将新建字符串交给 PHP |
+
+`!*phpz.zend.String` 表示成功时返回字符串，也可能返回 Zig 错误。`String.init` 在局部缓冲区失效前复制内容，新字符串的一份引用由返回槽接收，不再手动释放。不能直接返回指向局部缓冲区的切片，因为包装器在处理器返回后才写入 PHP 返回值。这里的缓冲区为 256 字节，问候语超出容量时会报错。
+
+## [类示例]($heading.id('implement-classes'))
+
+骨架还包含 `Counter` 类，上面的调用展示了创建对象、修改状态和读取结果。类绑定、构造器与 Zig 实例数据的完整说明见[类、属性与方法]($link.page('reference/registration/classes'))。
+
+# [测试与更新]($heading.id('run-tests'))
+
+`zig build run-tests` 使用 phpz 随包提供的 `run-tests.php` 运行项目 PHPT 测试：
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+修改 `my_php_extension.stub.php` 后，重新生成 arginfo，再构建和测试：
+
+```sh
+zig build gen-stub
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+`zig build gen-stub` 使用 phpz 随包提供的 `gen_stub.php`，并需要 tokenizer 扩展。只修改 Zig 实现时，直接构建或测试即可。
+
+# [下一步]($heading.id('next-steps'))
+
+- [工作原理]($link.page('getting-started/how-it-works'))：了解 Stubs、Zig 与 PHP 如何连接。
+- [骨架与代码生成]($link.page('development/tools'))：了解骨架生成器与 arginfo 更新。
+- [PHPT 测试]($link.page('development/testing'))：编写和运行最小测试。

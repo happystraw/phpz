@@ -1,0 +1,44 @@
+---
+.title = "PHP 引用",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/references",
+.custom = { "section": "类型与值" },
+---
+
+PHP 引用不是一种普通值，而是多个 zval 槽位共享同一份值的别名。phpz 用 `zend.Reference` 包装引用结构。
+
+# [引用参数]($heading.id('reference-arguments'))
+
+先在 Stubs 中声明引用参数：
+
+```php
+function increment(int &$value, int $by = 1): void {}
+```
+
+然后用 `expectArgs` 的 `.reference` 规格读取：
+
+```zig
+pub fn increment(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .reference = .{ .kind = .int, .as = .value } },
+        .{ .int = .{ .optional = true } },
+    }, {});
+    const value = args[0];
+    value.set(.int, value.asUnchecked(.int) +| (args[1] orelse 1));
+}
+```
+
+`.reference.as` 决定返回哪一种借用视图：
+
+| `as` | Zig 类型 | 含义 |
+| --- | --- | --- |
+| `.reference` | `*zend.Reference` | 引用包装本身 |
+| `.zval` | `*Zval` | 外层引用 zval |
+| `.value` | `*Zval` | 被引用的值槽 |
+
+`zend.Reference.val()` 借用被引用值的槽位。要保留别名关系，用 `.as = .zval` 取得外层引用，再以 `Zval.raw.copy` 复制到自己的槽位；用完后 `release()`。`addref()` 同样保留引用包装，但不会延长原槽位的寿命。`copyDeref` 和 `set(.mixed, ...)` 复制解引用后的值，不保留外层别名关系。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/zend/reference.zig](https://github.com/happystraw/phpz/blob/dev/src/zend/reference.zig)

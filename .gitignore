@@ -12,3 +12,9 @@ zig-pkg
 # For msvc cross-compilation test
 /tmp
 **/build/windows/
+
+# Zine documentation output and local editor schemas
+/docs/public/
+/docs/.zine-cache/
+/docs/.zine.ziggy-schema
+/docs/content/**/.smd.ziggy-schema

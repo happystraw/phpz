@@ -1,0 +1,41 @@
+---
+.title = "超全局变量",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/superglobals",
+.custom = { "section": "运行时接口" },
+---
+
+# [读取请求数据]($heading.id('read-request-data'))
+
+`phpz.globals.php()` 包装 PHP globals，`phpz.globals.executor()` 包装 Zend executor globals。超全局变量可能按需初始化，因此使用提供的访问接口。
+
+```zig
+const get = phpz.globals.executor().superglobal(.GET)
+    orelse return error.SuperglobalUnavailable;
+ctx.ret(.mixed, get.ptr());
+```
+
+这里返回 `$_GET` 的值副本。访问结果是借用的 `Zval.Array`；不要释放访问器返回的原始值。
+
+`httpGlobal` 覆盖 GET、POST、COOKIE、SERVER、ENV、FILES；`superglobal` 还提供 REQUEST 等对应接口。具体内容取决于 SAPI、请求、PHP 配置和数据读取设置。
+
+# [修改]($heading.id('modify-values'))
+
+```zig
+const get = phpz.globals.executor().superglobalMut(.GET)
+    orelse return error.SuperglobalUnavailable;
+get.set(.string, "from_zig", "hello");
+```
+
+使用 `superglobalMut` 取得可写访问路径，避免直接写共享数组破坏 PHP 写时复制语义。修改后不应继续使用之前缓存的元素指针。
+
+`$_REQUEST` 是按 PHP 配置组装的请求快照，不会因为之后修改 `$_GET` 就自动同步。CLI 也不等同于 HTTP 请求环境；涉及 POST、上传和请求合并的行为需要 CGI/FPM 等目标环境验证。
+
+# [生命周期]($heading.id('lifecycle'))
+
+所有访问器结果都局限于相应请求生命周期。模块全局变量中不能跨请求保存这些借用指针，跨线程也不能直接共享。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/globals.zig](https://github.com/happystraw/phpz/blob/dev/src/globals.zig)

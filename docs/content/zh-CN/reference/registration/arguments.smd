@@ -1,0 +1,299 @@
+---
+.title = "参数解析与返回值",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/arguments",
+.custom = { "section": "声明与注册" },
+---
+
+函数、类方法和闭包共用类型化处理器：在 Zig 签名中声明参数和返回类型即可。需要带类型约束的引用、类约束、可变参数或按特定类型校验的 zval 视图时，使用 `Ctx` / `GuardCtx` 手动解析。两种方式都应与 Stubs 中的 PHP 签名保持一致。
+
+# [参数与返回值]($heading.id('arguments-and-return-values'))
+
+以下处理器对应 Stubs `function greet(string $name): string`，绑定方式见[函数绑定]($link.page('reference/registration/functions'))：
+
+```zig
+pub fn greet(name: []const u8) []const u8 {
+    return name;
+}
+```
+
+包装器在调用处理器前校验参数，成功后把返回值写入 PHP 返回槽。输入切片借用当前 PHP 参数，返回时复制字节。需要手动规格时，可以写成：
+
+```zig
+pub fn greet(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+    }, {});
+    ctx.ret(.string, args[0]);
+}
+```
+
+`expectArgs` 根据规格计算参数数量，返回带类型的元组（tuple）。标量参数遵循 Zend 参数解析（ZPP）的转换规则，与类型化签名一致。可选值与可空值见[可选参数与可空参数]($link.ref('missing-and-null'))。
+
+`ctx.call.arg(1)` 使用从 1 开始的参数位置，属于底层借用接口，应先检查数量和类型。
+
+`Ctx` 和 `GuardCtx` 都提供 `ctx.ret(kind, value)`，等价于 `ctx.retval.set(kind, value)`，参数类型和[所有权规则]($link.page('reference/types/ownership'))相同。`ctx.retval` 是 `*phpz.Zval` 返回槽，调用底层接口时可使用 `ctx.retval.ptr()`。
+
+`ret` 只写入 PHP 返回值，不会结束 Zig 函数；需要立即结束时使用 `return ctx.ret(.int, 42);`。
+
+# [类型化签名]($heading.id('typed-signatures'))
+
+`Ctx` / `GuardCtx` 可选，存在时放在所有 PHP 参数之前；实例方法的 `self` 仍排第一。只接收上下文的处理器自行校验实参；声明了类型化参数后，包装器会按整个签名解析参数并拒绝多余参数。
+
+| Zig 参数 | PHP 输入及行为 |
+| --- | --- |
+| `i8` / `i16` / `i32` / `i64` / `isize`、对应无符号整数 | 按 PHP int 解析，再检查 Zig 目标范围；越界产生参数 `ValueError` |
+| `f32` / `f64` | 按 PHP float 解析，也接受 int；`f32` 检查有限值是否溢出，但可能损失精度 |
+| `bool` | 按 PHP bool 解析 |
+| `[]const u8` / `*phpz.zend.String` | 按 PHP string 解析；分别借用字节切片或 Zend 字符串 |
+| `*phpz.zend.Array` / `*phpz.zend.Object` / `*phpz.zend.Resource` | 借用对应 PHP 值 |
+| `*phpz.Stream` | 检查普通或持久流资源后借用 Stream |
+| `*phpz.zend.Callable` | 解析 callable；临时解析结构只在本次处理器调用期间有效 |
+| `*phpz.zend.Reference` | 借用 PHP 引用；被引用值的类型约束使用手动 `.reference.kind` |
+| `*phpz.Zval` | 接受任意 PHP 值，包括 null，借用参数槽 |
+| `phpz.Mixed(&.{ .int, .string })` | 解析为带标签的 union |
+| `?T` | 参数槽可缺省；外层 null 表示缺省 |
+| `phpz.Nullable(T)` | 接受显式 PHP null，以 `.null` / `.value` 表示 |
+| `?phpz.Nullable(T)` | 同时接受缺省和显式 null |
+
+`Nullable(T)` 支持标量、字符串、数组、对象、资源、Stream 和 Callable 参数；`*Zval` 自身已接受 null，`Mixed` 可加入 `.null`，引用参数则使用手动规格处理其被引用值。
+
+标量解析规则：
+
+- 弱类型调用允许 ZPP 支持的转换，例如 `"12"` 转为 int、`1` 转为 float，以及 Stringable 对象转为 string；无法转换时产生 `TypeError`。
+- 调用方启用 `declare(strict_types=1)` 时拒绝上述弱转换，但仍允许 int 转为 float。
+- 转换结果写回当前调用帧的参数槽；`as = .zval` 得到的也是转换后的值。数组、对象、资源、引用约束和 `Mixed` 联合类型不做这种转换。
+- 非 nullable 标量接收 null 时遵循目标 PHP 的规则；PHP 8.2–8.5 弱类型调用会产生弃用提示后转换，严格调用则拒绝。需要保留 null 时显式使用 `Nullable(T)` 或 `nullable = true`。
+
+`?T` 只添加缺省能力；若 `T` 本身是 mixed 或含 `.null` 的 union，仍按其自身规则接受 PHP null。可选参数必须位于必选参数之后。
+
+例如 Stubs `function choose(?int $value = null): ?int` 对应下面的处理器：
+
+```zig
+pub fn choose(value: ?phpz.Nullable(i64)) ?i64 {
+    const provided = value orelse return 0;
+    return provided.asOptional();
+}
+```
+
+省略参数返回 0，显式 null 返回 null，整数原样返回。**参数与返回值的 `?T` 含义不同**：返回的 null 直接写为 PHP null，不表示“没有返回槽”。Stubs 默认值是元数据，Zig 实现仍需为缺省槽决定行为。
+
+# [联合类型]($heading.id('typed-unions'))
+
+```zig
+const IntOrString = phpz.Mixed(&.{ .int, .string });
+
+pub fn describe(value: IntOrString) []const u8 {
+    return switch (value) {
+        .int => "integer",
+        .string => "string",
+    };
+}
+```
+
+对应 Stubs `function describe(int|string $value): string`。`Mixed` 至少需要两个不同类型，可包含 `.null`，不可包含 `.mixed`、`.reference`、`.callable`。`phpz.Mixed` 与 `phpz.CallFrame.Mixed` 是同一入口；手写一个字段相似的 Zig union 不会被识别为同一种签名。
+
+# [直接返回值与所有权]($heading.id('typed-returns'))
+
+支持返回上述整数、浮点、布尔、字节切片、Zend 字符串/数组/对象/资源指针、`*zend.Reference`、`*Zval`、`Mixed`、`Nullable(T)` 及可选值，也支持它们的错误联合类型。`void` / `!void` 不自动写槽，可用 `ctx.ret()`；其他返回类型由包装器写槽，不应再混用手动返回。
+
+- 整数返回值需能装入 `zend_long`，否则返回 `ReturnValueOutOfRange`。
+- 字节切片会被复制，但复制发生在处理器返回之后；不能返回局部栈缓冲区或已被 `defer` 释放的切片。局部缓冲区可在函数内用 `String.init` 复制，或在返回前使用 `ctx.ret(.string, bytes)`。
+- `*zend.String`、`*zend.Array`、`*zend.Object`、`*zend.Resource`、`*zend.Reference` 转移一份引用。借用指针应先按类型复制或增加引用，参见[所有权]($link.page('reference/types/ownership'))；输入指针不能无条件原样返回。
+- 返回 `*Zval` 会复制解引用后的值，源槽仍保留原有所有权，但槽位必须在包装器写入时有效。
+- `*Stream` 与 `*zend.Callable` 不是直接返回类型；流应通过 `toZval(ctx.retval)` 转移。
+
+# [手动解析的选择]($heading.id('manual-parsing'))
+
+需要 `instanceof`、引用写回、原始 zval 或自行处理参数数量时保留上下文处理器。`expectArgs` 返回带类型元组；`parseArgs` 仍是基于 PHP 格式字符串的底层入口，不因类型化签名而被移除，其格式、转换和输出指针规则应按该接口处理。
+
+# [参数解析类型]($heading.id('argument-parsing-types'))
+
+`expectArgs` 的第一个参数是 `ExpectArgKind.Spec` 数组，第二个参数提供 `callable`、`object instanceof` 等运行时扩展。规格里的通用选项：
+
+| 选项 | 适用类型 | 含义 |
+| --- | --- | --- |
+| `optional = true` | 除 `.null` 外 | 参数可以缺省；结果外层为 `?T` |
+| `nullable = true` | 标量、数组、对象、资源和 callable | 接受显式 `null`；未选择 `as = .zval` 时返回 `CallFrame.Nullable(T)` |
+| `as = .zval` | `.int`、`.float`、`.bool`、`.string`、`.array`、`.object`、`.resource` | 返回借用的 `*Zval`，而不是解析后的 Zig 值 |
+
+可选参数必须排在必选参数之后。`.null` 不能单独作为参数类型；需要区分缺省、显式 `null` 和具体值时，使用 `optional + nullable` 或 `.mixed`。`as` 决定输出类型；数值范围检查与类型化签名相同。
+
+以下七种类型都支持 `optional`、`nullable` 和 `as`：
+
+| 规格 | 默认 Zig 结果类型 | 所有权 |
+| --- | --- | --- |
+| `.int` | `i64` | 标量值 |
+| `.float` | `f64` | 标量值 |
+| `.bool` | `bool` | 标量值 |
+| `.string` | `[]const u8` | 借用字节切片 |
+| `.array` | `*zend.Array` | 借用数组 |
+| `.object` | `*zend.Object` | 借用对象 |
+| `.resource` | `*zend.Resource` | 借用资源 |
+
+设默认结果类型为 `T`，选项组合规则如下：
+
+| 选项 | Zig 结果类型 | 显式 null 的表示 |
+| --- | --- | --- |
+| 默认 | `T` | 非 nullable 标量按上述 ZPP 规则处理；其他类型拒绝 |
+| `optional` | `?T` | 与默认相同；外层 `null` 仅表示参数槽缺省 |
+| `nullable` | `CallFrame.Nullable(T)` | `.null`；非 null 值使用 `.value` |
+| `optional + nullable` | `?CallFrame.Nullable(T)` | 外层 `null` 表示缺省，内层 `.null` 表示 PHP null |
+| `as = .zval` | `*Zval` | 非 nullable 标量按上述 ZPP 规则处理；其他类型拒绝 |
+| `nullable + as = .zval` | `*Zval` | 用 `is(.null)` 检查借用槽位 |
+| `optional + as = .zval`，可再加 `nullable` | `?*Zval` | 外层 `null` 表示缺省；设置 `nullable` 才能保留 PHP null，其他情况遵循上述规则 |
+
+`as = .zval` 优先决定结果类型，启用后不再包装为 `Nullable(T)`。它只改变返回的视图，不取消规格的类型检查。
+
+## [.int]($heading.id('expect-int'))
+
+以整数为例，以下各行是可分别放入 `expectArgs` 的规格：
+
+```zig
+.{ .int = .{} } // i64
+.{ .int = .{ .as = .u8 } } // u8；只接受 0–255
+.{ .int = .{ .optional = true } } // ?i64
+.{ .int = .{ .nullable = true } } // CallFrame.Nullable(i64)
+.{ .int = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(i64)
+.{ .int = .{ .nullable = true, .as = .zval } } // *Zval
+```
+
+## [.float]($heading.id('expect-float'))
+
+`.float = .{}` 读取 `f64`，`.float = .{ .as = .f32 }` 读取 `f32`。两者都接受 PHP int；弱类型调用还接受 ZPP 可转换的其他标量，转换后再检查 `f32` 范围。选项组合遵循上表。
+
+## [.bool]($heading.id('expect-bool'))
+
+`.bool = .{}` 返回 Zig `bool`。弱类型调用可按 ZPP 规则转换其他标量；严格调用只接受 PHP `true` / `false`，数组等非标量不会自动转为布尔值。
+
+## [.string]($heading.id('expect-string'))
+
+`.string = .{}` 返回借用的 `[]const u8`，按字节处理且不保证 UTF-8。`.string = .{ .as = .str }` 返回借用的 `*zend.String`。保留到原值生命周期之外时需要复制，见[字符串]($link.page('reference/types/strings'))。
+
+## [.array]($heading.id('expect-array'))
+
+`.array = .{}` 返回 `*zend.Array`；`.array = .{ .as = .zval }` 返回 `*Zval`，可再通过 `array()` 取得 `Zval.Array`。两者均借用参数，不自动分离共享数组，修改前应遵守[写时复制规则]($link.page('reference/types/arrays'))。
+
+## [.object]($heading.id('expect-object'))
+
+对象还支持 `instanceof = true`，用于校验类或接口。对应类条目（class entry）放在与规格位置一致的运行时元组中：
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .object = .{ .instanceof = true } },
+}, .{
+    .{ .class = UserClass.entry },
+});
+
+const user: *phpz.zend.Object = args[0];
+```
+
+不需要运行时数据的规格使用 `{}` 占位。例如第二个参数是对象、首个参数是整数时，运行时元组为 `.{ {}, .{ .class = UserClass.entry } }`。
+
+## [.resource]($heading.id('expect-resource'))
+
+`.resource = .{}` 返回借用的 `*zend.Resource`。该规格只检查 PHP resource 类型，不检查自定义资源类型 ID；`.resource = .{ .as = .stream }` 会检查普通或持久流类型并返回借用的 `*phpz.Stream`，见 [PHP Stream]($link.page('reference/runtime/streams'))。普通资源读取 `userPtr()` 前仍需校验资源类型，见[PHP 资源]($link.page('reference/types').ref('php-resources'))。
+
+## [.reference]($heading.id('expect-reference'))
+
+- 选项：`optional`、`kind`、`as`
+- `kind = .int` 等：校验被引用值的类型
+- `as = .reference`：返回 `*zend.Reference`
+- `as = .zval`：返回外层引用 `*Zval`
+- `as = .value`：返回被引用值槽 `*Zval`
+- `optional = true`：外层为 `?T`
+
+```zig
+.{ .reference = .{} } // *zend.Reference
+.{ .reference = .{ .optional = true } } // ?*zend.Reference
+.{ .reference = .{ .kind = .int, .as = .value } } // *Zval；被引用值
+.{ .reference = .{ .as = .zval } } // *Zval；外层引用
+```
+
+## [.mixed]($heading.id('expect-mixed'))
+
+- 选项：`optional`、`one_of`
+- 无 `one_of`：返回借用的 `*Zval`；`optional` 时为 `?*Zval`
+- `one_of = &.{ .int, .string }`：返回带 `.int` / `.string` 标签的 Zig union
+- `optional = true`：`?Union`
+- `.mixed` 不能出现在 `one_of` 中，也不能与 `.reference` 或 `.callable` 组成 union
+
+```zig
+.{ .mixed = .{} } // *Zval
+.{ .mixed = .{ .optional = true } } // ?*Zval
+.{ .mixed = .{ .one_of = &.{ .int, .string } } } // union { int: i64, string: []const u8 }
+.{ .mixed = .{ .optional = true, .one_of = &.{ .int, .string } } } // ?Union
+```
+
+## [.callable]($heading.id('expect-callable'))
+
+- 选项：`optional`、`nullable`、`resolve`
+- 基础返回类型：借用的 `*Zval`
+- `nullable`：`CallFrame.Nullable(*Zval)`
+- `optional`：`?*Zval` 或 `?CallFrame.Nullable(*Zval)`
+- `resolve = true`：需要 runtime `.{ .out = &callable }`，解析为 `zend.Callable`
+
+```zig
+.{ .callable = .{} } // *Zval
+.{ .callable = .{ .optional = true } } // ?*Zval
+.{ .callable = .{ .nullable = true } } // CallFrame.Nullable(*Zval)
+.{ .callable = .{ .optional = true, .nullable = true } } // ?CallFrame.Nullable(*Zval)
+.{ .callable = .{ .resolve = true } } // *Zval；需要 runtime .out
+```
+
+`resolve` 需要提供可写的 `zend.Callable` 目标：
+
+```zig
+var target: phpz.zend.Callable = .nil;
+const args = try ctx.call.expectArgs(&.{
+    .{ .callable = .{ .resolve = true } },
+}, .{
+    .{ .out = &target },
+});
+
+// args[0] 是借用的 *Zval；target 已解析为可调用对象。
+```
+
+# [可选参数与可空参数]($heading.id('missing-and-null'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .int = .{ .optional = true, .nullable = true } },
+}, {});
+if (args[0]) |provided| {
+    switch (provided) {
+        .null => ctx.ret(.null, {}),
+        .value => |value| ctx.ret(.int, value),
+    }
+} else {
+    ctx.ret(.int, 0);
+}
+```
+
+这是一个函数体片段，适用于可选 `?int` 参数。缺省返回 0，显式 null 返回 null，其余返回传入整数。
+
+## [默认值由实现处理]($heading.id('handle-default-values'))
+
+Stubs 声明默认值，Zig 实现也要处理参数缺省。例如骨架的 `Counter::__construct(int $n = 0)` 使用类型化参数 `n: ?i64` 和 `n orelse 0`。
+
+不要用一个普通 `?i64` 同时解释“省略”和“显式 null”，否则会丢失调用者意图。
+
+# [命名参数与可变参数]($heading.id('named-and-variadic-arguments'))
+
+普通命名参数由 Zend 根据 Stubs 参数名放入对应槽位。跳过前面的可选参数而指定后面的参数时，Zend 可能按 Stubs 默认值补齐前面的槽位；`optional` 判断的是参数槽是否缺省，不能用它还原所有调用语法中的省略行为。额外的命名可变参数在单独的表中：
+
+- `expectArgs` 默认拒绝额外命名参数。
+- `expectArgsAllowExtraNamed` 允许它们存在，但不校验表内值，也不允许超出规格长度的位置参数。
+- `extraNamedArgs()` 获取该表；`args()` 读取位置槽位。
+
+真正的 `...$args` 函数需要自行检查位置参数和额外命名参数，不能只遍历 `args()` 就认为收集了全部实参。
+
+# [错误传播]($heading.id('error-propagation'))
+
+`try` 把解析和调用错误交给包装器。已有 PHP 异常被保留；普通 Zig 错误会转成 PHP `Error`；`ZendBailout` 继续终止请求，`OutOfMemory` 按[致命内存错误]($link.page('advanced/bailout').ref('cleanup-rules'))处理。不要在错误后继续构造正常返回值。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)
+- [src/ctx.zig](https://github.com/happystraw/phpz/blob/dev/src/ctx.zig)

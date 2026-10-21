@@ -1,0 +1,86 @@
+---
+.title = "对象生命周期与垃圾回收",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/objects",
+.custom = { "section": "进阶主题" },
+---
+
+非空 Zig struct 作为 PHP 对象的 Zig 实例数据（backing data）时，phpz 负责连接创建、析构、克隆和 GC 回调。PHP 属性与 backing 字段的管理方式不同。
+
+# [初始化与析构]($heading.id('initialization-and-destruction'))
+
+- `.init` 发生在对象创建阶段、PHP 构造器之前。
+- 所有字段都有默认值时默认使用 `.default`，否则默认 `.none`。
+- 返回 `T` 的 `__construct` 替换 backing；已有 backing 通过 `.deinit` 释放。
+- `.deinit` 只处理初始化成功的 backing，负责自己持有的资源。
+
+`.deinit` 是 Zig 实例数据的释放回调，不是 PHP 的 `__destruct` 方法。它会在已初始化的 backing 被替换或对象存储被释放时执行。
+
+`.init` 失败时，或克隆因源 backing 未初始化、`.clone` 返回错误而失败时，框架会标记失败对象，跳过它的 PHP `__destruct`。对象释放会先清空 backing 再调用 `.deinit`；此时重入需要 `self` 的方法会产生 `object has no initialized backing` 错误。不要在清理中继续访问已释放的实例数据。
+
+# [克隆]($heading.id('cloning'))
+
+带 backing 的类默认不可克隆；未配置克隆回调时，PHP 的 `clone $object` 抛出 `Error`。通常通过 `.clone` 启用克隆。只有标量字段时，可以按值复制：
+
+```php
+class Point {
+    public function x(): int {}
+}
+```
+
+```zig
+const Point = struct {
+    x_value: i64 = 1,
+
+    fn clone(self: *const Point) Point {
+        return self.*;
+    }
+
+    pub fn x(self: *const Point, ctx: phpz.Ctx) void {
+        ctx.ret(.int, self.x_value);
+    }
+};
+const PointClass = phpz.Class("Point", Point, .{ .clone = Point.clone });
+```
+
+将 `PointClass` 加入 `module.classes` 后，`(clone new Point())->x()` 返回 `1`。框架复制 PHP 属性并执行适用的 PHP `__clone` 方法；`.clone` 负责复制 Zig backing。持有 PHP 值时应为副本增加引用，持有原生资源时应复制资源或建立共享所有权，不能直接复制拥有资源的裸指针。
+
+底层 `.handlers.clone_obj` 也可提供克隆行为，但不能与 `.clone` 同时设置；该处理器需要自行维护对象布局与所有权。
+
+# [报告 PHP 引用]($heading.id('report-php-references'))
+
+以下片段展示资源字段和回调，实际类还需在 Stubs 和模块中声明注册：
+
+```zig
+const Holder = struct {
+    held: phpz.c.zval = phpz.Zval.raw.undef,
+
+    fn deinit(self: *Holder) void {
+        phpz.Zval.raw.release(&self.held);
+    }
+
+    fn gc(self: *Holder, buffer: *phpz.GcBuffer) void {
+        buffer.add(.from(&self.held));
+    }
+};
+const HolderClass = phpz.Class("Holder", Holder, .{
+    .deinit = Holder.deinit,
+    .gc = Holder.gc,
+});
+```
+
+保存输入时用 `Zval.raw.copy` 获得引用。`.gc` 让 Zend 看见 backing 中可能形成环的引用；标准 PHP 属性会自动纳入。持有 Callable 时使用 `buffer.addCallable` 报告其依赖。
+
+GC 回调只报告已有引用，不修改对象、不执行 PHP 用户代码，也不保存借用的 `GcBuffer`。没有正确 GC 报告，即使 `.deinit` 能释放资源，循环引用也可能使析构永远无法开始。
+
+# [序列化]($heading.id('serialization'))
+
+backing 类默认禁止序列化，除非同时提供本地绑定的 `__serialize` 和 `__unserialize`。只提供一个会编译失败，继承来的钩子不能直接启用新的 backing 类。
+
+PHP 反序列化不会调用构造器，因此在 `__unserialize` 前需要通过字段默认值或 `.init` 建立有效 backing。必须验证输入数据，不能把任意序列化字节直接当作 Zig 对象内存。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/class.zig](https://github.com/happystraw/phpz/blob/dev/src/class.zig)
+- [src/gc.zig](https://github.com/happystraw/phpz/blob/dev/src/gc.zig)
