@@ -138,7 +138,7 @@ pub fn checkObjectCreation(stage: []const u8) !void {
     creation_stage = std.meta.stringToEnum(CreationStage, stage) orelse return error.InvalidStage;
     // Each PHPT defines this dedicated user class; no other class is modified.
     const entry = (try phpz.ClassEntry.lookup("NativeBoundaryTarget", false)) orelse return error.ClassNotFound;
-    creation_handlers = c.std_object_handlers;
+    creation_handlers = phpz.globals.stdObjectHandlers();
     creation_handlers.get_constructor = getConstructor;
     creation_handlers.dtor_obj = destroyObject;
     creation_handlers.free_obj = freeObject;

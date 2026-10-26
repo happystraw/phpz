@@ -137,7 +137,7 @@ fn worker(shared: *Shared, index: usize) void {
 /// Test TSRM isolation and concurrent PHP requests in a CLI test process.
 pub fn checkNativeTsrmThreads() !bool {
     if (comptime !phpz.zts) return error.RequiresZts;
-    const sapi_module = phpz.globals.global(.ptr, c.sapi_module_struct, "sapi_module");
+    const sapi_module = phpz.globals.sapiModule();
     if (!std.mem.eql(u8, std.mem.span(sapi_module.name), "cli")) return error.RequiresCli;
     if (!cacheMatches()) return error.TsrmCacheMismatch;
     const caller_storage = @intFromPtr(c.tsrm_get_ls_cache());

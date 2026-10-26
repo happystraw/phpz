@@ -40,6 +40,12 @@ pub inline fn stdObjectHandlers() c.zend_object_handlers {
     return global(.value, c.zend_object_handlers, "std_object_handlers");
 }
 
+/// Borrow the active SAPI module definition, shared across threads.
+/// This is distinct from the per-thread SAPI globals returned by sapi().
+pub inline fn sapiModule() *c.sapi_module_struct {
+    return global(.ptr, c.sapi_module_struct, "sapi_module");
+}
+
 const zts = c.USING_ZTS != 0;
 
 inline fn fastGlobals(comptime T: type, comptime offset_name: []const u8) *T {
@@ -145,6 +151,12 @@ pub const ExecutorGlobals = opaque {
 
     pub inline fn classes(self: *ExecutorGlobals) *zend.Array {
         return zend.Array.from(self.ptr().class_table);
+    }
+
+    /// Borrow the current thread's global constant table after executor initialization.
+    /// PHP owns the table and its entries; do not release them.
+    pub inline fn constants(self: *ExecutorGlobals) *zend.Array {
+        return zend.Array.from(self.ptr().zend_constants);
     }
 
     pub inline fn exception(self: *ExecutorGlobals) ?*zend.Object {

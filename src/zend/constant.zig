@@ -31,8 +31,7 @@ pub const Constant = opaque {
     /// Namespace segments in table keys are lowercase; the constant name is case-sensitive.
     /// Does not strip a leading backslash, resolve Class::NAME, or evaluate expressions.
     pub fn find(key: []const u8) ?*Constant {
-        const raw = c.zend_hash_str_find_ptr(globals.executor().ptr().zend_constants, key.ptr, key.len);
-        return if (raw != null) .from(@ptrCast(@alignCast(raw))) else null;
+        return globals.executor().constants().findPtr(Constant, key);
     }
 
     /// Resolve a constant through zend_get_constant_ex(). Supports qualified global

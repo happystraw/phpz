@@ -609,7 +609,10 @@ pub const Array = opaque {
         // Separate loops give each layout a constant element stride.
         const ht = self.ptr();
         if (isPacked(ht)) {
-            for (packedValues(ht)[0..ht.nNumUsed]) |*zv| {
+            var cursor = packedValues(ht);
+            const end = cursor + ht.nNumUsed;
+            while (cursor != end) : (cursor += 1) {
+                const zv = &cursor[0];
                 if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue;
@@ -617,12 +620,15 @@ pub const Array = opaque {
                 @call(.always_inline, callback, .{zv} ++ args);
             }
         } else {
-            for (buckets(ht)[0..ht.nNumUsed]) |*bucket| {
-                if (Zval.raw.is(&bucket.val, .undef)) {
+            var cursor = buckets(ht);
+            const end = cursor + ht.nNumUsed;
+            while (cursor != end) : (cursor += 1) {
+                const zv = &cursor[0].val;
+                if (Zval.raw.is(zv, .undef)) {
                     @branchHint(.unlikely);
                     continue;
                 }
-                @call(.always_inline, callback, .{&bucket.val} ++ args);
+                @call(.always_inline, callback, .{zv} ++ args);
             }
         }
     }
