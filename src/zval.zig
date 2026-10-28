@@ -369,6 +369,11 @@ pub const Zval = opaque {
         raw.set(self.ptr(), zk, val);
     }
 
+    /// Wrap this value in a PHP reference in place. Existing references are unchanged.
+    pub inline fn makeRef(self: *Zval) void {
+        raw.makeRef(self.ptr());
+    }
+
     /// Increment the refcount of this zval's refcounted payload.
     /// Requires a refcounted value; preserves PHP reference wrappers.
     ///
@@ -665,6 +670,10 @@ pub const Zval = opaque {
         /// and adding a refcount when needed. The destination owns the copied value.
         /// Does not release the destination's previous value or change the source.
         pub const copyDeref = c.phpz_zval_copy_deref;
+
+        /// Wrap the value in a PHP reference using ZVAL_MAKE_REF.
+        /// Existing references are unchanged; a new container starts with refcount 1.
+        pub const makeRef = c.phpz_zval_make_ref;
 
         /// Set one zval from another using PHP's `ZVAL_ZVAL`.
         ///

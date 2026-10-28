@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 2da3a1695f6fae468e5f63f47fb6679619e5ebbc */
+ * Stub hash: 1552fc61e52ca76161e0f85a18ff2a767cd05177 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -368,6 +368,29 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_referenceArgument,
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_createReference, 1, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_makeReference, 1, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setReference, 0, 3, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(1, target, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setReferenceSelf, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(1, target, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_createReferenceCopy, 1, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(1, source, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_optionalReferenceArgument, 0, 3, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, mode, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
@@ -610,6 +633,11 @@ ZEND_FUNCTION(MyPHPExt_Test_guardResources);
 ZEND_FUNCTION(MyPHPExt_Test_superglobalsSnapshot);
 ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
 ZEND_FUNCTION(MyPHPExt_Test_referenceArgument);
+ZEND_FUNCTION(MyPHPExt_Test_createReference);
+ZEND_FUNCTION(MyPHPExt_Test_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_setReference);
+ZEND_FUNCTION(MyPHPExt_Test_setReferenceSelf);
+ZEND_FUNCTION(MyPHPExt_Test_createReferenceCopy);
 ZEND_FUNCTION(MyPHPExt_Test_optionalReferenceArgument);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __construct);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __invoke);
@@ -1064,6 +1092,31 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "referenceArgument"), zif_MyPHPExt_Test_referenceArgument, arginfo_MyPHPExt_Test_referenceArgument, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "referenceArgument"), zif_MyPHPExt_Test_referenceArgument, arginfo_MyPHPExt_Test_referenceArgument, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createReference"), zif_MyPHPExt_Test_createReference, arginfo_MyPHPExt_Test_createReference, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createReference"), zif_MyPHPExt_Test_createReference, arginfo_MyPHPExt_Test_createReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeReference"), zif_MyPHPExt_Test_makeReference, arginfo_MyPHPExt_Test_makeReference, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeReference"), zif_MyPHPExt_Test_makeReference, arginfo_MyPHPExt_Test_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReference"), zif_MyPHPExt_Test_setReference, arginfo_MyPHPExt_Test_setReference, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReference"), zif_MyPHPExt_Test_setReference, arginfo_MyPHPExt_Test_setReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReferenceSelf"), zif_MyPHPExt_Test_setReferenceSelf, arginfo_MyPHPExt_Test_setReferenceSelf, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReferenceSelf"), zif_MyPHPExt_Test_setReferenceSelf, arginfo_MyPHPExt_Test_setReferenceSelf, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createReferenceCopy"), zif_MyPHPExt_Test_createReferenceCopy, arginfo_MyPHPExt_Test_createReferenceCopy, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createReferenceCopy"), zif_MyPHPExt_Test_createReferenceCopy, arginfo_MyPHPExt_Test_createReferenceCopy, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalReferenceArgument"), zif_MyPHPExt_Test_optionalReferenceArgument, arginfo_MyPHPExt_Test_optionalReferenceArgument, 0, NULL, NULL)

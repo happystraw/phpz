@@ -324,5 +324,10 @@ namespace MyPHPExt\Test {
     function mutateSuperglobals(): void {}
 
     function referenceArgument(string $mode, string $type, bool $single, mixed &$value): string {}
+    function &createReference(string $type, mixed $value): mixed {}
+    function &makeReference(mixed $value): mixed {}
+    function setReference(mixed &$target, string $type, mixed $value): void {}
+    function setReferenceSelf(mixed &$target): void {}
+    function &createReferenceCopy(mixed &$source): mixed {}
     function optionalReferenceArgument(string $mode, string $type, bool $single, mixed &$value = null): string {}
 }

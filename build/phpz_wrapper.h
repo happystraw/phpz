@@ -92,6 +92,32 @@ static zend_always_inline void phpz_zval_copy_deref(zval *z, zval *src) {
     ZVAL_COPY_DEREF(z, src);
 }
 
+static zend_always_inline void phpz_zval_make_ref(zval *value) {
+    ZVAL_MAKE_REF(value);
+}
+
+static zend_always_inline zend_reference *phpz_reference_new_empty(void) {
+    zval value;
+    ZVAL_NEW_EMPTY_REF(&value);
+    return Z_REF(value);
+}
+
+/* Consumes one owned value, including when a typed assignment fails. */
+static zend_always_inline void phpz_reference_assign(zend_reference *ref, zval *value) {
+    if (UNEXPECTED(ZEND_REF_HAS_TYPE_SOURCES(ref)) &&
+        UNEXPECTED(!zend_verify_ref_assignable_zval(ref, value, ZEND_ARG_USES_STRICT_TYPES()))) {
+        zval_ptr_dtor(value);
+        return;
+    }
+    /* The inner value is not a reference; its type constraints were checked above.
+     * Zend's variable assignment writes first, then destroys the old payload. */
+#if PHP_VERSION_ID >= 80500
+    zend_safe_assign_to_variable_noref(&ref->val, value);
+#else
+    zend_assign_to_variable(&ref->val, value, IS_TMP_VAR, false);
+#endif
+}
+
 static zend_always_inline void phpz_separate_array(zval *z) {
     SEPARATE_ARRAY(z);
 }
