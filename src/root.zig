@@ -116,6 +116,7 @@ test {
     _ = @import("zend/function.zig");
     _ = @import("zend/file_handle.zig");
     _ = @import("zend/object.zig");
+    _ = @import("zend/object_iterator.zig");
     _ = @import("zend/property_info.zig");
     _ = @import("zend/string.zig");
     _ = @import("zend/bailout.zig");

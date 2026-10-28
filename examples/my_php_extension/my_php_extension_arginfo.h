@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: e79df035e09101b3a838927afdaf99c2f5c0ebe5 */
+ * Stub hash: 1801403d634faa5fa921b2b4e558f73451c221f7 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -417,6 +417,15 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_resourceDestructions, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_iterateObject, 0, 1, IS_ARRAY, 0)
+	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, limit, IS_LONG, 0, "-1")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_incrementObjectIterator, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ClosureCounter___construct, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -663,6 +672,8 @@ ZEND_FUNCTION(MyPHPExt_Test_closeResource);
 ZEND_FUNCTION(MyPHPExt_Test_resourceTypeName);
 ZEND_FUNCTION(MyPHPExt_Test_checkResourceRelease);
 ZEND_FUNCTION(MyPHPExt_Test_resourceDestructions);
+ZEND_FUNCTION(MyPHPExt_Test_iterateObject);
+ZEND_FUNCTION(MyPHPExt_Test_incrementObjectIterator);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __construct);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __invoke);
 ZEND_METHOD(MyPHPExt_ClosureRef, __construct);
@@ -1176,6 +1187,16 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceDestructions"), zif_MyPHPExt_Test_resourceDestructions, arginfo_MyPHPExt_Test_resourceDestructions, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceDestructions"), zif_MyPHPExt_Test_resourceDestructions, arginfo_MyPHPExt_Test_resourceDestructions, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateObject"), zif_MyPHPExt_Test_iterateObject, arginfo_MyPHPExt_Test_iterateObject, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "iterateObject"), zif_MyPHPExt_Test_iterateObject, arginfo_MyPHPExt_Test_iterateObject, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "incrementObjectIterator"), zif_MyPHPExt_Test_incrementObjectIterator, arginfo_MyPHPExt_Test_incrementObjectIterator, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "incrementObjectIterator"), zif_MyPHPExt_Test_incrementObjectIterator, arginfo_MyPHPExt_Test_incrementObjectIterator, 0)
 #endif
 	ZEND_FE_END
 };

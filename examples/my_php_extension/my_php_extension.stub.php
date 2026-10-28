@@ -341,4 +341,7 @@ namespace MyPHPExt\Test {
     function resourceTypeName($resource): ?string {}
     function checkResourceRelease(): bool {}
     function resourceDestructions(): int {}
+
+    function iterateObject(object $object, int $limit = -1): array {}
+    function incrementObjectIterator(object $object): void {}
 }

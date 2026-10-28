@@ -27,6 +27,7 @@ const object_access = @import("testing/object_access.zig");
 const string_tests = @import("testing/strings.zig");
 const array_tests = @import("testing/arrays.zig");
 const iteration = @import("testing/iteration.zig");
+const object_iterator = @import("testing/object_iterator.zig");
 const error_tests = @import("testing/errors.zig");
 const exception_boundaries = @import("testing/exception_boundaries.zig");
 const boundaries = @import("testing/boundaries.zig");
@@ -121,6 +122,8 @@ comptime {
         .@"MyPHPExt\\Test\\isArrayList" = array_tests.isArrayList,
         .@"MyPHPExt\\Test\\arrayToList" = array_tests.arrayToList,
         .@"MyPHPExt\\Test\\iterateArray" = iteration.iterateArray,
+        .@"MyPHPExt\\Test\\iterateObject" = object_iterator.iterateObject,
+        .@"MyPHPExt\\Test\\incrementObjectIterator" = object_iterator.incrementObjectIterator,
         .@"MyPHPExt\\Test\\lookupKey" = iteration.lookupKey,
         .@"MyPHPExt\\Test\\storeKey" = iteration.storeKey,
         .@"MyPHPExt\\Test\\deleteKey" = iteration.deleteKey,
