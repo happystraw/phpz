@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 3e60c23f99578de730cb50a8d1452a013792b689 */
+ * Stub hash: 2da3a1695f6fae468e5f63f47fb6679619e5ebbc */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -31,6 +31,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Clo
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_checkStreams arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkSocketOptions, 0, 1, IS_VOID, 0)
+	ZEND_ARG_INFO(0, stream)
+ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_MyPHPExt_Test_openStream, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
@@ -531,6 +535,7 @@ ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
 ZEND_FUNCTION(MyPHPExt_Test_checkStreams);
+ZEND_FUNCTION(MyPHPExt_Test_checkSocketOptions);
 ZEND_FUNCTION(MyPHPExt_Test_openStream);
 ZEND_FUNCTION(MyPHPExt_Test_openPersistentStream);
 ZEND_FUNCTION(MyPHPExt_Test_checkPersistentStreams);
@@ -684,6 +689,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSocketOptions"), zif_MyPHPExt_Test_checkSocketOptions, arginfo_MyPHPExt_Test_checkSocketOptions, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSocketOptions"), zif_MyPHPExt_Test_checkSocketOptions, arginfo_MyPHPExt_Test_checkSocketOptions, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "openStream"), zif_MyPHPExt_Test_openStream, arginfo_MyPHPExt_Test_openStream, 0, NULL, NULL)

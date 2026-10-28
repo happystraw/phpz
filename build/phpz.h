@@ -17,6 +17,7 @@
 #include "Zend/zend_enum.h"
 #include "Zend/zend_observer.h"
 #include "ext/standard/file.h"
+#include "ext/standard/flock_compat.h"
 #include "ext/standard/info.h"
 #include "main/SAPI.h"
 #include "main/php_main.h"

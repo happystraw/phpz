@@ -31,12 +31,12 @@ pub const Stream = opaque {
     /// Caller-owned storage for a directory entry name, including its NUL terminator.
     pub const DirBuffer = [c.MAXPATHLEN]u8;
 
-    /// Defaults to closing and releasing the stream (PHP_STREAM_FREE_CLOSE).
+    /// No flags are enabled by default; use a preset for PHP's standard close modes.
     pub const FreeOptions = packed struct(i32) {
         /// Call the stream's close operation.
-        call_dtor: bool = true,
+        call_dtor: bool = false,
         /// Release the stream's storage.
-        release_stream: bool = true,
+        release_stream: bool = false,
         /// Preserve the underlying handle when calling the close operation.
         preserve_handle: bool = false,
         /// The call originates from the resource destructor.
@@ -49,6 +49,13 @@ pub const Stream = opaque {
         keep_rsrc: bool = false,
 
         _: u25 = 0,
+
+        /// PHP_STREAM_FREE_CLOSE: close and release the stream.
+        pub const close: FreeOptions = @bitCast(@as(i32, c.PHP_STREAM_FREE_CLOSE));
+        /// PHP_STREAM_FREE_CLOSE_CASTED: close and release, preserving the underlying handle.
+        pub const close_casted: FreeOptions = @bitCast(@as(i32, c.PHP_STREAM_FREE_CLOSE_CASTED));
+        /// PHP_STREAM_FREE_CLOSE_PERSISTENT: close and release, removing the persistent registry entry.
+        pub const close_persistent: FreeOptions = @bitCast(@as(i32, c.PHP_STREAM_FREE_CLOSE_PERSISTENT));
     };
 
     pub const SeekWhence = enum(i32) {
@@ -57,6 +64,17 @@ pub const Stream = opaque {
         end = c.SEEK_END,
         _,
     };
+
+    pub const LockMode = enum(c_int) {
+        shared = c.LOCK_SH,
+        exclusive = c.LOCK_EX,
+    };
+
+    /// Native PHP stat fields; layout and available fields depend on the target.
+    pub const Stat = c.zend_stat_t;
+
+    pub const OptionError = error{ UnsupportedOperation, SetOptionFailed };
+    pub const LockError = error{ UnsupportedOperation, LockFailed, WouldBlock };
 
     /// Wrap an existing pointer without changing ownership.
     pub inline fn from(stream: *c.php_stream) *Stream {
@@ -198,6 +216,95 @@ pub const Stream = opaque {
     /// Check for EOF; PHP may probe the underlying stream.
     pub fn eof(self: *Stream) bool {
         return c.php_stream_eof(self.ptr());
+    }
+
+    /// Query wrapper support; a subsequent operation may still fail.
+    pub fn supportsSync(self: *Stream) bool {
+        return c.php_stream_sync_supported(self.ptr()) != 0;
+    }
+
+    /// Query wrapper support; a subsequent operation may still fail.
+    pub fn supportsTruncate(self: *Stream) bool {
+        return c.php_stream_truncate_supported(self.ptr()) != 0;
+    }
+
+    /// Query wrapper support; a subsequent operation may still fail.
+    pub fn supportsLock(self: *Stream) bool {
+        return c.php_stream_supports_lock(self.ptr()) != 0;
+    }
+
+    /// Acquire or change a lock. Nonblocking contention reports WouldBlock when
+    /// the wrapper supplies EWOULDBLOCK; custom wrappers may only report LockFailed.
+    pub fn lock(self: *Stream, mode: LockMode, non_blocking: bool) LockError!void {
+        const flags = @backingInt(mode) | (if (non_blocking) @as(c_int, c.LOCK_NB) else 0);
+        try self.changeLock(flags);
+    }
+
+    /// Release a lock without closing the stream.
+    pub fn unlock(self: *Stream) LockError!void {
+        try self.changeLock(c.LOCK_UN);
+    }
+
+    fn changeLock(self: *Stream, flags: c_int) LockError!void {
+        const errno_ptr = std.c._errno();
+        errno_ptr.* = 0;
+        const result = c.php_stream_lock(self.ptr(), flags);
+        const would_block = result != 0 and errno_ptr.* == c.EWOULDBLOCK;
+        if (result == c.PHP_STREAM_OPTION_RETURN_NOTIMPL) return error.UnsupportedOperation;
+        if (result != 0) return if (would_block) error.WouldBlock else error.LockFailed;
+    }
+
+    /// Change blocking mode. Successful wrappers may return the previous mode.
+    pub fn setBlocking(self: *Stream, blocking: bool) OptionError!void {
+        const result = c.php_stream_set_option(self.ptr(), c.PHP_STREAM_OPTION_BLOCKING, @intFromBool(blocking), null);
+        if (result == c.PHP_STREAM_OPTION_RETURN_NOTIMPL) return error.UnsupportedOperation;
+        if (result < 0) return error.SetOptionFailed;
+    }
+
+    /// Set a read timeout; microseconds must be below 1,000,000 and seconds must
+    /// fit the target's timeval. Support and timeout behavior depend on the wrapper.
+    pub fn setReadTimeout(self: *Stream, seconds: u64, microseconds: u32) (OptionError || error{InvalidTimeout})!void {
+        var timeout: c.struct_timeval = std.mem.zeroes(c.struct_timeval);
+        if (microseconds >= 1_000_000) return error.InvalidTimeout;
+        timeout.tv_sec = std.math.cast(@TypeOf(timeout.tv_sec), seconds) orelse return error.InvalidTimeout;
+        timeout.tv_usec = @intCast(microseconds);
+        try checkOption(c.php_stream_set_option(self.ptr(), c.PHP_STREAM_OPTION_READ_TIMEOUT, 0, &timeout));
+    }
+
+    /// Zero disables buffering; nonzero requests full buffering with this size.
+    /// PHP's read-buffer fallback only toggles buffering and ignores the size.
+    pub fn setReadBuffer(self: *Stream, size: usize) OptionError!void {
+        var buffer_size = size;
+        try checkOption(c.php_stream_set_option(self.ptr(), c.PHP_STREAM_OPTION_READ_BUFFER, if (size == 0) c.PHP_STREAM_BUFFER_NONE else c.PHP_STREAM_BUFFER_FULL, &buffer_size));
+    }
+
+    /// Zero disables buffering; nonzero requests full buffering with this size.
+    /// The wrapper may reject the request. Flush pending writes before changing buffering.
+    pub fn setWriteBuffer(self: *Stream, size: usize) OptionError!void {
+        var buffer_size = size;
+        try checkOption(c.php_stream_set_option(self.ptr(), c.PHP_STREAM_OPTION_WRITE_BUFFER, if (size == 0) c.PHP_STREAM_BUFFER_NONE else c.PHP_STREAM_BUFFER_FULL, &buffer_size));
+    }
+
+    /// Set the internal chunk size (1..INT_MAX), returning the previous size.
+    /// PHP caps a previous size larger than INT_MAX at INT_MAX.
+    pub fn setChunkSize(self: *Stream, size: usize) (OptionError || error{InvalidChunkSize})!usize {
+        if (size == 0 or size > std.math.maxInt(c_int)) return error.InvalidChunkSize;
+        const result = c.php_stream_set_chunk_size(self.ptr(), @as(c_int, @intCast(size)));
+        if (result == c.PHP_STREAM_OPTION_RETURN_NOTIMPL) return error.UnsupportedOperation;
+        if (result <= 0) return error.SetOptionFailed;
+        return @intCast(result);
+    }
+
+    fn checkOption(result: c_int) OptionError!void {
+        if (result == c.PHP_STREAM_OPTION_RETURN_NOTIMPL) return error.UnsupportedOperation;
+        if (result != c.PHP_STREAM_OPTION_RETURN_OK) return error.SetOptionFailed;
+    }
+
+    /// Return stat information for the open stream without changing its position.
+    pub fn stat(self: *Stream) error{StatFailed}!Stat {
+        var info: c.php_stream_statbuf = std.mem.zeroes(c.php_stream_statbuf);
+        if (c.php_stream_stat(self.ptr(), &info) != 0) return error.StatFailed;
+        return info.sb;
     }
 
     /// Flush stream buffers; this does not guarantee durable storage.

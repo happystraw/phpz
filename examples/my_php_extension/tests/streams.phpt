@@ -13,7 +13,30 @@ use function MyPHPExt\Test\syncStream;
 function check($condition) {
     if (!$condition) throw new RuntimeException('check failed');
 }
+class OptionsStream {
+    public $context;
+    public static array $options = [];
+    public function stream_open($path, $mode, $options, &$openedPath) { return true; }
+    public function stream_set_option($option, $arg1, $arg2) {
+        self::$options[] = [$option, $arg1, $arg2];
+        return true;
+    }
+    public function stream_flush() { return true; }
+    public function stream_close() {}
+}
+stream_wrapper_register('streamoptions', OptionsStream::class);
 checkStreams();
+check(OptionsStream::$options === [
+    [STREAM_OPTION_BLOCKING, 0, null],
+    [STREAM_OPTION_BLOCKING, 1, null],
+    [STREAM_OPTION_READ_TIMEOUT, 0, 0],
+    [STREAM_OPTION_READ_TIMEOUT, 0, 999999],
+    [STREAM_OPTION_READ_TIMEOUT, 2, 345678],
+    [STREAM_OPTION_READ_BUFFER, STREAM_BUFFER_NONE, 0],
+    [STREAM_OPTION_READ_BUFFER, STREAM_BUFFER_FULL, 4096],
+    [STREAM_OPTION_WRITE_BUFFER, STREAM_BUFFER_NONE, 0],
+    [STREAM_OPTION_WRITE_BUFFER, STREAM_BUFFER_FULL, 8192],
+]);
 for ($i = 0; $i < 20; $i++) {
     $stream = openStream('php://memory');
     check(is_resource($stream) && get_resource_type($stream) === 'stream');

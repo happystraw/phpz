@@ -185,6 +185,8 @@ namespace MyPHPExt {
 
 namespace MyPHPExt\Test {
     function checkStreams(): void {}
+    /** @param resource $stream */
+    function checkSocketOptions($stream): void {}
     /** @return resource */
     function openStream(string $path) {}
     /** @return resource */

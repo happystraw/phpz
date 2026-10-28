@@ -15,6 +15,9 @@ class FailedStream {
     public function stream_flush() { return false; }
     public function stream_seek($offset, $whence) { return false; }
     public function stream_truncate($size) { return false; }
+    public function stream_stat() { return false; }
+    public function stream_set_option($option, $arg1, $arg2) { return false; }
+    public function stream_lock($operation) { return false; }
     public function stream_close() {}
 }
 class ShortStream extends FailedStream {

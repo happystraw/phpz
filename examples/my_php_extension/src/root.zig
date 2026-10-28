@@ -46,6 +46,7 @@ comptime {
         .@"MyPHPExt\\Test\\checkExceptionBoundary" = exception_boundaries.checkExceptionBoundary,
         .@"MyPHPExt\\Test\\checkNativeTsrmThreads" = thread_tests.checkNativeTsrmThreads,
         .@"MyPHPExt\\Test\\checkStreams" = stream_tests.checkStreams,
+        .@"MyPHPExt\\Test\\checkSocketOptions" = stream_tests.checkSocketOptions,
         .@"MyPHPExt\\Test\\openStream" = stream_tests.openStream,
         .@"MyPHPExt\\Test\\openPersistentStream" = stream_tests.openPersistentStream,
         .@"MyPHPExt\\Test\\checkPersistentStreams" = stream_tests.checkPersistentStreams,

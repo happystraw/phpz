@@ -6,25 +6,36 @@ const expect = std.testing.expect;
 const expectError = std.testing.expectError;
 
 pub fn checkStreams() !void {
-    inline for (.{
-        .{ "call_dtor", phpz.c.PHP_STREAM_FREE_CALL_DTOR },
-        .{ "release_stream", phpz.c.PHP_STREAM_FREE_RELEASE_STREAM },
-        .{ "preserve_handle", phpz.c.PHP_STREAM_FREE_PRESERVE_HANDLE },
-        .{ "rsrc_dtor", phpz.c.PHP_STREAM_FREE_RSRC_DTOR },
-        .{ "persistent", phpz.c.PHP_STREAM_FREE_PERSISTENT },
-        .{ "ignore_enclosing", phpz.c.PHP_STREAM_FREE_IGNORE_ENCLOSING },
-        .{ "keep_rsrc", phpz.c.PHP_STREAM_FREE_KEEP_RSRC },
-    }) |flag| {
-        var options: Stream.FreeOptions = .{ .call_dtor = false, .release_stream = false };
-        @field(options, flag[0]) = true;
-        try expect(@backingInt(options) == flag[1]);
-    }
+    try checkFreeOptionsLayout();
+    try checkFreeOptionsPresets();
+
     const stream = try Stream.open("php://memory", "w+b", .{ .must_seek = true });
     defer _ = stream.close();
     try expect(Stream.from(stream.ptr()) == stream);
     try expect(!stream.isPersistent());
+    try expect(!stream.supportsSync());
+    try expect(stream.supportsTruncate());
+    try expect(!stream.supportsLock());
+    try expectError(error.UnsupportedOperation, stream.lock(.exclusive, true));
+    try expectError(error.UnsupportedOperation, stream.unlock());
+    try expectError(error.UnsupportedOperation, stream.setBlocking(false));
+    try expectError(error.UnsupportedOperation, stream.setReadTimeout(1, 0));
+    try expectError(error.UnsupportedOperation, stream.setWriteBuffer(0));
+    try expectError(error.InvalidTimeout, stream.setReadTimeout(0, 1_000_000));
+    try expectError(error.InvalidTimeout, stream.setReadTimeout(std.math.maxInt(u64), 0));
+    try expectError(error.InvalidChunkSize, stream.setChunkSize(0));
+    try expectError(error.InvalidChunkSize, stream.setChunkSize(@as(usize, std.math.maxInt(c_int)) + 1));
+    const old_chunk = try stream.setChunkSize(1024);
+    try expect(old_chunk > 0);
+    try expect(try stream.setChunkSize(2048) == 1024);
+    try expect(try stream.setChunkSize(1) == 2048);
+    try expect(try stream.setChunkSize(std.math.maxInt(c_int)) == 1);
+    try expect(try stream.setChunkSize(old_chunk) == std.math.maxInt(c_int));
+    try stream.setReadBuffer(0);
+    try stream.setReadBuffer(4096);
     try expect(try stream.write("") == 0);
     try expect(try stream.write("a\x00b\nxyz") == 7);
+    try expect((try stream.stat()).st_size == 7);
     try stream.flush();
     try expect(stream.tell() == 7);
     try stream.seek(-3, .end);
@@ -70,9 +81,64 @@ pub fn checkStreams() !void {
     try expectError(error.SyncFailed, stream.sync(false));
 
     const owned = try Stream.open("php://memory", "w+b", .{});
-    try expect(owned.free(.{}) == 0);
+    try expect(owned.free(.close) == 0);
     const closed = try Stream.open("php://memory", "w+b", .{});
     try expect(closed.close() == 0);
+
+    // The PHPT wrapper records the options forwarded to stream_set_option().
+    const options_stream = try Stream.open("streamoptions://test", "w+b", .{});
+    defer _ = options_stream.close();
+    try expect(!options_stream.supportsTruncate());
+    try options_stream.setBlocking(false);
+    try options_stream.setBlocking(true);
+    try options_stream.setReadTimeout(0, 0);
+    try options_stream.setReadTimeout(0, 999_999);
+    try options_stream.setReadTimeout(2, 345_678);
+    try options_stream.setReadBuffer(0);
+    try options_stream.setReadBuffer(4096);
+    try options_stream.setWriteBuffer(0);
+    try options_stream.setWriteBuffer(8192);
+}
+
+pub fn checkSocketOptions(stream: *Stream) !void {
+    var buffer: [1]u8 = undefined;
+    try stream.setReadBuffer(0);
+    try stream.setBlocking(false);
+    try expect(try stream.read(&buffer) == 0);
+    try expect(!stream.eof());
+
+    try stream.setBlocking(true);
+    try stream.setReadTimeout(0, 20_000);
+    try expectError(error.ReadFailed, stream.read(&buffer));
+    // The PHPT checks timed_out and verifies that this borrowed stream recovers.
+}
+
+fn checkFileOptions(path: [:0]const u8) !void {
+    const first = try Stream.open(path, "r+b", .{});
+    defer _ = first.close();
+    const second = try Stream.open(path, "r+b", .{});
+    defer _ = second.close();
+    try expect(first.supportsSync() and first.supportsTruncate() and first.supportsLock());
+    try expect((try first.stat()).st_size == 4);
+    try expect(first.tell() == 0);
+    try first.lock(.shared, false);
+    try second.lock(.shared, true);
+    try second.unlock();
+    try first.unlock();
+    try first.lock(.exclusive, false);
+    // Windows and flock-based systems lock independently opened handles separately.
+    // Other systems may implement PHP locks with process-scoped fcntl locks.
+    if (@import("builtin").os.tag == .windows or @hasDecl(phpz.c, "HAVE_FLOCK")) {
+        try expectError(error.WouldBlock, second.lock(.exclusive, true));
+    }
+    try first.unlock();
+    try second.lock(.exclusive, true);
+    try second.unlock();
+    if (@import("builtin").os.tag != .windows) {
+        // Native streams return the old blocking mode (including success == 1).
+        try first.setBlocking(false);
+        try first.setBlocking(true);
+    }
 }
 
 pub fn openStream(ctx: phpz.Ctx, path: *phpz.zend.String) !void {
@@ -100,6 +166,7 @@ fn persistentId(stream: *Stream) !*phpz.zend.String {
 }
 
 pub fn checkPersistentStreams(path: *phpz.zend.String) !void {
+    try checkFileOptions(path.slice());
     const c = phpz.c;
     try expect(try Stream.fromPersistentId("phpz-missing-stream") == null);
     const collision = "phpz-non-stream";
@@ -180,11 +247,14 @@ pub fn optionalNullableStream(resource: ?phpz.Nullable(*Stream)) []const u8 {
 // The PHPT only supplies streams that permit explicit closure.
 pub fn closeStream(resource: *Resource) !i32 {
     const stream = try Stream.fromResource(resource);
-    return stream.free(.{ .keep_rsrc = true, .persistent = stream.isPersistent() });
+    var options: Stream.FreeOptions = if (stream.isPersistent()) .close_persistent else .close;
+    options.keep_rsrc = true;
+    return stream.free(options);
 }
 
 pub fn syncStream(resource: *Resource) !void {
     const stream = try Stream.fromResource(resource);
+    try expect(stream.supportsSync());
     try stream.flush();
     try stream.sync(false);
     try stream.sync(true);
@@ -200,6 +270,15 @@ pub fn checkStreamFailures(source: *Resource, destination: *Resource) !void {
     try expectError(error.FlushFailed, failed.flush());
     try expectError(error.SeekFailed, failed.seek(0, .start));
     try expectError(error.TruncateFailed, failed.truncate(1));
+    try expectError(error.StatFailed, failed.stat());
+    try expectError(error.SetOptionFailed, failed.setBlocking(false));
+    try expectError(error.SetOptionFailed, failed.setReadTimeout(1, 0));
+    try expectError(error.SetOptionFailed, failed.setReadBuffer(0));
+    try expectError(error.SetOptionFailed, failed.setWriteBuffer(0));
+    // A stale errno must not turn a wrapper's ordinary failure into contention.
+    std.c._errno().* = phpz.c.EWOULDBLOCK;
+    try expectError(error.LockFailed, failed.lock(.exclusive, true));
+    try expectError(error.LockFailed, failed.unlock());
 
     const memory = try Stream.open("php://memory", "w+b", .{});
     defer _ = memory.close();
@@ -213,4 +292,38 @@ pub fn checkStreamFailures(source: *Resource, destination: *Resource) !void {
     try expectError(error.CopyFailed, memory.copyTo(short, null, &copied));
     // PHP's failure count is not necessarily the number actually written.
     try expect(copied <= 4);
+}
+
+fn checkFreeOptionsLayout() !void {
+    try expect(@backingInt(Stream.FreeOptions{}) == 0);
+    inline for (.{
+        .{ "call_dtor", phpz.c.PHP_STREAM_FREE_CALL_DTOR },
+        .{ "release_stream", phpz.c.PHP_STREAM_FREE_RELEASE_STREAM },
+        .{ "preserve_handle", phpz.c.PHP_STREAM_FREE_PRESERVE_HANDLE },
+        .{ "rsrc_dtor", phpz.c.PHP_STREAM_FREE_RSRC_DTOR },
+        .{ "persistent", phpz.c.PHP_STREAM_FREE_PERSISTENT },
+        .{ "ignore_enclosing", phpz.c.PHP_STREAM_FREE_IGNORE_ENCLOSING },
+        .{ "keep_rsrc", phpz.c.PHP_STREAM_FREE_KEEP_RSRC },
+    }) |flag| {
+        var options: Stream.FreeOptions = .{};
+        @field(options, flag[0]) = true;
+        try expect(@backingInt(options) == flag[1]);
+    }
+}
+
+fn checkFreeOptionsPresets() !void {
+    try expect(Stream.FreeOptions.close == Stream.FreeOptions{
+        .call_dtor = true,
+        .release_stream = true,
+    });
+    try expect(Stream.FreeOptions.close_casted == Stream.FreeOptions{
+        .call_dtor = true,
+        .release_stream = true,
+        .preserve_handle = true,
+    });
+    try expect(Stream.FreeOptions.close_persistent == Stream.FreeOptions{
+        .call_dtor = true,
+        .release_stream = true,
+        .persistent = true,
+    });
 }

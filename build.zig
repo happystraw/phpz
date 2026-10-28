@@ -99,7 +99,9 @@ fn addTestStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) voi
         .root_module = mod,
     });
     test_lib.setLibCFile(options.getLibCFilePath());
-    const step = b.step("test", "Run unit tests");
+    // PHP/Zend symbols are supplied by the PHP host, so these library tests
+    // only check compilation. Runtime assertions belong in the example PHPTs.
+    const step = b.step("test", "Compile library tests and run standalone tool tests");
     step.dependOn(&test_lib.step);
 
     for ([_][]const u8{
