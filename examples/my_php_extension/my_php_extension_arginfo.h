@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 1552fc61e52ca76161e0f85a18ff2a767cd05177 */
+ * Stub hash: e79df035e09101b3a838927afdaf99c2f5c0ebe5 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -398,6 +398,25 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_optionalReferenceA
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(1, value, IS_MIXED, 0, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_createResource, 0, 2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, number, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, other, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readResource, 0, 2, IS_LONG, 0)
+	ZEND_ARG_INFO(0, resource)
+	ZEND_ARG_TYPE_INFO(0, other, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_closeResource arginfo_MyPHPExt_Test_rewindStreamDir
+
+#define arginfo_MyPHPExt_Test_resourceTypeName arginfo_MyPHPExt_Test_readStreamDir
+
+#define arginfo_MyPHPExt_Test_checkResourceRelease arginfo_MyPHPExt_Test_checkNativeTsrmThreads
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_resourceDestructions, 0, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_ClosureCounter___construct, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -410,8 +429,7 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_ClosureRef___invoke, 1, 0, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Identifiable_getId, 0, 0, IS_LONG, 0)
-ZEND_END_ARG_INFO()
+#define arginfo_class_MyPHPExt_Identifiable_getId arginfo_MyPHPExt_Test_resourceDestructions
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Tag___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
@@ -422,7 +440,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Entity___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, id, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_Entity_getId arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Entity_getId arginfo_MyPHPExt_Test_resourceDestructions
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Entity_label, 0, 0, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -457,7 +475,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Counter_decrement arginfo_class_MyPHPExt_Counter_increment
 
-#define arginfo_class_MyPHPExt_Counter_value arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Counter_value arginfo_MyPHPExt_Test_resourceDestructions
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Counter_reset, 0, 0, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, value, IS_LONG, 0, "0")
@@ -490,7 +508,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Collection_offset
 	ZEND_ARG_TYPE_INFO(0, offset, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_Collection_count arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Collection_count arginfo_MyPHPExt_Test_resourceDestructions
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_MyPHPExt_Collection_current, 0, 0, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -505,7 +523,7 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Config_greeting arginfo_class_MyPHPExt_Entity_label
 
-#define arginfo_class_MyPHPExt_Config_maxUsers arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Config_maxUsers arginfo_MyPHPExt_Test_resourceDestructions
 
 #define arginfo_class_MyPHPExt_Config_debugEnabled arginfo_MyPHPExt_Test_checkNativeTsrmThreads
 
@@ -525,13 +543,13 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_MyPHPExt_Test_NewValue___destruct arginfo_class_MyPHPExt_ClosureCounter___construct
 
-#define arginfo_class_MyPHPExt_Test_FallibleValue_value arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Test_FallibleValue_value arginfo_MyPHPExt_Test_resourceDestructions
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_MyPHPExt_Test_SerializableValue___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, value, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_MyPHPExt_Test_SerializableValue_value arginfo_class_MyPHPExt_Identifiable_getId
+#define arginfo_class_MyPHPExt_Test_SerializableValue_value arginfo_MyPHPExt_Test_resourceDestructions
 
 #define arginfo_class_MyPHPExt_Test_SerializableValue___serialize arginfo_MyPHPExt_Test_iterateWhileMutating
 
@@ -639,6 +657,12 @@ ZEND_FUNCTION(MyPHPExt_Test_setReference);
 ZEND_FUNCTION(MyPHPExt_Test_setReferenceSelf);
 ZEND_FUNCTION(MyPHPExt_Test_createReferenceCopy);
 ZEND_FUNCTION(MyPHPExt_Test_optionalReferenceArgument);
+ZEND_FUNCTION(MyPHPExt_Test_createResource);
+ZEND_FUNCTION(MyPHPExt_Test_readResource);
+ZEND_FUNCTION(MyPHPExt_Test_closeResource);
+ZEND_FUNCTION(MyPHPExt_Test_resourceTypeName);
+ZEND_FUNCTION(MyPHPExt_Test_checkResourceRelease);
+ZEND_FUNCTION(MyPHPExt_Test_resourceDestructions);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __construct);
 ZEND_METHOD(MyPHPExt_ClosureCounter, __invoke);
 ZEND_METHOD(MyPHPExt_ClosureRef, __construct);
@@ -1122,6 +1146,36 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalReferenceArgument"), zif_MyPHPExt_Test_optionalReferenceArgument, arginfo_MyPHPExt_Test_optionalReferenceArgument, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "optionalReferenceArgument"), zif_MyPHPExt_Test_optionalReferenceArgument, arginfo_MyPHPExt_Test_optionalReferenceArgument, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createResource"), zif_MyPHPExt_Test_createResource, arginfo_MyPHPExt_Test_createResource, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createResource"), zif_MyPHPExt_Test_createResource, arginfo_MyPHPExt_Test_createResource, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readResource"), zif_MyPHPExt_Test_readResource, arginfo_MyPHPExt_Test_readResource, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readResource"), zif_MyPHPExt_Test_readResource, arginfo_MyPHPExt_Test_readResource, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "closeResource"), zif_MyPHPExt_Test_closeResource, arginfo_MyPHPExt_Test_closeResource, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "closeResource"), zif_MyPHPExt_Test_closeResource, arginfo_MyPHPExt_Test_closeResource, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceTypeName"), zif_MyPHPExt_Test_resourceTypeName, arginfo_MyPHPExt_Test_resourceTypeName, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceTypeName"), zif_MyPHPExt_Test_resourceTypeName, arginfo_MyPHPExt_Test_resourceTypeName, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkResourceRelease"), zif_MyPHPExt_Test_checkResourceRelease, arginfo_MyPHPExt_Test_checkResourceRelease, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkResourceRelease"), zif_MyPHPExt_Test_checkResourceRelease, arginfo_MyPHPExt_Test_checkResourceRelease, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceDestructions"), zif_MyPHPExt_Test_resourceDestructions, arginfo_MyPHPExt_Test_resourceDestructions, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "resourceDestructions"), zif_MyPHPExt_Test_resourceDestructions, arginfo_MyPHPExt_Test_resourceDestructions, 0)
 #endif
 	ZEND_FE_END
 };

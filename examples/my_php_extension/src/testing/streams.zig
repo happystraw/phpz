@@ -200,7 +200,7 @@ pub fn checkPersistentStreams(path: *phpz.zend.String) !void {
     const result = stream.closePersistent();
     closed = true;
     try expect(result == 0);
-    try expect(resource.type() == -1 and resource.refcount() == 2);
+    try expect(resource.typeId() == -1 and resource.refcount() == 2);
     try expect(try Stream.fromPersistentId(id.slice()) == null);
 
     const reopened = try Stream.open(path.slice(), "r+b", .{ .persistent = true });

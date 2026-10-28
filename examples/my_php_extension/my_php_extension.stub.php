@@ -330,4 +330,15 @@ namespace MyPHPExt\Test {
     function setReferenceSelf(mixed &$target): void {}
     function &createReferenceCopy(mixed &$source): mixed {}
     function optionalReferenceArgument(string $mode, string $type, bool $single, mixed &$value = null): string {}
+
+    /** @return resource */
+    function createResource(int $number, bool $other): mixed {}
+    /** @param resource $resource */
+    function readResource($resource, bool $other): int {}
+    /** @param resource $resource */
+    function closeResource($resource): void {}
+    /** @param resource $resource */
+    function resourceTypeName($resource): ?string {}
+    function checkResourceRelease(): bool {}
+    function resourceDestructions(): int {}
 }

@@ -19,6 +19,7 @@ const tsrm = @import("tsrm.zig");
 /// registered during module startup.
 /// Class wrappers listed in `classes` are registered during module startup,
 /// before `module_startup_fn`.
+/// Resource types listed in `resources` are registered before classes.
 pub const Config = struct {
     /// Extension name (must be null-terminated).
     /// This should match the filename of your extension (.so file).
@@ -33,6 +34,9 @@ pub const Config = struct {
     /// Class wrappers to register during module startup, in the given order.
     /// Parent classes and interfaces should appear before children.
     classes: ?[]const type = null,
+
+    /// Resource.Typed declarations to register during module startup.
+    resources: ?[]const type = null,
 
     /// INI declarations to register during module startup.
     ini: []const type = &.{},
@@ -130,6 +134,7 @@ fn makePhpModuleStartupFn(
     comptime hook_fn: ?PhpHookFn,
     comptime ini_defs: ?[]const c.zend_ini_entry_def,
     comptime classes: ?[]const type,
+    comptime resources: ?[]const type,
     comptime observer_cfg: ?observer.Config,
 ) ?*const fn (c_int, c_int) callconv(.c) c.zend_result {
     const symbols_fn_name = "register_" ++ module_name ++ "_symbols";
@@ -148,6 +153,14 @@ fn makePhpModuleStartupFn(
             if (comptime ini_defs) |defs| {
                 if (c.zend_register_ini_entries(&defs[0], module_number) != c.SUCCESS) {
                     return c.FAILURE;
+                }
+            }
+            if (comptime resources) |items| {
+                inline for (items) |ResourceType| {
+                    ResourceType.register(module_number) catch |err| {
+                        errors.warning("Resource registration failed: %s", .{@errorName(err).ptr});
+                        return c.FAILURE;
+                    };
                 }
             }
             if (comptime classes) |items| {
@@ -240,7 +253,7 @@ pub fn initModuleEntry(comptime cfg: Config) ModuleEntry {
     // EXTENSION SETUP
     entry.name = cfg.name;
     entry.functions = if (@hasDecl(c, "ext_functions")) &c.ext_functions else null;
-    entry.module_startup_func = makePhpModuleStartupFn(cfg.name, cfg.module_startup_fn, registered_ini_defs, cfg.classes, cfg.observer);
+    entry.module_startup_func = makePhpModuleStartupFn(cfg.name, cfg.module_startup_fn, registered_ini_defs, cfg.classes, cfg.resources, cfg.observer);
     entry.module_shutdown_func = makePhpModuleShutdownFn(cfg.module_shutdown_fn, registered_ini_defs, cfg.observer);
     entry.request_startup_func = makePhpRequestStartupFn(cfg.request_startup_fn);
     entry.request_shutdown_func = if (cfg.request_shutdown_fn) |f| makePhpHookFn(f) else null;
