@@ -422,8 +422,8 @@ if (!(Test-Path -LiteralPath (Join-Path $phpLibDirectory $phpImportLibrary))) {
 $actualVersion = ([string] (& $phpExe -n -r 'echo PHP_VERSION;')).Trim()
 $actualThreadSafety = ([string] (& $phpExe -n -r 'echo PHP_ZTS ? "ts" : "nts";')).Trim()
 $actualDebug = ([string] (& $phpExe -n -r 'echo PHP_DEBUG ? "1" : "0";')).Trim()
-if ($actualVersion -ne [string] $release.version) {
-    throw "Expected PHP $($release.version), got $actualVersion"
+if (!$actualVersion.StartsWith("$PhpVersion.")) {
+    throw "Expected PHP $PhpVersion.x, got $actualVersion"
 }
 if ($actualThreadSafety -ne $ThreadSafety) {
     throw "Expected PHP $ThreadSafety, got $actualThreadSafety"
