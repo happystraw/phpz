@@ -30,6 +30,10 @@ pub const ClassConstant = opaque {
     pub fn isPrivate(self: *ClassConstant) bool {
         return (self.flags() & c.ZEND_ACC_PRIVATE) != 0;
     }
+
+    pub fn isEnumCase(self: *ClassConstant) bool {
+        return (self.flags() & c.ZEND_CLASS_CONST_IS_CASE) != 0;
+    }
 };
 
 test {

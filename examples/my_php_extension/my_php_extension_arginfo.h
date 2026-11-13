@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: dc01bce393bc52230a55eea0783bac26d2c98861 */
+ * Stub hash: 223bfc1da7ed5560e4ceb07ea2ff84522020345d */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -256,6 +256,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_hasObjectProperty,
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, standard, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_enumCase, 0, 2, IS_OBJECT, 1)
+	ZEND_ARG_TYPE_INFO(0, class, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, case, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_lookupClass, 0, 2, IS_STRING, 1)
@@ -640,6 +645,7 @@ ZEND_FUNCTION(MyPHPExt_Test_initObject);
 ZEND_FUNCTION(MyPHPExt_Test_cloneObject);
 ZEND_FUNCTION(MyPHPExt_Test_objectProperties);
 ZEND_FUNCTION(MyPHPExt_Test_hasObjectProperty);
+ZEND_FUNCTION(MyPHPExt_Test_enumCase);
 ZEND_FUNCTION(MyPHPExt_Test_lookupClass);
 ZEND_FUNCTION(MyPHPExt_Test_readStaticProperty);
 ZEND_FUNCTION(MyPHPExt_Test_checkConstantMetadata);
@@ -1012,6 +1018,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "hasObjectProperty"), zif_MyPHPExt_Test_hasObjectProperty, arginfo_MyPHPExt_Test_hasObjectProperty, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "hasObjectProperty"), zif_MyPHPExt_Test_hasObjectProperty, arginfo_MyPHPExt_Test_hasObjectProperty, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "enumCase"), zif_MyPHPExt_Test_enumCase, arginfo_MyPHPExt_Test_enumCase, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "enumCase"), zif_MyPHPExt_Test_enumCase, arginfo_MyPHPExt_Test_enumCase, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "lookupClass"), zif_MyPHPExt_Test_lookupClass, arginfo_MyPHPExt_Test_lookupClass, 0, NULL, NULL)

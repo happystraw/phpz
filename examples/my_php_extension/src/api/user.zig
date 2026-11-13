@@ -30,10 +30,8 @@ pub fn __construct(ctx: phpz.Ctx) !void {
         try user.setProperty(.null, "age", {});
     }
 
-    const role_value = role_arg orelse
-        (role.Class.entry.getEnumCase("User") orelse unreachable);
-    const status_value = status_arg orelse
-        (status.Class.entry.getEnumCase("Active") orelse unreachable);
+    const role_value = role_arg orelse role.Class.entry.getEnumCaseUnchecked("User");
+    const status_value = status_arg orelse status.Class.entry.getEnumCaseUnchecked("Active");
     try user.setProperty(.object, "role", role_value);
     try user.setProperty(.object, "status", status_value);
 }

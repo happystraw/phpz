@@ -226,10 +226,28 @@ pub const ClassEntry = opaque {
         return @fromBackingInt(self.ptr().*.enum_backing_type);
     }
 
-    /// Get an enum case object by name from this enum class
+    /// Get an enum case object by name.
+    ///
+    /// Ownership: borrowed case object owned by the enum class.
+    ///
+    /// Returns null if this class is not an enum or `case_name` is not one of
+    /// its cases, including when it names a regular class constant.
     pub fn getEnumCase(self: *ClassEntry, case_name: [:0]const u8) ?*Object {
-        const case_obj = c.zend_enum_get_case_cstr(self.ptr(), case_name.ptr);
-        return if (case_obj) |obj| Object.from(obj) else null;
+        if (!self.isEnum()) return null;
+        const case_constant = self.findConstant(case_name) orelse return null;
+        if (!case_constant.isEnumCase()) return null;
+        return self.getEnumCaseUnchecked(case_name);
+    }
+
+    /// Get an enum case object by name without validating it.
+    ///
+    /// Ownership: borrowed case object owned by the enum class.
+    ///
+    /// `self` must be an enum and `case_name` one of its cases. Zend does not
+    /// check either: debug builds assert, release builds dereference a null
+    /// constant or return a non-object value.
+    pub fn getEnumCaseUnchecked(self: *ClassEntry, case_name: [:0]const u8) *Object {
+        return .from(c.zend_enum_get_case_cstr(self.ptr(), case_name.ptr).?);
     }
 
     pub const SetStaticPropertyError = error{UpdateStaticPropertyFailed} || exception.Error;

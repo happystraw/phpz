@@ -45,6 +45,13 @@ pub fn readClassConstant(class_name: []const u8, name: []const u8, silent: bool)
     return (try entry.constant(name, silent)) orelse error.ConstantNotFound;
 }
 
+pub fn enumCase(class_name: []const u8, case_name: [:0]const u8) !?*phpz.zend.Object {
+    const entry = (try phpz.ClassEntry.lookup(class_name, true)) orelse return error.ClassNotFound;
+    const case = entry.getEnumCase(case_name) orelse return null;
+    case.addref();
+    return case;
+}
+
 pub fn lookupClass(name: []const u8, autoload: bool) !?[]const u8 {
     const entry = (try phpz.ClassEntry.lookup(name, autoload)) orelse return null;
     return entry.name();

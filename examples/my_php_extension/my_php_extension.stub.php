@@ -249,6 +249,7 @@ namespace MyPHPExt\Test {
     function cloneObject(object $object): object {}
     function objectProperties(object $object, bool $standard): array {}
     function hasObjectProperty(object $object, string $name, bool $standard): bool {}
+    function enumCase(string $class, string $case): ?object {}
     function lookupClass(string $name, bool $autoload): ?string {}
     function readStaticProperty(string $class, string $name, bool $silent): mixed {}
     function checkConstantMetadata(): void {}

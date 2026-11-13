@@ -134,6 +134,7 @@ comptime {
         .@"MyPHPExt\\Test\\checkArrayCallbacks" = boundaries.checkArrayCallbacks,
         .@"MyPHPExt\\Test\\checkObjectPropertyHandlers" = boundaries.checkObjectPropertyHandlers,
         .@"MyPHPExt\\Test\\checkObjectCreation" = boundaries.checkObjectCreation,
+        .@"MyPHPExt\\Test\\enumCase" = class_entry.enumCase,
         .@"MyPHPExt\\Test\\lookupClass" = class_entry.lookupClass,
         .@"MyPHPExt\\Test\\readStaticProperty" = class_entry.readStaticProperty,
         .@"MyPHPExt\\Test\\checkConstantMetadata" = class_entry.checkConstantMetadata,
