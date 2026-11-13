@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: cc9ddeb20dece8f40169a27bcf0f9754d903f5e0 */
+ * Stub hash: 5f33ebd26500b12a4c9fc091deca823b93262750 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -135,6 +135,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_writeObjectNative,
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, input, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkCallIfExists, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, target, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_objectDimension, 0, 4, IS_MIXED, 0)
@@ -621,6 +625,7 @@ ZEND_FUNCTION(MyPHPExt_Test_checkNativeTsrmThreads);
 ZEND_FUNCTION(MyPHPExt_Test_objectView);
 ZEND_FUNCTION(MyPHPExt_Test_readObjectNative);
 ZEND_FUNCTION(MyPHPExt_Test_writeObjectNative);
+ZEND_FUNCTION(MyPHPExt_Test_checkCallIfExists);
 ZEND_FUNCTION(MyPHPExt_Test_objectDimension);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectViews);
 ZEND_FUNCTION(MyPHPExt_Test_checkWriteOwnership);
@@ -891,6 +896,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "writeObjectNative"), zif_MyPHPExt_Test_writeObjectNative, arginfo_MyPHPExt_Test_writeObjectNative, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "writeObjectNative"), zif_MyPHPExt_Test_writeObjectNative, arginfo_MyPHPExt_Test_writeObjectNative, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkCallIfExists"), zif_MyPHPExt_Test_checkCallIfExists, arginfo_MyPHPExt_Test_checkCallIfExists, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkCallIfExists"), zif_MyPHPExt_Test_checkCallIfExists, arginfo_MyPHPExt_Test_checkCallIfExists, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectDimension"), zif_MyPHPExt_Test_objectDimension, arginfo_MyPHPExt_Test_objectDimension, 0, NULL, NULL)

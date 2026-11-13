@@ -555,6 +555,13 @@ pub const Object = opaque {
     pub const TryCallIfExistsError = error{MethodCallFailed} || Function.TryCallError;
 
     /// Call a method by name, succeeding only if the method exists.
+    ///
+    /// `retval` receives the result; pass null to discard it. The caller owns
+    /// the result; existing contents of `retval` are not released. When the
+    /// method does not exist, `retval` is set to undef.
+    ///
+    /// Returns error.MethodCallFailed if the method does not exist, or
+    /// error.PhpException or error.UnwindExit if it threw a PHP exception.
     pub fn callIfExists(
         self: *Object,
         method_name: []const u8,
@@ -564,10 +571,13 @@ pub const Object = opaque {
         const zstr = String.init(method_name, false);
         defer zstr.release();
 
+        var discard = Zval.raw.undef;
+        defer if (retval == null) Zval.raw.release(&discard);
+
         const result = c.zend_call_method_if_exists(
             self.ptr(),
             zstr.ptr(),
-            retval,
+            retval orelse &discard,
             @intCast(params.len),
             if (params.len > 0) @ptrCast(params.ptr) else null,
         );
@@ -576,6 +586,7 @@ pub const Object = opaque {
     }
 
     /// Call a method by name if it exists and convert a Zend bailout into `error.ZendBailout`.
+    /// Arguments and ownership follow `callIfExists()`.
     pub fn tryCallIfExists(
         self: *Object,
         method_name: []const u8,
@@ -585,11 +596,14 @@ pub const Object = opaque {
         const zstr = String.init(method_name, false);
         defer zstr.release();
 
+        var discard = Zval.raw.undef;
+        defer if (retval == null) Zval.raw.release(&discard);
+
         const CallResult = @typeInfo(@TypeOf(c.zend_call_method_if_exists)).@"fn".return_type.?;
         const Context = struct {
             object: *Object,
             method: *c.zend_string,
-            retval: ?*c.zval,
+            retval: *c.zval,
             params: []c.zval,
 
             fn call(context: *@This()) CallResult {
@@ -606,7 +620,7 @@ pub const Object = opaque {
         var context: Context = .{
             .object = self,
             .method = zstr.ptr(),
-            .retval = retval,
+            .retval = retval orelse &discard,
             .params = params,
         };
         const result = try bailout.run(Context.call, .{&context});

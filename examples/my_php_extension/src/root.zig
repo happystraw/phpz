@@ -112,6 +112,7 @@ comptime {
         .@"MyPHPExt\\Test\\constructObject" = object_tests.constructObject,
         .@"MyPHPExt\\Test\\objectView" = object_access.objectView,
         .@"MyPHPExt\\Test\\readObjectNative" = object_access.readObjectNative,
+        .@"MyPHPExt\\Test\\checkCallIfExists" = object_access.checkCallIfExists,
         .@"MyPHPExt\\Test\\writeObjectNative" = object_access.writeObjectNative,
         .@"MyPHPExt\\Test\\objectDimension" = object_access.objectDimension,
         .@"MyPHPExt\\Test\\checkObjectViews" = object_access.checkObjectViews,

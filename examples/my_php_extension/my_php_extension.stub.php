@@ -223,6 +223,7 @@ namespace MyPHPExt\Test {
     function objectView(object $object, string $purpose): ?array {}
     function readObjectNative(object $object, string $name, string $api): mixed {}
     function writeObjectNative(object $object, string $name, mixed $input, string $api): void {}
+    function checkCallIfExists(object $target): void {}
     function objectDimension(object $object, string $action, mixed $offset, mixed $input): mixed {}
     function checkObjectViews(array $empty): void {}
     function checkWriteOwnership(array $immutable): void {}

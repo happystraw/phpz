@@ -136,3 +136,22 @@ pub fn checkObjectViews(empty: *Array) !void {
     defer raw.release(&ordinary_scratch);
     try expect((try ordinary.propertyStr(name, false, &ordinary_scratch)).asUnchecked(.int) == 42);
 }
+
+/// Discarded and missing-method results of callIfExists/tryCallIfExists.
+/// `target.make()` returns an object whose destructor reports its release.
+pub fn checkCallIfExists(target: *Object) !void {
+    const no_params: []c.zval = &.{};
+    try target.callIfExists("make", null, no_params);
+    try target.tryCallIfExists("make", null, no_params);
+    try std.testing.expectError(error.MethodCallFailed, target.callIfExists("missing", null, no_params));
+    try std.testing.expectError(error.MethodCallFailed, target.tryCallIfExists("missing", null, no_params));
+
+    var result = raw.undef;
+    try target.callIfExists("make", &result, no_params);
+    try expect(raw.is(&result, .object));
+    raw.release(&result);
+
+    var missing = raw.init(.int, 1);
+    try std.testing.expectError(error.MethodCallFailed, target.callIfExists("missing", &missing, no_params));
+    try expect(raw.is(&missing, .undef));
+}
