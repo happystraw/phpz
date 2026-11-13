@@ -9,7 +9,7 @@ const expectError = std.testing.expectError;
 pub fn checkWriteOwnership(input: *phpz.zend.Array) !void {
     try expect(input.isImmutable());
     try checkImmutable(input);
-    try checkImmutable(phpz.zend.Array.from(@constCast(&c.zend_empty_array)));
+    try checkImmutable(phpz.zend.Array.emptyImmutable());
     try checkMutable();
     try checkFailedAppend();
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const c = @import("../root.zig").c;
 const exception = @import("../exception.zig");
+const globals = @import("../globals.zig");
 const Zval = @import("../zval.zig").Zval;
 const String = @import("string.zig").String;
 
@@ -14,6 +15,13 @@ pub const Array = opaque {
     /// Ownership: caller owns the returned array; call `release()` when done.
     pub fn empty() *Array {
         return @ptrCast(c.zend_new_array(0));
+    }
+
+    /// Borrow Zend's shared immutable empty array without allocating.
+    /// Do not mutate or destroy it; call `dupe()` for a mutable copy.
+    /// Ownership: borrowed singleton; `release()` is a no-op.
+    pub inline fn emptyImmutable() *Array {
+        return .from(@constCast(globals.global(.ptr, c.zend_array, "zend_empty_array")));
     }
 
     /// Create an array with initial capacity.
