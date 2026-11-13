@@ -125,7 +125,7 @@ pub const Identifier = union(enum) {
     pub fn typeError(self: Identifier, comptime format: [:0]const u8, args: anytype) exception.Error {
         return switch (self) {
             .position => |position| exception.argumentTypeError(position, format, args),
-            .name => |name| namedError(name, .builtin("zend_ce_type_error"), format, args),
+            .name => |name| namedError(name, .internal("zend_ce_type_error"), format, args),
         };
     }
 
@@ -134,7 +134,7 @@ pub const Identifier = union(enum) {
     pub fn valueError(self: Identifier, comptime format: [:0]const u8, args: anytype) exception.Error {
         return switch (self) {
             .position => |position| exception.argumentValueError(position, format, args),
-            .name => |name| namedError(name, .builtin("zend_ce_value_error"), format, args),
+            .name => |name| namedError(name, .internal("zend_ce_value_error"), format, args),
         };
     }
 

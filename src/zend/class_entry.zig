@@ -30,11 +30,13 @@ pub const ClassEntry = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Borrow a built-in class entry by PHP class name or exact C symbol name.
+    /// Borrow the class entry of an internal class, one defined by the engine
+    /// or an extension (see ReflectionClass::isInternal()), by PHP class name
+    /// or exact C symbol name.
     /// Resolves the symbol at compile time, then reads its global pointer directly.
     /// Does not query the class table or invoke autoloaders; the class must be initialized.
-    pub inline fn builtin(comptime class_name: []const u8) *ClassEntry {
-        return .from(globals.global(.value, *c.zend_class_entry, builtinSymbol(class_name)));
+    pub inline fn internal(comptime class_name: []const u8) *ClassEntry {
+        return .from(globals.global(.value, *c.zend_class_entry, internalSymbol(class_name)));
     }
 
     /// Look up a class in CG(class_table), during MINIT or a request.
@@ -54,7 +56,7 @@ pub const ClassEntry = opaque {
     /// Look up a class by name, optionally invoking registered autoloaders.
     ///
     /// Requires an active request with an initialized executor and EG(class_table).
-    /// Do not call during MINIT, even with `autoload = false`; use `builtin` or
+    /// Do not call during MINIT, even with `autoload = false`; use `internal` or
     /// `find` for classes that have already been registered during startup.
     ///
     /// Unlike `find`, the name is normalized following Zend's rules
@@ -298,7 +300,7 @@ pub const ClassEntry = opaque {
     }
 };
 
-fn builtinSymbolName(comptime prefix: []const u8, comptime class_name: []const u8, comptime lowercase: bool) []const u8 {
+fn internalSymbolName(comptime prefix: []const u8, comptime class_name: []const u8, comptime lowercase: bool) []const u8 {
     const name = if (class_name.len > 0 and class_name[0] == '\\') class_name[1..] else class_name;
     if (name.len == 0) @compileError("class entry name cannot be empty");
 
@@ -317,20 +319,20 @@ fn builtinSymbolName(comptime prefix: []const u8, comptime class_name: []const u
     return &final;
 }
 
-fn builtinSymbol(comptime class_name: []const u8) []const u8 {
+fn internalSymbol(comptime class_name: []const u8) []const u8 {
     return comptime blk: {
         if (@hasDecl(c, class_name)) break :blk class_name;
 
-        const zend_original = builtinSymbolName("zend_ce_", class_name, false);
+        const zend_original = internalSymbolName("zend_ce_", class_name, false);
         if (@hasDecl(c, zend_original)) break :blk zend_original;
 
-        const zend_lowercase = builtinSymbolName("zend_ce_", class_name, true);
+        const zend_lowercase = internalSymbolName("zend_ce_", class_name, true);
         if (@hasDecl(c, zend_lowercase)) break :blk zend_lowercase;
 
-        const spl_original = builtinSymbolName("spl_ce_", class_name, false);
+        const spl_original = internalSymbolName("spl_ce_", class_name, false);
         if (@hasDecl(c, spl_original)) break :blk spl_original;
 
-        const spl_lowercase = builtinSymbolName("spl_ce_", class_name, true);
+        const spl_lowercase = internalSymbolName("spl_ce_", class_name, true);
         if (@hasDecl(c, spl_lowercase)) break :blk spl_lowercase;
 
         @compileError("class entry symbol not found: " ++ zend_original ++ ", " ++ zend_lowercase ++ ", " ++ spl_original ++ ", or " ++ spl_lowercase);

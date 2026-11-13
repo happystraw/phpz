@@ -17,7 +17,7 @@ pub const Object = opaque {
     /// Uses PHP's native OOM policy: OOM may be delayed or bail out;
     /// exceeding a hard memory limit terminates the process.
     pub fn std() *Object {
-        return initStd(.builtin("zend_standard_class_def"));
+        return initStd(.internal("zend_standard_class_def"));
     }
 
     /// Allocate a standard-layout object and initialize its default properties.

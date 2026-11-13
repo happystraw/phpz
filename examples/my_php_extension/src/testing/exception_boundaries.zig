@@ -34,7 +34,7 @@ fn invoke(frame: *phpz.CallFrame, api: []const u8, value: *phpz.Zval) !void {
         if (value.is(.bool) and try value.as(.bool)) {
             exitSignal();
         } else if (value.is(.string)) {
-            _ = phpz.exception.throwExceptionObject(.builtin("Exception"), "original", 0);
+            _ = phpz.exception.throwExceptionObject(.internal("Exception"), "original", 0);
         }
         return invokeHelper(api["helper-".len..]);
     }
@@ -105,7 +105,7 @@ fn invoke(frame: *phpz.CallFrame, api: []const u8, value: *phpz.Zval) !void {
     } else if (std.mem.startsWith(u8, api, "throw")) {
         // Zend must preserve an already pending exit when another exception is thrown.
         exitSignal();
-        const ce = phpz.ClassEntry.builtin("Exception");
+        const ce = phpz.ClassEntry.internal("Exception");
         if (std.mem.eql(u8, api, "throw")) return phpz.exception.throwException(ce, "preserve exit", 0);
         return phpz.exception.throwExceptionEx(ce, 0, "%s", .{@as([*:0]const u8, "preserve exit")});
     } else {

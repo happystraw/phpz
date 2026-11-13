@@ -1,7 +1,7 @@
 fn register(register_fn: anytype) *phpz.ClassEntry {
     return register_fn(.{
         entity.Class.entry,
-        .builtin("Stringable"),
+        .internal("Stringable"),
     });
 }
 

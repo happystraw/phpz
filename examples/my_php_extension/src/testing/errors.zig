@@ -3,7 +3,7 @@ const phpz = @import("phpz");
 
 pub fn readLastError(clear_exception: bool) !?*phpz.zend.Array {
     if (clear_exception) {
-        const thrown = phpz.exception.throwException(.builtin("Exception"), "pending fixture", 0);
+        const thrown = phpz.exception.throwException(.internal("Exception"), "pending fixture", 0);
         const pending = phpz.exception.pending();
         phpz.exception.clear();
         try std.testing.expect(thrown == error.PhpException);
@@ -25,7 +25,7 @@ pub fn readLastError(clear_exception: bool) !?*phpz.zend.Array {
 /// cleanup does: zend_throw_exception_internal(NULL) with an active frame
 /// passes NULL to zend_throw_exception_hook.
 pub fn rethrowPendingException() !void {
-    phpz.exception.throwException(.builtin("Exception"), "rethrown", 0) catch {};
+    phpz.exception.throwException(.internal("Exception"), "rethrown", 0) catch {};
     phpz.c.zend_throw_exception_internal(null);
     return error.PhpException;
 }
