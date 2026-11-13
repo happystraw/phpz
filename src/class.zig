@@ -78,6 +78,9 @@ fn Resolved(comptime T: type) type {
         register: fn () anyerror!*zend.ClassEntry,
         /// Initializer for the Zig backing value.
         init: ?fn () anyerror!T,
+        /// Whether `.init` has a non-empty error set, so a failure can leave
+        /// create_object with a pending exception.
+        init_fallible: bool,
         /// Destructor for the Zig backing value.
         deinit: ?fn (*T) void,
         /// Cloner for the Zig backing value.
@@ -209,6 +212,7 @@ fn Resolved(comptime T: type) type {
             };
 
             var initializer: ?fn () anyerror!T = null;
+            var init_fallible = false;
             var deinitializer: ?fn (*T) void = null;
             var cloner: ?fn (*const T) anyerror!T = null;
             var gc_callback: ?fn (*T, *GcBuffer) void = null;
@@ -232,7 +236,15 @@ fn Resolved(comptime T: type) type {
                             }
                         }.call;
                     } else @compileError("Class " ++ class_name ++ " .init must be .none, .default, or a function"),
-                    .@"fn" => blk: {
+                    .@"fn" => |fn_info| blk: {
+                        init_fallible = switch (@typeInfo(fn_info.return_type.?)) {
+                            // anyerror has no known names; an empty inferred set cannot fail.
+                            .error_union => |error_union| if (@typeInfo(error_union.error_set).error_set.error_names) |names|
+                                names.len != 0
+                            else
+                                true,
+                            else => false,
+                        };
                         break :blk struct {
                             fn call() anyerror!T {
                                 return @call(.auto, init, .{});
@@ -333,6 +345,7 @@ fn Resolved(comptime T: type) type {
                 .binding_strategy = binding_strategy,
                 .register = register,
                 .init = initializer,
+                .init_fallible = init_fallible,
                 .deinit = deinitializer,
                 .clone = cloner,
                 .gc = gc_callback,
@@ -604,6 +617,7 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             handlers.offset = @offsetOf(Self, "std");
             handlers.clone_obj = if (resolved.clone != null) lifecycle.cloneObject else null;
             if (resolved.gc != null) handlers.get_gc = lifecycle.getGc;
+            if (resolved.init_fallible) handlers.get_constructor = lifecycle.getConstructor;
 
             // Apply object handlers
             inline for (@typeInfo(ObjectHandlers).@"struct".field_names) |field_name| {
@@ -658,6 +672,32 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
                     };
                 }
                 return &intern.std;
+            }
+
+            /// Stops `new` after a failed `.init`.
+            ///
+            /// The failure leaves an exception pending on an object without
+            /// backing. ZEND_NEW checks EG(exception) only when this returns
+            /// null; otherwise it evaluates the arguments and runs __construct
+            /// with the exception still pending.
+            ///
+            /// Internal callers such as ReflectionClass::newInstance() still get
+            /// the real constructor: zend_call_function() returns early on a
+            /// pending exception, while a null constructor with arguments would
+            /// replace it with a ReflectionException.
+            fn getConstructor(obj: ?*c.zend_object) callconv(.c) ?*c.zend_function {
+                const self: *Self = .fromStdUnchecked(obj.?);
+                if (self.backing() == null) {
+                    @branchHint(.cold);
+                    if (exception.hasPending() and inUserFrame()) return null;
+                }
+                return c.zend_std_get_constructor(obj);
+            }
+
+            fn inUserFrame() bool {
+                const frame = globals.executor().currentCallFrame() orelse return false;
+                const func = frame.function() orelse return false;
+                return func.kind() != .internal;
             }
 
             fn destroyObject(obj: ?*c.zend_object) callconv(.c) void {
@@ -986,6 +1026,7 @@ test "concrete Zig class public declarations compile" {
         .binding_strategy = .automatic,
         .register = register,
         .init = null,
+        .init_fallible = false,
         .deinit = null,
         .clone = null,
         .gc = null,
