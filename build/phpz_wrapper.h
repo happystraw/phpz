@@ -140,6 +140,11 @@ static zend_always_inline void phpz_class_entry_set_create_object(zend_class_ent
     ce->create_object = handler;
 }
 
+/* Interfaces store interface_gets_implemented in the same union slot. */
+static zend_always_inline bool phpz_class_entry_has_create_object(const zend_class_entry *ce) {
+    return !(ce->ce_flags & ZEND_ACC_INTERFACE) && ce->create_object != NULL;
+}
+
 static zend_always_inline zend_class_entry *phpz_class_entry_get_parent(zend_class_entry *ce) {
     return ce->parent;
 }

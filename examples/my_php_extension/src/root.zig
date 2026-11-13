@@ -113,6 +113,8 @@ comptime {
         .@"MyPHPExt\\Test\\objectView" = object_access.objectView,
         .@"MyPHPExt\\Test\\readObjectNative" = object_access.readObjectNative,
         .@"MyPHPExt\\Test\\checkCallIfExists" = object_access.checkCallIfExists,
+        .@"MyPHPExt\\Test\\objectFromArray" = object_access.objectFromArray,
+        .@"MyPHPExt\\Test\\objectWithProperties" = object_access.objectWithProperties,
         .@"MyPHPExt\\Test\\writeObjectNative" = object_access.writeObjectNative,
         .@"MyPHPExt\\Test\\objectDimension" = object_access.objectDimension,
         .@"MyPHPExt\\Test\\checkObjectViews" = object_access.checkObjectViews,

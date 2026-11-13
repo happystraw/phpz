@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 5f33ebd26500b12a4c9fc091deca823b93262750 */
+ * Stub hash: 1df0e233556dbc0ab059b6e5ece8b7631fad8061 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -139,6 +139,15 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkCallIfExists, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, target, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_objectFromArray, 0, 1, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, properties, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_objectWithProperties, 0, 2, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, class, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, properties, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_objectDimension, 0, 4, IS_MIXED, 0)
@@ -626,6 +635,8 @@ ZEND_FUNCTION(MyPHPExt_Test_objectView);
 ZEND_FUNCTION(MyPHPExt_Test_readObjectNative);
 ZEND_FUNCTION(MyPHPExt_Test_writeObjectNative);
 ZEND_FUNCTION(MyPHPExt_Test_checkCallIfExists);
+ZEND_FUNCTION(MyPHPExt_Test_objectFromArray);
+ZEND_FUNCTION(MyPHPExt_Test_objectWithProperties);
 ZEND_FUNCTION(MyPHPExt_Test_objectDimension);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectViews);
 ZEND_FUNCTION(MyPHPExt_Test_checkWriteOwnership);
@@ -901,6 +912,16 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkCallIfExists"), zif_MyPHPExt_Test_checkCallIfExists, arginfo_MyPHPExt_Test_checkCallIfExists, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkCallIfExists"), zif_MyPHPExt_Test_checkCallIfExists, arginfo_MyPHPExt_Test_checkCallIfExists, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectFromArray"), zif_MyPHPExt_Test_objectFromArray, arginfo_MyPHPExt_Test_objectFromArray, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectFromArray"), zif_MyPHPExt_Test_objectFromArray, arginfo_MyPHPExt_Test_objectFromArray, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectWithProperties"), zif_MyPHPExt_Test_objectWithProperties, arginfo_MyPHPExt_Test_objectWithProperties, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectWithProperties"), zif_MyPHPExt_Test_objectWithProperties, arginfo_MyPHPExt_Test_objectWithProperties, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "objectDimension"), zif_MyPHPExt_Test_objectDimension, arginfo_MyPHPExt_Test_objectDimension, 0, NULL, NULL)

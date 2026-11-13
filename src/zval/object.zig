@@ -30,19 +30,52 @@ pub const Object = opaque {
         return @ptrCast(zv);
     }
 
-    /// Create an object with class and properties in caller-provided zval storage.
+    pub const InitWithPropertiesError = error{UnsupportedClass} || exception.Error;
+
+    /// Create an object of `ce` from an array in caller-provided zval storage
+    /// without calling its constructor, like PHP's `(object)$array` cast for
+    /// classes that only hold dynamic properties. Wraps
+    /// object_and_properties_init(). Integer keys become string property names.
     ///
-    /// Ownership: caller owns `zv`'s object value. `properties` is consumed by
-    /// Zend's object initializer when non-null; addref/copy it first if it is
-    /// borrowed and must remain independently owned.
+    /// Entries are stored directly in the property table: write_property,
+    /// __set and the dynamic property deprecation are not involved.
+    ///
+    /// Ownership: caller owns `zv`'s object value on success. `properties` is
+    /// borrowed and keeps its reference; the object may share the table
+    /// copy-on-write, and Zend separates it before either side is modified.
+    ///
+    /// Returns UnsupportedClass without touching `zv` if `ce` has a
+    /// create_object handler or declared properties: Zend would ignore the
+    /// table or leave the declared property slots uninitialized. Returns
+    /// PhpException or UnwindExit if Zend rejects the class, for example an
+    /// abstract class or interface.
     pub fn initWithProperties(
         zv: *c.zval,
         ce: *zend.ClassEntry,
-        properties: ?*zend.Array,
-    ) InitClassError!*Object {
-        const result = c.object_and_properties_init(zv, ce.ptr(), if (properties) |p| p.ptr() else null);
-        if (result != c.SUCCESS) return error.InitFailed;
+        properties: *zend.Array,
+    ) InitWithPropertiesError!*Object {
+        const class_entry = ce.ptr();
+        if (c.phpz_class_entry_has_create_object(class_entry) or class_entry.default_properties_count != 0) return error.UnsupportedClass;
+
+        var table = c.zend_symtable_to_proptable(properties.ptr());
+        if (zend.Array.from(table).isImmutable()) table = c.zend_array_dup(table);
+
+        if (c.object_and_properties_init(zv, class_entry, table) != c.SUCCESS) {
+            // Zend only takes the table once the object is created.
+            zend.Array.from(table).release();
+            return exception.pending() orelse error.PhpException;
+        }
         return @ptrCast(zv);
+    }
+
+    /// Create a stdClass object from an array in caller-provided zval storage,
+    /// like PHP's `(object)$array` cast. See initWithProperties().
+    ///
+    /// Ownership: caller owns `zv`'s object value; `properties` is borrowed.
+    pub fn stdWithProperties(zv: *c.zval, properties: *zend.Array) *Object {
+        // stdClass has no create_object handler or declared properties and is
+        // always instantiable.
+        return initWithProperties(zv, .internal("zend_standard_class_def"), properties) catch unreachable;
     }
 
     pub const FromError = error{NullPointer} || Zval.Error;

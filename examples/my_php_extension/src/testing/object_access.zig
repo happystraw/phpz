@@ -155,3 +155,19 @@ pub fn checkCallIfExists(target: *Object) !void {
     try std.testing.expectError(error.MethodCallFailed, target.callIfExists("missing", &missing, no_params));
     try expect(raw.is(&missing, .undef));
 }
+
+/// Build a stdClass from a borrowed array; the returned object's reference
+/// moves from the scratch zval to PHP.
+pub fn objectFromArray(properties: *Array) *Object {
+    var value = raw.undef;
+    return phpz.Zval.Object.stdWithProperties(&value, properties).zendObject();
+}
+
+/// Build an object of `class_name` from a borrowed array through
+/// Zval.Object.initWithProperties().
+pub fn objectWithProperties(class_name: []const u8, properties: *Array) !*Object {
+    const entry = (try phpz.ClassEntry.lookup(class_name, true)) orelse return error.ClassNotFound;
+    var value = raw.undef;
+    const object = try phpz.Zval.Object.initWithProperties(&value, entry, properties);
+    return object.zendObject();
+}
