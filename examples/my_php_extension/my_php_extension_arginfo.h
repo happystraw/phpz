@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 1801403d634faa5fa921b2b4e558f73451c221f7 */
+ * Stub hash: dc01bce393bc52230a55eea0783bac26d2c98861 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -146,6 +146,10 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkObjectViews, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, empty, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkWriteOwnership, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, immutable, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_checkArrayCallbacks arginfo_hello
@@ -612,6 +616,7 @@ ZEND_FUNCTION(MyPHPExt_Test_readObjectNative);
 ZEND_FUNCTION(MyPHPExt_Test_writeObjectNative);
 ZEND_FUNCTION(MyPHPExt_Test_objectDimension);
 ZEND_FUNCTION(MyPHPExt_Test_checkObjectViews);
+ZEND_FUNCTION(MyPHPExt_Test_checkWriteOwnership);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
 ZEND_FUNCTION(MyPHPExt_Test_readLastError);
 ZEND_FUNCTION(MyPHPExt_Test_checkExceptionBoundary);
@@ -887,6 +892,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectViews"), zif_MyPHPExt_Test_checkObjectViews, arginfo_MyPHPExt_Test_checkObjectViews, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkObjectViews"), zif_MyPHPExt_Test_checkObjectViews, arginfo_MyPHPExt_Test_checkObjectViews, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkWriteOwnership"), zif_MyPHPExt_Test_checkWriteOwnership, arginfo_MyPHPExt_Test_checkWriteOwnership, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkWriteOwnership"), zif_MyPHPExt_Test_checkWriteOwnership, arginfo_MyPHPExt_Test_checkWriteOwnership, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArrayCallbacks"), zif_MyPHPExt_Test_checkArrayCallbacks, arginfo_MyPHPExt_Test_checkArrayCallbacks, 0, NULL, NULL)

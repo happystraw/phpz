@@ -225,6 +225,7 @@ namespace MyPHPExt\Test {
     function writeObjectNative(object $object, string $name, mixed $input, string $api): void {}
     function objectDimension(object $object, string $action, mixed $offset, mixed $input): mixed {}
     function checkObjectViews(array $empty): void {}
+    function checkWriteOwnership(array $immutable): void {}
     function checkArrayCallbacks(): void {}
     function readLastError(bool $clear_exception): ?array {}
     function checkExceptionBoundary(string $api, mixed $value): void {}

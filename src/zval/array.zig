@@ -99,7 +99,12 @@ pub const Array = opaque {
             .string => c.add_assoc_stringl_ex(self.ptr(), key.ptr, key.len, val.ptr, val.len),
             .str => c.add_assoc_str_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .bool => c.add_assoc_bool_ex(self.ptr(), key.ptr, key.len, val),
-            .array => c.add_assoc_array_ex(self.ptr(), key.ptr, key.len, val.ptr()),
+            .array => {
+                // add_assoc_array_ex() always tags the value as refcounted, which
+                // corrupts immutable arrays such as zend_empty_array.
+                var value = Zval.raw.init(.array, val);
+                c.add_assoc_zval_ex(self.ptr(), key.ptr, key.len, &value);
+            },
             .object => c.add_assoc_object_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .resource => c.add_assoc_resource_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .reference => c.add_assoc_reference_ex(self.ptr(), key.ptr, key.len, val.ptr()),
@@ -130,7 +135,10 @@ pub const Array = opaque {
             .string => c.add_index_stringl(self.ptr(), idx, val.ptr, val.len),
             .str => c.add_index_str(self.ptr(), idx, val.ptr()),
             .bool => c.add_index_bool(self.ptr(), idx, val),
-            .array => c.add_index_array(self.ptr(), idx, val.ptr()),
+            .array => {
+                var value = Zval.raw.init(.array, val);
+                if (c.add_index_zval(self.ptr(), idx, &value) != c.SUCCESS) return error.SetIndexFailed;
+            },
             .object => c.add_index_object(self.ptr(), idx, val.ptr()),
             .resource => c.add_index_resource(self.ptr(), idx, val.ptr()),
             .reference => c.add_index_reference(self.ptr(), idx, val.ptr()),
@@ -159,10 +167,19 @@ pub const Array = opaque {
             .null => c.add_next_index_null(self.ptr()),
             .int => c.add_next_index_long(self.ptr(), @intCast(val)),
             .float => c.add_next_index_double(self.ptr(), val),
-            .string => c.add_next_index_stringl(self.ptr(), val.ptr, val.len),
+            .string => blk: {
+                // add_next_index_stringl() leaks its copy when the next index is exhausted.
+                var value = Zval.raw.init(.string, val);
+                const inserted = c.add_next_index_zval(self.ptr(), &value);
+                if (inserted != c.SUCCESS) Zval.raw.release(&value);
+                break :blk inserted;
+            },
             .str => c.add_next_index_str(self.ptr(), val.ptr()),
             .bool => c.add_next_index_bool(self.ptr(), val),
-            .array => c.add_next_index_array(self.ptr(), val.ptr()),
+            .array => blk: {
+                var value = Zval.raw.init(.array, val);
+                break :blk c.add_next_index_zval(self.ptr(), &value);
+            },
             .object => c.add_next_index_object(self.ptr(), val.ptr()),
             .resource => c.add_next_index_resource(self.ptr(), val.ptr()),
             .reference => c.add_next_index_reference(self.ptr(), val.ptr()),

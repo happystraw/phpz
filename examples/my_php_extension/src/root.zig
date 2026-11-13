@@ -31,6 +31,7 @@ const object_iterator = @import("testing/object_iterator.zig");
 const error_tests = @import("testing/errors.zig");
 const exception_boundaries = @import("testing/exception_boundaries.zig");
 const boundaries = @import("testing/boundaries.zig");
+const writes = @import("testing/writes.zig");
 const class_entry = @import("testing/class_entry.zig");
 const property_tests = @import("testing/properties.zig");
 const zval_tests = @import("testing/zval.zig");
@@ -129,6 +130,7 @@ comptime {
         .@"MyPHPExt\\Test\\deleteKey" = iteration.deleteKey,
         .@"MyPHPExt\\Test\\iterateWhileMutating" = iteration.iterateWhileMutating,
         .@"MyPHPExt\\Test\\buildList" = iteration.buildList,
+        .@"MyPHPExt\\Test\\checkWriteOwnership" = writes.checkWriteOwnership,
         .@"MyPHPExt\\Test\\checkArrayCallbacks" = boundaries.checkArrayCallbacks,
         .@"MyPHPExt\\Test\\checkObjectPropertyHandlers" = boundaries.checkObjectPropertyHandlers,
         .@"MyPHPExt\\Test\\checkObjectCreation" = boundaries.checkObjectCreation,

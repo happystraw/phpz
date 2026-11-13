@@ -94,7 +94,7 @@ pub const Object = opaque {
     /// Ownership: `.mixed` is borrowed and must already be dereferenced.
     /// The caller keeps its input reference on success and failure.
     /// Scalars and `.string` are copied.
-    /// The native helpers for `.str`, `.array`, `.object`, `.resource` release the
+    /// Writes of `.str`, `.array`, `.object`, `.resource` release the
     /// supplied reference after the property handler returns, including when a
     /// PHP exception is pending. Bailout may bypass this cleanup. Addref first
     /// if that reference is borrowed.
@@ -109,7 +109,13 @@ pub const Object = opaque {
             .string => c.add_property_stringl_ex(self.ptr(), key.ptr, key.len, val.ptr, val.len),
             .str => c.add_property_str_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .bool => c.add_property_bool_ex(self.ptr(), key.ptr, key.len, val),
-            .array => c.add_property_array_ex(self.ptr(), key.ptr, key.len, val.ptr()),
+            .array => {
+                // add_property_array_ex() always tags the value as refcounted, which
+                // corrupts immutable arrays such as zend_empty_array.
+                var value = Zval.raw.init(.array, val);
+                c.add_property_zval_ex(self.ptr(), key.ptr, key.len, &value);
+                Zval.raw.release(&value);
+            },
             .object => c.add_property_object_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .resource => c.add_property_resource_ex(self.ptr(), key.ptr, key.len, val.ptr()),
             .reference => @compileError("property writes do not accept .reference; pass reference.val() with .mixed instead"),
