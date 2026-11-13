@@ -121,6 +121,7 @@ comptime {
         .@"MyPHPExt\\Test\\checkZendStrings" = string_tests.checkZendStrings,
         .@"MyPHPExt\\Test\\copyArray" = array_tests.copyArray,
         .@"MyPHPExt\\Test\\separateArray" = array_tests.separateArray,
+        .@"MyPHPExt\\Test\\setSlicedKeys" = array_tests.setSlicedKeys,
         .@"MyPHPExt\\Test\\mergeArray" = array_tests.mergeArray,
         .@"MyPHPExt\\Test\\compareArrays" = array_tests.compareArrays,
         .@"MyPHPExt\\Test\\checkArrayHashTable" = array_tests.checkArrayHashTable,

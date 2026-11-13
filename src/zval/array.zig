@@ -93,23 +93,14 @@ pub const Array = opaque {
     /// do not release the transferred reference after writing.
     pub fn set(self: *Array, comptime zk: Zval.Kind, key: []const u8, val: Zval.Type(zk)) void {
         switch (zk) {
-            .null => c.add_assoc_null_ex(self.ptr(), key.ptr, key.len),
-            .int => c.add_assoc_long_ex(self.ptr(), key.ptr, key.len, @intCast(val)),
-            .float => c.add_assoc_double_ex(self.ptr(), key.ptr, key.len, val),
-            .string => c.add_assoc_stringl_ex(self.ptr(), key.ptr, key.len, val.ptr, val.len),
-            .str => c.add_assoc_str_ex(self.ptr(), key.ptr, key.len, val.ptr()),
-            .bool => c.add_assoc_bool_ex(self.ptr(), key.ptr, key.len, val),
-            .array => {
-                // add_assoc_array_ex() always tags the value as refcounted, which
-                // corrupts immutable arrays such as zend_empty_array.
-                var value = Zval.raw.init(.array, val);
-                c.add_assoc_zval_ex(self.ptr(), key.ptr, key.len, &value);
-            },
-            .object => c.add_assoc_object_ex(self.ptr(), key.ptr, key.len, val.ptr()),
-            .resource => c.add_assoc_resource_ex(self.ptr(), key.ptr, key.len, val.ptr()),
-            .reference => c.add_assoc_reference_ex(self.ptr(), key.ptr, key.len, val.ptr()),
-            .mixed => c.add_assoc_zval_ex(self.ptr(), key.ptr, key.len, val),
             inline .undef, .indirect, .ptr => @compileError("'" ++ @tagName(zk) ++ "' cannot be set as array value"),
+            .mixed => _ = self.zendArray().symtableUpdate(key, val),
+            else => {
+                // add_assoc_*_ex() read past `key` for "" and "-" because Zend
+                // expects NUL-terminated keys; symtableUpdate() avoids that.
+                var value = Zval.raw.init(zk, val);
+                _ = self.zendArray().symtableUpdate(key, &value);
+            },
         }
     }
 

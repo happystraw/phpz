@@ -278,3 +278,14 @@ fn compareIdentical(left: *const phpz.c.zval, right: *const phpz.c.zval) c_int {
     const b = if (phpz.Zval.raw.is(r, .reference)) phpz.Zval.raw.asUnchecked(r, .reference).val() else r;
     return @intFromBool(!phpz.c.zend_is_identical(a, b));
 }
+
+/// Keys are slices of a larger buffer, so they are not NUL-terminated:
+/// "-" and "" are followed by digits that Zend's numeric key check would read.
+pub fn setSlicedKeys(ctx: phpz.Ctx) void {
+    const result = phpz.Zval.Array.empty(ctx.retval.ptr());
+    const buffer = "-5|7x";
+    result.set(.int, buffer[0..1], 1);
+    result.set(.string, buffer[1..1], "empty");
+    // Numeric string keys still become integer keys.
+    result.set(.bool, buffer[3..4], true);
+}
