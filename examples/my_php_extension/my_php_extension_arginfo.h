@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 223bfc1da7ed5560e4ceb07ea2ff84522020345d */
+ * Stub hash: cc9ddeb20dece8f40169a27bcf0f9754d903f5e0 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -157,6 +157,8 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readLastError, 0, 1, IS_ARRAY, 1)
 	ZEND_ARG_TYPE_INFO(0, clear_exception, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_rethrowPendingException arginfo_hello
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkExceptionBoundary, 0, 2, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
@@ -624,6 +626,7 @@ ZEND_FUNCTION(MyPHPExt_Test_checkObjectViews);
 ZEND_FUNCTION(MyPHPExt_Test_checkWriteOwnership);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
 ZEND_FUNCTION(MyPHPExt_Test_readLastError);
+ZEND_FUNCTION(MyPHPExt_Test_rethrowPendingException);
 ZEND_FUNCTION(MyPHPExt_Test_checkExceptionBoundary);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayHashTable);
 ZEND_FUNCTION(MyPHPExt_Test_isArrayList);
@@ -913,6 +916,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readLastError"), zif_MyPHPExt_Test_readLastError, arginfo_MyPHPExt_Test_readLastError, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "readLastError"), zif_MyPHPExt_Test_readLastError, arginfo_MyPHPExt_Test_readLastError, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rethrowPendingException"), zif_MyPHPExt_Test_rethrowPendingException, arginfo_MyPHPExt_Test_rethrowPendingException, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rethrowPendingException"), zif_MyPHPExt_Test_rethrowPendingException, arginfo_MyPHPExt_Test_rethrowPendingException, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkExceptionBoundary"), zif_MyPHPExt_Test_checkExceptionBoundary, arginfo_MyPHPExt_Test_checkExceptionBoundary, 0, NULL, NULL)

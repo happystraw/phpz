@@ -38,6 +38,8 @@ pub const Error = struct {
 /// The exception object is borrowed and is valid for the duration of the
 /// callback. Use `addref()` if it must be retained.
 pub const Exception = struct {
+    /// Called for each newly thrown exception. Rethrows of an already pending
+    /// exception, such as those from opcache JIT frame cleanup, are skipped.
     observe: fn (*zend.Object) void,
 };
 
@@ -126,7 +128,9 @@ fn ExceptionAdapter(comptime config: Exception) type {
         var installed = false;
 
         fn callback(exception: ?*c.zend_object) callconv(.c) void {
-            config.observe(zend.Object.from(exception.?));
+            // zend_throw_exception_internal(NULL) rethrows EG(exception) into
+            // the current frame and passes NULL to the hook.
+            if (exception) |thrown| config.observe(zend.Object.from(thrown));
             if (previous) |previous_hook| {
                 previous_hook(exception);
             }

@@ -20,3 +20,12 @@ pub fn readLastError(clear_exception: bool) !?*phpz.zend.Array {
     result.set(.int, "line", record.line);
     return result.zendArray();
 }
+
+/// Throw, then rethrow the pending exception the way opcache JIT frame
+/// cleanup does: zend_throw_exception_internal(NULL) with an active frame
+/// passes NULL to zend_throw_exception_hook.
+pub fn rethrowPendingException() !void {
+    phpz.exception.throwException(.builtin("Exception"), "rethrown", 0) catch {};
+    phpz.c.zend_throw_exception_internal(null);
+    return error.PhpException;
+}
