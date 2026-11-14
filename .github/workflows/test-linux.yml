@@ -75,6 +75,20 @@ jobs:
           php: ${{ matrix.php }}
           ts: ts
           debug: 'false'
+      - name: Test NTS PHP debug
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: nts
+          debug: 'true'
+      - name: Test TS PHP debug
+        if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
+        uses: ./.github/actions/test-variant
+        with:
+          php: ${{ matrix.php }}
+          ts: ts
+          debug: 'true'
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
