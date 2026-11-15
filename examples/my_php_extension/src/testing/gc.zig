@@ -1,3 +1,4 @@
+const std = @import("std");
 const phpz = @import("phpz");
 const Zval = phpz.Zval;
 const RetainedCallable = phpz.zend.Callable.Cache;
@@ -27,6 +28,15 @@ const GcNode = struct {
     /// PHP: MyPHPExt\Test\GcNode::invokeCallback(mixed $value, bool $guarded = false): mixed
     pub fn invokeCallback(self: *GcNode, ctx: phpz.Ctx, value: *Zval, guarded: ?bool) !void {
         if (!self.hasCallback()) return error.MissingCallback;
+        // Asking the custom GC handler for roots must not materialize properties.
+        // Existing property tables should be returned unchanged, not duplicated.
+        const object = ctx.call.this().?.ptr();
+        const before = object.properties;
+        var roots: ?[*]phpz.c.zval = null;
+        var count: c_int = 0;
+        const properties = object.handlers.*.get_gc.?(object, &roots, &count);
+        try std.testing.expect(object.properties == before);
+        try std.testing.expect(properties == before);
         const params = .{value.ptr().*};
         if (guarded orelse false) {
             try self.callback.tryCall(ctx.retval.ptr(), params, null);

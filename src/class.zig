@@ -678,10 +678,16 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
                 const value = self.backing() orelse
                     return if (instance.gcRoots(table.?, n.?)) |props| props.ptr() else null;
 
+                var property_roots: ?[*]c.zval = null;
+                var property_count: c_int = 0;
+                const properties = instance.gcRoots(&property_roots, &property_count);
                 const buffer = GcBuffer.create();
+                if (property_roots) |roots| {
+                    for (roots[0..@intCast(property_count)]) |*root| buffer.add(.from(root));
+                }
                 resolved.gc.?(value, buffer);
                 buffer.use(table.?, n.?);
-                return c.zend_std_get_properties(obj.?);
+                return if (properties) |props| props.ptr() else null;
             }
 
             fn createObject(ce: ?*c.zend_class_entry) callconv(.c) ?*c.zend_object {
