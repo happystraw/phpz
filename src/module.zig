@@ -48,6 +48,7 @@ pub const Config = struct {
 
     /// Observer configuration for profiling, error monitoring, and exception tracking.
     /// Each observer type must implement specific methods.
+    /// Observers are not registered when the extension is loaded with dl().
     observer: ?observer.Config = null,
 
     /// Module startup hook, called when PHP starts (e.g., when Apache starts).
@@ -141,8 +142,6 @@ fn makePhpModuleStartupFn(
     const has_symbols = comptime @hasDecl(c, symbols_fn_name);
     return struct {
         fn handle(module_type: c_int, module_number: c_int) callconv(.c) c.zend_result {
-            _ = module_type;
-
             tsrm.updateCache();
             tsrm.initTcbOffset();
             guard.ScopeObject.register(module_number);
@@ -172,8 +171,11 @@ fn makePhpModuleStartupFn(
                     };
                 }
             }
+            // Like ext/zend_test, skip observers when loaded with dl(): fcall
+            // slots are reserved at engine startup, and error observers cannot
+            // be removed when the module is unloaded at request end.
             if (comptime observer_cfg) |cfg| {
-                observer.startup(cfg);
+                if (module_type != c.MODULE_TEMPORARY) observer.startup(cfg);
             }
             if (comptime hook_fn) |f| {
                 f() catch |err| {
