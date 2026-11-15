@@ -232,6 +232,7 @@ namespace MyPHPExt\Test {
     function checkArrayCallbacks(): void {}
     function readLastError(bool $clear_exception): ?array {}
     function rethrowPendingException(): void {}
+    function reportPendingException(): bool {}
     function checkExceptionBoundary(string $api, mixed $value): void {}
     function checkArrayHashTable(array $references): void {}
     function isArrayList(array $source): bool {}

@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 2c7c159542560b82cbc51d524c841c618cbfc12e */
+ * Stub hash: 70f5dc9b8b5fdafa72b33f86838215b0bd6c2d8c */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -172,6 +172,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_readLastError, 0, 
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_rethrowPendingException arginfo_hello
+
+#define arginfo_MyPHPExt_Test_reportPendingException arginfo_MyPHPExt_Test_checkNativeTsrmThreads
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkExceptionBoundary, 0, 2, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, api, IS_STRING, 0)
@@ -649,6 +651,7 @@ ZEND_FUNCTION(MyPHPExt_Test_checkWriteOwnership);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayCallbacks);
 ZEND_FUNCTION(MyPHPExt_Test_readLastError);
 ZEND_FUNCTION(MyPHPExt_Test_rethrowPendingException);
+ZEND_FUNCTION(MyPHPExt_Test_reportPendingException);
 ZEND_FUNCTION(MyPHPExt_Test_checkExceptionBoundary);
 ZEND_FUNCTION(MyPHPExt_Test_checkArrayHashTable);
 ZEND_FUNCTION(MyPHPExt_Test_isArrayList);
@@ -960,6 +963,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rethrowPendingException"), zif_MyPHPExt_Test_rethrowPendingException, arginfo_MyPHPExt_Test_rethrowPendingException, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "rethrowPendingException"), zif_MyPHPExt_Test_rethrowPendingException, arginfo_MyPHPExt_Test_rethrowPendingException, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "reportPendingException"), zif_MyPHPExt_Test_reportPendingException, arginfo_MyPHPExt_Test_reportPendingException, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "reportPendingException"), zif_MyPHPExt_Test_reportPendingException, arginfo_MyPHPExt_Test_reportPendingException, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkExceptionBoundary"), zif_MyPHPExt_Test_checkExceptionBoundary, arginfo_MyPHPExt_Test_checkExceptionBoundary, 0, NULL, NULL)

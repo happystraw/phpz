@@ -152,8 +152,10 @@ pub fn takeUnwindExit() ?ExitStatus {
 /// Clear the pending PHP exception. Does nothing if no exception is set.
 pub const clear = c.zend_clear_exception;
 
-/// Report and consume the pending PHP exception.
-pub fn report(ex: *zend.Object, level: errors.Level) void {
+/// Report and consume the pending PHP exception; does nothing if none is pending.
+/// Reporting may run PHP code such as __toString() and can bail out.
+pub fn report(level: errors.Level) void {
+    const ex = get() orelse return;
     _ = c.zend_exception_error(ex.ptr(), @backingInt(level));
 }
 

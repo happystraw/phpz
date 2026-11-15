@@ -99,9 +99,7 @@ pub fn main(init: std.process.Init) !void {
                         if (phpz.exception.takeUnwindExit()) |status| break :blk status == .ok;
                     } else if (err == error.PhpException) {
                         // Reporting can run PHP __toString(), so it needs its own boundary.
-                        if (phpz.exception.get()) |exception| {
-                            zend.bailout.run(phpz.exception.report, .{ exception, .err }) catch {};
-                        }
+                        zend.bailout.run(phpz.exception.report, .{.err}) catch {};
                     }
                     break :blk false;
                 };

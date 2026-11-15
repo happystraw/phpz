@@ -49,6 +49,7 @@ comptime {
         .@"MyPHPExt\\Test\\checkArgumentDeclaration" = argument_declaration.checkArgumentDeclaration,
         .@"MyPHPExt\\Test\\readLastError" = error_tests.readLastError,
         .@"MyPHPExt\\Test\\rethrowPendingException" = error_tests.rethrowPendingException,
+        .@"MyPHPExt\\Test\\reportPendingException" = error_tests.reportPendingException,
         .@"MyPHPExt\\Test\\checkExceptionBoundary" = exception_boundaries.checkExceptionBoundary,
         .@"MyPHPExt\\Test\\checkNativeTsrmThreads" = thread_tests.checkNativeTsrmThreads,
         .@"MyPHPExt\\Test\\checkStreams" = stream_tests.checkStreams,

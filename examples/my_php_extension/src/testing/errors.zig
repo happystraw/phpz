@@ -29,3 +29,12 @@ pub fn rethrowPendingException() !void {
     phpz.c.zend_throw_exception_internal(null);
     return error.PhpException;
 }
+
+/// Report the pending exception as a warning; report() is a no-op when nothing
+/// is pending. Returns whether an exception is still pending afterwards.
+pub fn reportPendingException() bool {
+    phpz.exception.report(.warning);
+    phpz.exception.throwException(.internal("Exception"), "reported", 0) catch {};
+    phpz.exception.report(.warning);
+    return phpz.exception.hasPending();
+}
