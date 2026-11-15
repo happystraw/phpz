@@ -5,6 +5,7 @@ const stub = @import("../stub.zig");
 const c = @import("../root.zig").c;
 const Zval = @import("../zval.zig").Zval;
 const Object = @import("object.zig").Object;
+const String = @import("string.zig").String;
 const Array = @import("array.zig").Array;
 const bailout = @import("bailout.zig");
 
@@ -21,6 +22,10 @@ const bailout = @import("bailout.zig");
 /// try cb.call(null, .{ arg1 }, null);
 /// ```
 pub const Callable = struct {
+    /// Owned, request-local callable cache. Uses native FCC ownership on PHP 8.3+
+    /// and retains the source callable on PHP 8.2.
+    pub const Cache = @import("callable_cache.zig").CallableCache;
+
     /// Call info: function name, params, retval pointer.
     fci: c.zend_fcall_info,
     /// Cache: resolved function handler, scope, object.
@@ -65,6 +70,24 @@ pub const Callable = struct {
         // the trampoline will leak. Force it to be refetched during
         // zend_call_function instead.
         c.zend_release_fcall_info_cache(&self.fcc);
+    }
+
+    /// Retain the resolved callable without rechecking its visibility or scope.
+    /// Requires a successfully parsed Callable whose source is still alive.
+    /// If parsing released a magic-method trampoline, it must be resolved again
+    /// in a scope where the original source is callable. For scope-independent
+    /// retention of magic methods, use Cache.init() in the original scope.
+    /// The returned cache owns its PHP references and must be deinitialized
+    /// and reported to GC.
+    pub fn retainCache(self: *Callable) ParseError!Cache {
+        return Cache.retain(self);
+    }
+
+    /// Get a diagnostic callable name, optionally relative to an object.
+    /// Does not validate callability. Ownership: caller owns the returned string;
+    /// call release() when done.
+    pub fn name(value: *c.zval, object: ?*Object) *String {
+        return .from(c.zend_get_callable_name_ex(value, if (object) |obj| obj.ptr() else null));
     }
 
     /// Check whether a zval contains a callable.

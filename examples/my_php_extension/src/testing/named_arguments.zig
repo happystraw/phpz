@@ -65,6 +65,24 @@ pub fn invokeArguments(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Cal
 }
 
 fn invoke(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Callable, params: anytype, named_params: ?*phpz.zend.Array, guarded: bool) !void {
+    if (std.mem.startsWith(u8, mode, "cache")) {
+        var cache = try callback.retainCache();
+        defer cache.deinit();
+        if (std.mem.eql(u8, mode, "cache-cleanup")) {
+            defer std.debug.print("Zig cleanup\n", .{});
+            const result = if (guarded) cache.tryCall(null, params, named_params) else cache.call(null, params, named_params);
+            result catch |err| {
+                std.debug.print("Zig error: {s}\n", .{@errorName(err)});
+                return err;
+            };
+            std.debug.print("Zig returned\n", .{});
+        } else if (std.mem.eql(u8, mode, "cache-discard")) {
+            if (guarded) try cache.tryCall(null, params, named_params) else try cache.call(null, params, named_params);
+        } else {
+            if (guarded) try cache.tryCall(ctx.retval.ptr(), params, named_params) else try cache.call(ctx.retval.ptr(), params, named_params);
+        }
+        return;
+    }
     if (std.mem.eql(u8, mode, "callable-cleanup")) {
         // Native output also works after bailout has cleared the PHP execute frame.
         defer std.debug.print("Zig cleanup\n", .{});
