@@ -1,9 +1,11 @@
 //! PHP class declaration, method binding, and optional Zig object storage.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const c = @import("c.zig").c;
 const CallFrame = @import("ctx.zig").CallFrame;
+const errors = @import("errors.zig");
 const exception = @import("exception.zig");
 const functions = @import("function.zig");
 const GcBuffer = @import("gc.zig").GcBuffer;
@@ -479,6 +481,12 @@ pub const ObjectHandlers = struct {
 /// A parent class or interface referenced through `.entry` must appear before
 /// the dependent class in `phpz.module`'s `.classes` list.
 ///
+/// A class with Zig backing cannot extend a class that allocates its own
+/// objects, such as `Exception`, `ArrayObject` or another backed class: Zend
+/// keeps the parent's `create_object` in subclasses, and the parent's methods
+/// expect its object layout. Debug builds fail registration with
+/// `error.UnsupportedParent`; use `T = void` for such subclasses.
+///
 /// ## Method signatures
 ///
 /// - Standard-layout methods and backed static methods accept an optional leading
@@ -636,6 +644,14 @@ fn BackedClass(comptime class_name: [:0]const u8, comptime T: type, comptime opt
             }
 
             entry = try resolved.register();
+
+            if (comptime builtin.mode == .debug) {
+                if (c.phpz_class_entry_has_create_object(entry.ptr())) {
+                    const parent_name = if (entry.parent()) |parent| parent.name() else "its parent";
+                    errors.warning(class_name ++ " cannot have Zig backing: %s allocates its own objects; use T = void", .{parent_name.ptr});
+                    return error.UnsupportedParent;
+                }
+            }
 
             const serializable = comptime blk: {
                 @setEvalBranchQuota(stub.declarationQuota(resolved.required_methods.entries.len));
