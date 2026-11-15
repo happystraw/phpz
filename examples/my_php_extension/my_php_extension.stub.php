@@ -275,6 +275,8 @@ namespace MyPHPExt\Test {
 
     class NewBare {}
 
+    final class FaultyOperand {}
+
     class FallibleValue
     {
         public function value(): int {}

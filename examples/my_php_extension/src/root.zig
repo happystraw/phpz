@@ -16,6 +16,7 @@ const closure_tests = @import("testing/closures.zig");
 const gc = @import("testing/gc.zig");
 const serialization = @import("testing/serialization.zig");
 const class_new = @import("testing/class_new.zig");
+const operators = @import("testing/operators.zig");
 const stream_tests = @import("testing/streams.zig");
 const closures = @import("closures.zig");
 
@@ -155,7 +156,7 @@ comptime {
     phpz.module(.{
         .name = extension.name,
         .version = extension.version,
-        .classes = &(api.classes.* ++ .{ gc.Class, serialization.Class } ++ closures.classes ++ class_new.classes),
+        .classes = &(api.classes.* ++ .{ gc.Class, serialization.Class, operators.Class } ++ closures.classes ++ class_new.classes),
         .ini = ini.definitions,
         .resources = &resources.types,
         .globals = metrics.Globals,

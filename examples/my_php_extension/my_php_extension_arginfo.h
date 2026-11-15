@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: c24867269212b26a280a2c654399040dd53e5b7d */
+ * Stub hash: 2c7c159542560b82cbc51d524c841c618cbfc12e */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -1713,6 +1713,21 @@ static zend_class_entry *register_class_MyPHPExt_Test_NewBare(void)
 	class_entry = zend_register_internal_class_with_flags(&ce, NULL, 0);
 #else
 	class_entry = zend_register_internal_class_ex(&ce, NULL);
+#endif
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_MyPHPExt_Test_FaultyOperand(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "MyPHPExt\\Test", "FaultyOperand", NULL);
+#if (PHP_VERSION_ID >= 80400)
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+#else
+	class_entry = zend_register_internal_class_ex(&ce, NULL);
+	class_entry->ce_flags |= ZEND_ACC_FINAL;
 #endif
 
 	return class_entry;

@@ -273,18 +273,22 @@ fn Resolved(comptime T: type) type {
                     if (handlers.do_operation != null) @compileError("Class " ++ class_name ++ " .operate conflicts with .handlers.do_operation");
                     handlers.do_operation = struct {
                         fn call(opcode: u8, result: ?*c.zval, op1: ?*c.zval, op2: ?*c.zval) callconv(.c) c.zend_result {
-                            var left = op1.?;
-                            var op1_copy: c.zval = undefined;
-                            const aliased = result.? == op1.?;
-                            if (aliased) {
-                                Zval.raw.copyValue(&op1_copy, left);
-                                left = &op1_copy;
-                            }
+                            const out = result.?;
+                            // Compound assignments pass an operand as result, as in
+                            // `$a += $a`: move it aside so the callback writes a fresh result.
+                            var saved: c.zval = undefined;
+                            const aliased = out == op1.? or out == op2;
+                            if (aliased) Zval.raw.copyValue(&saved, out);
+                            const left = if (out == op1.?) &saved else op1.?;
+                            const op2_value = if (op2) |p| if (p == out) &saved else p else null;
+                            // Detects a callback that succeeds without writing a result.
+                            out.* = Zval.raw.undef;
 
                             const lhs = Zval.from(left);
-                            const rhs = if (op2) |p| Zval.from(p) else null;
+                            const rhs = if (op2_value) |p| Zval.from(p) else null;
                             const op: Operator = @fromBackingInt(opcode);
-                            @as(anyerror!void, options.operate(op, lhs, rhs, Zval.from(result.?))) catch |err| {
+                            @as(anyerror!void, options.operate(op, lhs, rhs, Zval.from(out))) catch |err| {
+                                discardResult(out, if (aliased) &saved else null);
                                 zend.bailout.propagate(err);
                                 if (exception.hasPending()) return c.FAILURE;
                                 const symbol = op.symbol();
@@ -305,8 +309,19 @@ fn Resolved(comptime T: type) type {
                                 }
                                 return c.FAILURE;
                             };
-                            if (aliased) Zval.raw.release(&op1_copy);
+                            if (Zval.raw.is(out, .undef)) {
+                                discardResult(out, if (aliased) &saved else null);
+                                const symbol = op.symbol() orelse "unknown";
+                                exception.throwError(null, class_name ++ " operator %s did not set a result", .{symbol.ptr}) catch {};
+                                return c.FAILURE;
+                            }
+                            if (aliased) Zval.raw.release(&saved);
                             return c.SUCCESS;
+                        }
+
+                        inline fn discardResult(out: *c.zval, saved: ?*c.zval) void {
+                            Zval.raw.release(out);
+                            if (saved) |original| Zval.raw.copyValue(out, original) else out.* = Zval.raw.undef;
                         }
                     }.call;
                 }
