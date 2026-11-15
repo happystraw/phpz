@@ -395,7 +395,7 @@ pub fn ContextType(comptime func: anytype, comptime has_receiver: bool) type {
     return Ctx;
 }
 
-fn ResultType(comptime func: anytype) type {
+pub fn ResultType(comptime func: anytype) type {
     const R = @typeInfo(@TypeOf(func)).@"fn".return_type.?;
     return if (@typeInfo(R) == .error_union) @typeInfo(R).error_union.payload else R;
 }
@@ -455,11 +455,20 @@ pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!
     return @call(.auto, func, params);
 }
 
-pub fn setReturnValue(retval: *Zval, value: anytype) anyerror!void {
+/// Unwrap reference returns when PHP 8.6 callers expect a temporary value.
+inline fn unwrapReturnReference(execute_data: *c.zend_execute_data, return_value: *c.zval) void {
+    if (comptime c.PHP_VERSION_ID >= 80600) c.zend_return_unwrap_ref(execute_data, return_value);
+}
+
+pub fn setReturnValue(ctx: anytype, value: anytype) anyerror!void {
+    const retval = ctx.retval;
     const T = @TypeOf(value);
-    if (T == void) return;
+    if (T == void) {
+        unwrapReturnReference(ctx.call.ptr(), ctx.retval.ptr());
+        return;
+    }
     if (@typeInfo(T) == .optional) {
-        if (value) |present| return setReturnValue(retval, present);
+        if (value) |present| return setReturnValue(ctx, present);
         retval.set(.null, {});
         return;
     }
@@ -468,14 +477,14 @@ pub fn setReturnValue(retval: *Zval, value: anytype) anyerror!void {
             inline else => |payload| if (@TypeOf(payload) == void)
                 retval.set(.null, {})
             else
-                try setReturnValue(retval, payload),
+                try setReturnValue(ctx, payload),
         }
         return;
     }
     if (NullablePayloadType(T) != null) {
         switch (value) {
             .null => retval.set(.null, {}),
-            .value => |present| try setReturnValue(retval, present),
+            .value => |present| try setReturnValue(ctx, present),
         }
         return;
     }
@@ -492,7 +501,11 @@ pub fn setReturnValue(retval: *Zval, value: anytype) anyerror!void {
     if (T == *zend.Array) return retval.set(.array, value);
     if (T == *zend.Object) return retval.set(.object, value);
     if (T == *zend.Resource) return retval.set(.resource, value);
-    if (T == *zend.Reference) return retval.set(.reference, value);
+    if (T == *zend.Reference) {
+        retval.set(.reference, value);
+        unwrapReturnReference(ctx.call.ptr(), ctx.retval.ptr());
+        return;
+    }
     if (T == *Zval) return retval.set(.mixed, value.ptr());
     @compileError("unsupported PHP handler return type " ++ @typeName(T));
 }
@@ -502,7 +515,7 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) H
     return struct {
         fn call(ctx: Context) anyerror!void {
             const value = try invoke(func, ctx, {});
-            try setReturnValue(ctx.retval, value);
+            try setReturnValue(ctx, value);
         }
 
         fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
@@ -511,7 +524,7 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) H
                 if (comptime Context == GuardCtx) blk: {
                     var scope: ?*guard.Scope = null;
                     defer if (scope) |owned| guard.ScopeObject.release(owned);
-                    break :blk zend.bailout.run(call, .{GuardCtx{
+                    break :blk zend.bailout.run(call, .{.{
                         .call = .from(execute_data.?),
                         .retval = .from(return_value.?),
                         .guard_scope = &scope,
@@ -522,6 +535,8 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) H
                 if (!exception.hasPending()) {
                     exception.throwError(null, "%s at " ++ func_desc, .{@errorName(err).ptr}) catch {};
                 }
+                // TODO: Revisit when php-src skips the PHP 8.6 Debug TMP_VAR assertion on exceptions.
+                unwrapReturnReference(execute_data.?, return_value.?);
             };
         }
     }.handle;

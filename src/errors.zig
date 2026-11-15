@@ -62,7 +62,7 @@ pub const LastError = struct {
     level: Level,
     message: [:0]const u8,
     file: ?[:0]const u8,
-    line: c_int,
+    line: u32,
 };
 
 /// Read the same record as PHP's error_get_last(), or null when none exists.
@@ -75,7 +75,7 @@ pub fn last() ?LastError {
         .level = @fromBackingInt(pg.last_error_type),
         .message = zend.String.from(message).slice(),
         .file = if (pg.last_error_file) |file| zend.String.from(file).slice() else null,
-        .line = pg.last_error_lineno,
+        .line = @intCast(pg.last_error_lineno),
     };
 }
 

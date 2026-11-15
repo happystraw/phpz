@@ -1230,7 +1230,7 @@ class Counter
 }
 PHP,
     '{{EXT_NAME}}_arginfo.h' => <<<'C'
-/* This is a generated file, edit the .stub.php file instead.
+/* This is a generated file, edit {{EXT_NAME}}.stub.php instead.
  * Stub hash: {{PHPZ_STUB_HASH}} */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)

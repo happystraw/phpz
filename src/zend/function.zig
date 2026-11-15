@@ -150,8 +150,12 @@ pub const Function = opaque {
             },
         }
 
-        var object: ?c.zval = if (options.object) |obj| Zval.raw.init(.object, obj) else null;
-        c.zend_create_fake_closure(destination.ptr(), func, declaration_scope, called_scope, if (object) |*value| value else null);
+        if (comptime c.PHP_VERSION_ID >= 80600) {
+            c.zend_create_fake_closure(destination.ptr(), func, declaration_scope, called_scope, if (options.object) |obj| obj.ptr() else null);
+        } else {
+            var object: ?c.zval = if (options.object) |obj| Zval.raw.init(.object, obj) else null;
+            c.zend_create_fake_closure(destination.ptr(), func, declaration_scope, called_scope, if (object) |*value| value else null);
+        }
     }
 
     /// Call as a global function (no object, no scope).

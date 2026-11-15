@@ -2,12 +2,10 @@
 
 A Zig framework for building PHP extensions with PHP C API bindings.
 
-> **ℹ️ Note**: phpz already covers most PHP extension use cases, but the API is still evolving. Pin to a specific commit if you need stability.
-
 ## Requirements
 
 - zig: 0.17.0
-- php: 8.2-8.5 (NTS/ZTS) on Linux (x86_64/aarch64), macOS (x86_64/aarch64), Windows MSVC (x64)
+- php: 8.2-8.6 (NTS/ZTS) on Linux (x86_64/aarch64), macOS (x86_64/aarch64), Windows MSVC (x64)
 
 ## Features
 

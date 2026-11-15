@@ -288,7 +288,7 @@ pub const CallFrame = opaque {
 
     fn assertArgsDeclaration(self: *CallFrame, required: u32, fixed: u32, variadic: bool) void {
         const func = self.function() orelse return;
-        if (closure.usesGenericArgInfo(func)) return;
+        if (closure.isPhpzClosure(func)) return;
         if (func.requiredParamCount() == required and
             func.fixedParamCount() == fixed and func.isVariadic() == variadic) return;
 

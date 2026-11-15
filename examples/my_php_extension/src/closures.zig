@@ -62,10 +62,10 @@ const Reference = struct {
     }
 
     /// PHP: MyPHPExt\ClosureRef::__invoke(): mixed (returns by reference)
-    pub fn __invoke(self: *const Reference, ctx: phpz.Ctx) !void {
-        try ctx.call.expectNoArgs();
-        // Returning a reference adds an owned reference to the return slot.
-        Zval.raw.copy(ctx.retval.ptr(), @constCast(&self.value));
+    pub fn __invoke(self: *const Reference) *phpz.zend.Reference {
+        const reference = phpz.zend.Reference.from(self.value.value.ref);
+        reference.addref();
+        return reference;
     }
 
     fn deinit(self: *Reference) void {

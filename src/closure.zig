@@ -4,23 +4,40 @@ const std = @import("std");
 const c = @import("c.zig").c;
 const functions = @import("function.zig");
 const Handler = functions.Handler;
-const String = @import("zend/string.zig").String;
 const Function = @import("zend/function.zig").Function;
+const String = @import("zend/string.zig").String;
 const Zval = @import("zval.zig").Zval;
 
-const handler_arginfo = [_]c.zend_internal_arg_info{
-    std.mem.zeroes(c.zend_internal_arg_info),
-    .{
-        .name = "args",
-        .type = .{ .ptr = null, .type_mask = c._ZEND_IS_VARIADIC_BIT },
-        .default_value = null,
-    },
+/// Shared argument metadata borrowed by native closures.
+pub const handler_arginfo = struct {
+    const needs_conversion = c.PHP_VERSION_ID >= 80600;
+    const Info = if (needs_conversion) c.zend_arg_info else c.zend_internal_arg_info;
+    const declaration = blk: {
+        var info = std.mem.zeroes([2]c.zend_internal_arg_info);
+        info[1].name = "args";
+        info[1].type.type_mask = c._ZEND_IS_VARIADIC_BIT;
+        break :blk info;
+    };
+    var runtime: if (needs_conversion) [declaration.len]Info else void = undefined;
+
+    /// Prepare PHP 8.6 runtime arginfo once during MINIT.
+    pub fn init() void {
+        if (comptime needs_conversion) {
+            for (&runtime, &declaration, 0..) |*target, *source, i| {
+                c.zend_convert_internal_arg_info(target, source, i == 0, true);
+            }
+        }
+    }
+
+    pub inline fn ptr() *const Info {
+        return if (comptime needs_conversion) &runtime[1] else &declaration[1];
+    }
 };
 
-/// Identify the generic argument declaration used by createFromHandler/FromFn.
-pub fn usesGenericArgInfo(function: *Function) bool {
+/// Identify closures created by createFromHandler or createFromFn.
+pub fn isPhpzClosure(function: *Function) bool {
     return function.kind() == .internal and
-        function.ptr().internal_function.arg_info == &handler_arginfo[1];
+        function.ptr().internal_function.arg_info == handler_arginfo.ptr();
 }
 
 /// Create a Closure from a typed Zig function, optionally with a leading Ctx or
@@ -48,7 +65,7 @@ pub fn createFromHandler(handler: *const Handler, destination: *Zval) void {
     function.internal_function.type = c.ZEND_INTERNAL_FUNCTION;
     function.internal_function.fn_flags = c.ZEND_ACC_PUBLIC | c.ZEND_ACC_VARIADIC;
     function.internal_function.function_name = name.ptr();
-    function.internal_function.arg_info = @constCast(&handler_arginfo[1]);
+    function.internal_function.arg_info = @constCast(handler_arginfo.ptr());
     function.internal_function.handler = handler;
     c.zend_create_fake_closure(destination.ptr(), &function, null, null, null);
 }

@@ -61,13 +61,15 @@ const ParseArginfoHashError = error{
 fn parseArginfoHash(arginfo: []const u8) ParseArginfoHashError![]const u8 {
     const marker = "* Stub hash: ";
     const marker_index = std.mem.indexOf(u8, arginfo, marker) orelse return error.MissingStubHash;
-    const hash_index = marker_index + marker.len;
-    if (hash_index + stub_hash_length + " */".len > arginfo.len or
-        !std.mem.eql(u8, arginfo[hash_index + stub_hash_length ..][0.." */".len], " */"))
-    {
-        return error.InvalidStubHash;
+    const value = arginfo[marker_index + marker.len ..];
+    // Newer generators can add another metadata line before closing the comment.
+    const end = std.mem.indexOfAny(u8, value, " \t\r\n") orelse value.len;
+    const hash = value[0..end];
+    if (hash.len != stub_hash_length) return error.InvalidStubHash;
+    for (hash) |ch| {
+        if (!std.ascii.isHex(ch)) return error.InvalidStubHash;
     }
-    return arginfo[hash_index..][0..stub_hash_length];
+    return hash;
 }
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {
@@ -92,10 +94,31 @@ test "parseArginfoHash extracts the generated stub hash" {
     try std.testing.expectEqualStrings(expected, try parseArginfoHash(arginfo));
 }
 
+test "parseArginfoHash accepts additional declaration header metadata" {
+    const expected = "d84374eb3cc93ebb1e1cf6f0dfa2ee49381bec07";
+    const arginfo = "/* Generated file\n * Stub hash: " ++ expected ++ "\n * Has decl header: yes */\n";
+    try std.testing.expectEqualStrings(expected, try parseArginfoHash(arginfo));
+}
+
+test "parseArginfoHash accepts CRLF declaration header metadata" {
+    const expected = "d84374eb3cc93ebb1e1cf6f0dfa2ee49381bec07";
+    const arginfo = "/* Generated file\r\n * Stub hash: " ++ expected ++ "\r\n * Has decl header: yes */\r\n";
+    try std.testing.expectEqualStrings(expected, try parseArginfoHash(arginfo));
+}
+
 test "parseArginfoHash rejects a missing stub hash" {
     try std.testing.expectError(error.MissingStubHash, parseArginfoHash("/* generated */"));
 }
 
-test "parseArginfoHash rejects a malformed stub hash" {
-    try std.testing.expectError(error.InvalidStubHash, parseArginfoHash("/* Stub hash: short */"));
+test "parseArginfoHash rejects malformed stub hashes" {
+    const valid = "d84374eb3cc93ebb1e1cf6f0dfa2ee49381bec07";
+    for ([_][]const u8{
+        "/* Stub hash: short */",
+        "/* Stub hash:  */",
+        "/* Stub hash: " ++ valid[0 .. stub_hash_length - 1] ++ " */",
+        "/* Stub hash: " ++ valid ++ "0\n * Has decl header: yes */",
+        "/* Stub hash: g" ++ valid[1..] ++ " */",
+    }) |arginfo| {
+        try std.testing.expectError(error.InvalidStubHash, parseArginfoHash(arginfo));
+    }
 }

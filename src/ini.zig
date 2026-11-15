@@ -357,12 +357,12 @@ pub fn get(name: []const u8) ?[:0]const u8 {
 /// Read through zend_ini_long (base-0 integer parsing, without K/M/G expansion).
 /// Missing directives return 0. Quantity parsing is provided by int.new().
 pub fn getInt(name: []const u8) i64 {
-    return c.zend_ini_long(name.ptr, @intCast(name.len), 0);
+    return c.zend_ini_long(name.ptr, @intCast(name.len), if (c.PHP_VERSION_ID >= 80600) false else 0);
 }
 
 /// Read through zend_ini_double, using zend_strtod. Missing directives return 0.
 pub fn getFloat(name: []const u8) f64 {
-    return c.zend_ini_double(name.ptr, @intCast(name.len), 0);
+    return c.zend_ini_double(name.ptr, @intCast(name.len), if (c.PHP_VERSION_ID >= 80600) false else 0);
 }
 
 /// Read through zend_ini_parse_bool. Missing or null values return false.
@@ -420,7 +420,7 @@ fn alter(comptime name: [:0]const u8, value: []const u8, opts: SetOptions) SetEr
     defer zname.release();
 
     const result = if (opts.force)
-        c.zend_alter_ini_entry_chars_ex(zname.ptr(), value.ptr, value.len, @backingInt(opts.modify), @backingInt(opts.stage), 1)
+        c.zend_alter_ini_entry_chars_ex(zname.ptr(), value.ptr, value.len, @backingInt(opts.modify), @backingInt(opts.stage), if (c.PHP_VERSION_ID >= 80600) true else 1)
     else
         c.zend_alter_ini_entry_chars(zname.ptr(), value.ptr, value.len, @backingInt(opts.modify), @backingInt(opts.stage));
     if (result != c.SUCCESS) return error.AlterIniFailed;

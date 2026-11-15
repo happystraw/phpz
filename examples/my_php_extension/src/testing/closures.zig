@@ -1,6 +1,9 @@
 const std = @import("std");
 const phpz = @import("phpz");
+const ini = @import("../ini.zig");
+const guard = @import("guard.zig");
 const named_arguments = @import("named_arguments.zig");
+const variadic = @import("variadic.zig");
 const Handler = @typeInfo(@typeInfo(phpz.c.zif_handler).optional.child).pointer.child;
 
 fn sumHandler(execute_data: ?*phpz.c.zend_execute_data, return_value: ?*phpz.c.zval) callconv(@typeInfo(Handler).@"fn".attrs.@"callconv") void {
@@ -27,6 +30,28 @@ fn fail() !void {
 
 fn value() i64 {
     return 42;
+}
+
+// Match ZVAL_NEW_REF without adding a public reference-construction API.
+fn referenceValue() *phpz.zend.Reference {
+    const ref: *phpz.c.zend_reference = @ptrCast(@alignCast(phpz.heap.emalloc(@sizeOf(phpz.c.zend_reference)).?));
+    ref.gc.refcount = 1;
+    ref.gc.u.type_info = phpz.c.GC_REFERENCE;
+    phpz.Zval.raw.set(&ref.val, .int, 42);
+    ref.sources.ptr = null;
+    return .from(ref);
+}
+
+fn optionalReference(present: bool) ?*phpz.zend.Reference {
+    return if (present) referenceValue() else null;
+}
+
+fn nullableReference(present: bool) phpz.Nullable(*phpz.zend.Reference) {
+    return if (present) .{ .value = referenceValue() } else .null;
+}
+
+fn manualReference(ctx: phpz.Ctx) void {
+    ctx.ret(.reference, referenceValue());
 }
 
 fn narrow(number: u8) u8 {
@@ -105,6 +130,20 @@ fn tooLarge() u64 {
     return std.math.maxInt(u64);
 }
 
+fn iniScalars() !void {
+    try ini.greeting.set("0x10");
+    try std.testing.expectEqual(@as(i64, 16), phpz.ini.getInt("my_php_extension.greeting"));
+    try ini.greeting.set("1.5");
+    try std.testing.expectEqual(@as(f64, 1.5), phpz.ini.getFloat("my_php_extension.greeting"));
+    const original = phpz.ini.getInt("my_php_extension.max_users");
+    try std.testing.expectError(error.AlterIniFailed, ini.max_users.set(200));
+    try std.testing.expectEqual(original, phpz.ini.getInt("my_php_extension.max_users"));
+    try ini.max_users.setWith(200, .{ .force = true });
+    try std.testing.expectEqual(@as(i64, 200), phpz.ini.getInt("my_php_extension.max_users"));
+    try std.testing.expectEqual(@as(i64, 0), phpz.ini.getInt("phpz.missing"));
+    try std.testing.expectEqual(@as(f64, 0), phpz.ini.getFloat("phpz.missing"));
+}
+
 const MixedValue = phpz.Mixed(&.{ .null, .int, .float, .bool, .string, .array, .object, .resource });
 
 fn mixed(input: MixedValue) MixedValue {
@@ -131,6 +170,14 @@ pub fn makeFnClosure(ctx: phpz.Ctx, kind_arg: ?[]const u8) !void {
         phpz.closure.createFromFn(fail, ctx.retval);
     } else if (std.mem.eql(u8, kind, "value")) {
         phpz.closure.createFromFn(value, ctx.retval);
+    } else if (std.mem.eql(u8, kind, "reference")) {
+        phpz.closure.createFromFn(referenceValue, ctx.retval);
+    } else if (std.mem.eql(u8, kind, "optional_reference")) {
+        phpz.closure.createFromFn(optionalReference, ctx.retval);
+    } else if (std.mem.eql(u8, kind, "nullable_reference")) {
+        phpz.closure.createFromFn(nullableReference, ctx.retval);
+    } else if (std.mem.eql(u8, kind, "manual_reference")) {
+        phpz.closure.createFromFn(manualReference, ctx.retval);
     } else if (std.mem.eql(u8, kind, "narrow")) {
         phpz.closure.createFromFn(narrow, ctx.retval);
     } else if (std.mem.eql(u8, kind, "with_context")) {
@@ -161,12 +208,14 @@ pub fn makeFnClosure(ctx: phpz.Ctx, kind_arg: ?[]const u8) !void {
         phpz.closure.createFromFn(narrowFloat, ctx.retval);
     } else if (std.mem.eql(u8, kind, "too_large")) {
         phpz.closure.createFromFn(tooLarge, ctx.retval);
+    } else if (std.mem.eql(u8, kind, "ini_scalars")) {
+        phpz.closure.createFromFn(iniScalars, ctx.retval);
     } else if (std.mem.eql(u8, kind, "mixed")) {
         phpz.closure.createFromFn(mixed, ctx.retval);
     } else if (std.mem.eql(u8, kind, "optional_mixed")) {
         phpz.closure.createFromFn(optionalMixed, ctx.retval);
     } else if (std.mem.eql(u8, kind, "guard_value")) {
-        phpz.closure.createFromFn(@import("guard.zig").value, ctx.retval);
+        phpz.closure.createFromFn(guard.value, ctx.retval);
     } else if (std.mem.eql(u8, kind, "named")) {
         phpz.closure.createFromFn(named_arguments.collectAll, ctx.retval);
     } else if (std.mem.eql(u8, kind, "checked_named")) {
@@ -176,9 +225,9 @@ pub fn makeFnClosure(ctx: phpz.Ctx, kind_arg: ?[]const u8) !void {
     } else if (std.mem.eql(u8, kind, "parse_variadic")) {
         phpz.closure.createFromFn(named_arguments.parsedVariadicCount, ctx.retval);
     } else if (std.mem.eql(u8, kind, "variadic")) {
-        phpz.closure.createFromFn(@import("variadic.zig").parse, ctx.retval);
+        phpz.closure.createFromFn(variadic.parse, ctx.retval);
     } else if (std.mem.eql(u8, kind, "variadic_mode")) {
-        phpz.closure.createFromFn(@import("variadic.zig").modeCount, ctx.retval);
+        phpz.closure.createFromFn(variadic.modeCount, ctx.retval);
     } else return error.UnknownClosureKind;
 }
 

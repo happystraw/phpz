@@ -4,6 +4,11 @@ if (isset($phpz_request_marker)) {
     throw new LogicException('PHP variables survived request shutdown');
 }
 $phpz_request_marker = "thread-$threadId";
+$closure = MyPHPExt\Test\makeFnClosure();
+if ($closure(20, 22) !== 42
+    || (new ReflectionFunction($closure))->getParameters()[0]->getName() !== 'args') {
+    throw new LogicException('Incorrect native closure metadata in worker request');
+}
 for ($i = 0; $i < $rounds; $i++) {
     if (greet($phpz_request_marker) !== "Hello, $phpz_request_marker!") {
         throw new LogicException('Incorrect thread greeting');

@@ -1039,14 +1039,13 @@ fn bindInstanceMethod(comptime class_name: [:0]const u8, comptime T: type, compt
     }
     const Context = functions.ContextType(func, true);
     const handler = functions.createHandler(func_desc, struct {
-        fn invoke(ctx: Context) anyerror!void {
-            const self = ClassType.receiver(ctx.call) orelse return;
+        fn invoke(ctx: Context) anyerror!functions.ResultType(func) {
+            const self = ClassType.receiver(ctx.call) orelse return error.PhpException;
             const backing = self.backing() orelse {
                 exception.throwError(null, class_name ++ " object has no initialized backing", .{}) catch {};
-                return;
+                return error.PhpException;
             };
-            const value = try functions.invoke(func, ctx, backing);
-            try functions.setReturnValue(ctx.retval, value);
+            return functions.invoke(func, ctx, backing);
         }
     }.invoke);
     @export(&handler, .{ .name = stub.methodSymbolName(class_name, method_name) });

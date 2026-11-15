@@ -42,7 +42,8 @@ pub const mode = phpz.ini.Typed(Mode).new(.{
 });
 
 fn displayText(entry: *phpz.c.zend_ini_entry, kind: phpz.ini.DisplayType) [:0]const u8 {
-    const value = if (kind == .original and entry.modified != 0) entry.orig_value else entry.value;
+    const modified = if (comptime @TypeOf(entry.modified) == bool) entry.modified else entry.modified != 0;
+    const value = if (kind == .original and modified) entry.orig_value else entry.value;
     return if (value) |text| phpz.zend.String.from(text).slice() else "";
 }
 

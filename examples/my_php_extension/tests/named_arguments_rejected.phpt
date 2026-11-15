@@ -32,7 +32,10 @@ foreach ([
     ob_start();
     try { $invalid(); throw new Exception('extra named argument accepted'); }
     catch (ArgumentCountError $e) {
-        check(str_contains($e->getMessage(), 'does not accept unknown named parameters'), true);
+        $message = PHP_VERSION_ID >= 80600
+            ? 'does not accept named variadic arguments'
+            : 'does not accept unknown named parameters';
+        check(str_contains($e->getMessage(), $message), true);
     } finally {
         $output = ob_get_clean();
     }

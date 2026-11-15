@@ -94,8 +94,7 @@ noinline fn refreshCache() *anyopaque {
 
 /// Storage at a fast TSRM offset, like TSRMG_FAST_BULK. ZTS only.
 pub inline fn fastBulk(comptime T: type, offset: usize) *T {
-    const base: [*]u8 = @ptrCast(localStorage());
-    return @ptrCast(@alignCast(base + offset));
+    return @ptrFromInt(@intFromPtr(localStorage()) +% offset);
 }
 
 /// Storage of a TSRM resource id, like TSRMG_BULK. ZTS only.

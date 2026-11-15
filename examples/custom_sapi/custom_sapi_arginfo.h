@@ -1,4 +1,4 @@
-/* This is a generated file, edit the .stub.php file instead.
+/* This is a generated file, edit custom_sapi.stub.php instead.
  * Stub hash: 6ec855c22a26d9272ddf5f99169fe375304fa71e */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_custom_sapi_greeting, 0, 0, IS_STRING, 0)

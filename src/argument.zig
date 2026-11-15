@@ -553,20 +553,35 @@ noinline fn coerce(comptime kind: ExpectArgKind, identifier: Identifier, zv: *c.
         },
         .float => {
             var value: f64 = undefined;
-            if (!c.zend_parse_arg_double_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            if (comptime c.PHP_VERSION_ID >= 80600) {
+                value = c.zend_parse_arg_double_slow(zv, arg_num);
+                if (std.math.isNan(value)) return identifier.expectedTypeError(expected, zv);
+            } else {
+                if (!c.zend_parse_arg_double_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            }
             Zval.raw.release(zv);
             Zval.raw.set(zv, .float, value);
         },
         .bool => {
             var value: bool = undefined;
-            if (!c.zend_parse_arg_bool_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            if (comptime c.PHP_VERSION_ID >= 80600) {
+                const status = c.zend_parse_arg_bool_slow(zv, arg_num);
+                if (status == c.ZPP_PARSE_BOOL_STATUS_ERROR) return identifier.expectedTypeError(expected, zv);
+                value = status == c.ZPP_PARSE_BOOL_STATUS_TRUE;
+            } else {
+                if (!c.zend_parse_arg_bool_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            }
             Zval.raw.release(zv);
             Zval.raw.set(zv, .bool, value);
         },
         // Converts the slot in place, like Z_PARAM_STR.
         .string => {
-            var value: [*c]c.zend_string = null;
-            if (!c.zend_parse_arg_str_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            if (comptime c.PHP_VERSION_ID >= 80600) {
+                if (c.zend_parse_arg_str_slow(zv, arg_num) == null) return identifier.expectedTypeError(expected, zv);
+            } else {
+                var value: [*c]c.zend_string = null;
+                if (!c.zend_parse_arg_str_slow(zv, &value, arg_num)) return identifier.expectedTypeError(expected, zv);
+            }
         },
         else => return identifier.expectedTypeError(expected, zv),
     }

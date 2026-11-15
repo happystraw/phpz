@@ -1,5 +1,9 @@
-/* This is a generated file, edit the .stub.php file instead.
+/* This is a generated file, edit my_php_extension.stub.php instead.
  * Stub hash: cf90c17b1b009b954d95ad56b964e6329a9fad03 */
+
+#include "zend_attributes.h"
+#include "zend_constants.h"
+#include "zend_enum.h"
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -1529,13 +1533,13 @@ static zend_class_entry *register_class_MyPHPExt_Tag(void)
 
 	zval property_description_default_value;
 	ZVAL_UNDEF(&property_description_default_value);
-	zend_string *property_description_name = zend_string_init("description", sizeof("description") - 1, 1);
+	zend_string *property_description_name = zend_string_init("description", sizeof("description") - 1, true);
 	zend_declare_typed_property(class_entry, property_description_name, &property_description_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING|MAY_BE_NULL));
-	zend_string_release(property_description_name);
+	zend_string_release_ex(property_description_name, true);
 
-	zend_string *attribute_name_Attribute_class_MyPHPExt_Tag_0 = zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
+	zend_string *attribute_name_Attribute_class_MyPHPExt_Tag_0 = zend_string_init_interned("Attribute", sizeof("Attribute") - 1, true);
 	zend_attribute *attribute_Attribute_class_MyPHPExt_Tag_0 = zend_add_class_attribute(class_entry, attribute_name_Attribute_class_MyPHPExt_Tag_0, 1);
-	zend_string_release(attribute_name_Attribute_class_MyPHPExt_Tag_0);
+	zend_string_release_ex(attribute_name_Attribute_class_MyPHPExt_Tag_0, true);
 	ZVAL_LONG(&attribute_Attribute_class_MyPHPExt_Tag_0->args[0].value, ZEND_ATTRIBUTE_TARGET_CLASS | ZEND_ATTRIBUTE_TARGET_PARAMETER | ZEND_ATTRIBUTE_IS_REPEATABLE);
 
 	return class_entry;
@@ -1556,13 +1560,13 @@ static zend_class_entry *register_class_MyPHPExt_Entity(zend_class_entry *class_
 
 	zval property_id_default_value;
 	ZVAL_UNDEF(&property_id_default_value);
-	zend_string *property_id_name = zend_string_init("id", sizeof("id") - 1, 1);
+	zend_string *property_id_name = zend_string_init("id", sizeof("id") - 1, true);
 	zend_declare_typed_property(class_entry, property_id_name, &property_id_default_value, ZEND_ACC_PROTECTED, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG));
-	zend_string_release(property_id_name);
+	zend_string_release_ex(property_id_name, true);
 
-	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
+	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, true);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0, 1);
-	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0);
+	zend_string_release_ex(attribute_name_MyPHPExt_Tag_class_MyPHPExt_Entity_0, true);
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str = zend_string_init("entity", strlen("entity"), 1);
 	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_Entity_0_arg0_str);
 
@@ -1583,9 +1587,9 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 
 	zval const_MIN_AGE_value;
 	ZVAL_LONG(&const_MIN_AGE_value, 0);
-	zend_string *const_MIN_AGE_name = zend_string_init_interned("MIN_AGE", sizeof("MIN_AGE") - 1, 1);
+	zend_string *const_MIN_AGE_name = zend_string_init_interned("MIN_AGE", sizeof("MIN_AGE") - 1, true);
 	zend_declare_class_constant_ex(class_entry, const_MIN_AGE_name, &const_MIN_AGE_value, ZEND_ACC_PUBLIC, NULL);
-	zend_string_release(const_MIN_AGE_name);
+	zend_string_release_ex(const_MIN_AGE_name, true);
 
 	zval property_name_default_value;
 	ZVAL_UNDEF(&property_name_default_value);
@@ -1593,36 +1597,36 @@ static zend_class_entry *register_class_MyPHPExt_User(zend_class_entry *class_en
 
 	zval property_age_default_value;
 	ZVAL_UNDEF(&property_age_default_value);
-	zend_string *property_age_name = zend_string_init("age", sizeof("age") - 1, 1);
+	zend_string *property_age_name = zend_string_init("age", sizeof("age") - 1, true);
 	zend_declare_typed_property(class_entry, property_age_name, &property_age_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG|MAY_BE_NULL));
-	zend_string_release(property_age_name);
+	zend_string_release_ex(property_age_name, true);
 
 	zval property_role_default_value;
 	ZVAL_UNDEF(&property_role_default_value);
-	zend_string *property_role_name = zend_string_init("role", sizeof("role") - 1, 1);
+	zend_string *property_role_name = zend_string_init("role", sizeof("role") - 1, true);
 	zend_string *property_role_class_MyPHPExt_Role = zend_string_init("MyPHPExt\\Role", sizeof("MyPHPExt\\Role")-1, 1);
 	zend_declare_typed_property(class_entry, property_role_name, &property_role_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_CLASS(property_role_class_MyPHPExt_Role, 0, 0));
-	zend_string_release(property_role_name);
+	zend_string_release_ex(property_role_name, true);
 
 	zval property_status_default_value;
 	ZVAL_UNDEF(&property_status_default_value);
-	zend_string *property_status_name = zend_string_init("status", sizeof("status") - 1, 1);
+	zend_string *property_status_name = zend_string_init("status", sizeof("status") - 1, true);
 	zend_string *property_status_class_MyPHPExt_Status = zend_string_init("MyPHPExt\\Status", sizeof("MyPHPExt\\Status")-1, 1);
 	zend_declare_typed_property(class_entry, property_status_name, &property_status_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_CLASS(property_status_class_MyPHPExt_Status, 0, 0));
-	zend_string_release(property_status_name);
+	zend_string_release_ex(property_status_name, true);
 
-	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
+	zend_string *attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, true);
 	zend_attribute *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0 = zend_add_class_attribute(class_entry, attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0, 2);
-	zend_string_release(attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0);
+	zend_string_release_ex(attribute_name_MyPHPExt_Tag_class_MyPHPExt_User_0, true);
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str = zend_string_init("model", strlen("model"), 1);
 	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[0].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg0_str);
 	zend_string *attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str = zend_string_init("Demonstrates properties, inheritance, enums, and attributes", strlen("Demonstrates properties, inheritance, enums, and attributes"), 1);
 	ZVAL_STR(&attribute_MyPHPExt_Tag_class_MyPHPExt_User_0->args[1].value, attribute_MyPHPExt_Tag_class_MyPHPExt_User_0_arg1_str);
 
 
-	zend_string *attribute_name_MyPHPExt_Tag_func___construct_arg0_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, 1);
+	zend_string *attribute_name_MyPHPExt_Tag_func___construct_arg0_0 = zend_string_init_interned("MyPHPExt\\Tag", sizeof("MyPHPExt\\Tag") - 1, true);
 	zend_attribute *attribute_MyPHPExt_Tag_func___construct_arg0_0 = zend_add_parameter_attribute(zend_hash_str_find_ptr(&class_entry->function_table, "__construct", sizeof("__construct") - 1), 0, attribute_name_MyPHPExt_Tag_func___construct_arg0_0, 1);
-	zend_string_release(attribute_name_MyPHPExt_Tag_func___construct_arg0_0);
+	zend_string_release_ex(attribute_name_MyPHPExt_Tag_func___construct_arg0_0, true);
 	zend_string *attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str = zend_string_init("identifier", strlen("identifier"), 1);
 	ZVAL_STR(&attribute_MyPHPExt_Tag_func___construct_arg0_0->args[0].value, attribute_MyPHPExt_Tag_func___construct_arg0_0_arg0_str);
 

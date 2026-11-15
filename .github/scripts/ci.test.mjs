@@ -31,6 +31,8 @@ test('configuration validates labels before constructing removable paths', t => 
   const first = configuration(env, root);
   const second = configuration({ ...env, CI_TS: 'ts' }, root);
   assert.notEqual(first.work, second.work);
+  assert.equal(configuration({ ...env, CI_PHP: '8.6' }, root).php, '8.6');
+  assert.throws(() => configuration({ ...env, CI_PHP: '8.7' }, root));
 });
 
 test('source snapshots preserve working-tree edits and exclude generated trees', t => {

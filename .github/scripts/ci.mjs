@@ -13,8 +13,8 @@ export function configuration(env = process.env, root = sourceRoot) {
   const php = env.CI_PHP;
   const ts = env.CI_TS;
   const debug = env.CI_DEBUG;
-  if (!/^8\.[2-5]$/.test(php) || !['nts', 'ts'].includes(ts) || !['true', 'false'].includes(debug)) {
-    throw new Error('Expected CI_PHP=8.2..8.5, CI_TS=nts|ts and CI_DEBUG=true|false');
+  if (!/^8\.[2-6]$/.test(php) || !['nts', 'ts'].includes(ts) || !['true', 'false'].includes(debug)) {
+    throw new Error('Expected CI_PHP=8.2..8.6, CI_TS=nts|ts and CI_DEBUG=true|false');
   }
   const extension = env.CI_EXTENSION;
   if (extension && !examples.includes(extension)) throw new Error('Unknown built-in extension');

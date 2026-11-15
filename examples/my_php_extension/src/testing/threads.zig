@@ -46,11 +46,12 @@ fn cacheMatches() bool {
     if (comptime @hasDecl(c, "phpz_static_tsrmls_cache_get")) {
         if (c.phpz_static_tsrmls_cache_get() != storage) return false;
     }
-    const base = @intFromPtr(storage);
-    return @intFromPtr(phpz.globals.executor()) == base + c.executor_globals_offset and
-        @intFromPtr(phpz.globals.compiler()) == base + c.compiler_globals_offset and
-        @intFromPtr(phpz.globals.php()) == base + c.core_globals_offset and
-        @intFromPtr(phpz.globals.sapi()) == base + c.sapi_globals_offset;
+    // Check fast offsets against PHP's resource table, including the negative
+    // compiler/executor offsets introduced in 8.6.
+    return @as(*anyopaque, @ptrCast(phpz.globals.executor())) == c.ts_resource_ex(phpz.globals.global(.value, c_int, "executor_globals_id"), null) and
+        @as(*anyopaque, @ptrCast(phpz.globals.compiler())) == c.ts_resource_ex(phpz.globals.global(.value, c_int, "compiler_globals_id"), null) and
+        @as(*anyopaque, @ptrCast(phpz.globals.php())) == c.ts_resource_ex(phpz.globals.global(.value, c_int, "core_globals_id"), null) and
+        @as(*anyopaque, @ptrCast(phpz.globals.sapi())) == c.ts_resource_ex(phpz.globals.global(.value, c_int, "sapi_globals_id"), null);
 }
 
 // CLI-only integration harness: no HTTP input/output or PHP values cross threads.

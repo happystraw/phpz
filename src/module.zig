@@ -4,6 +4,7 @@ const phpz_options = @import("phpz_options");
 
 const c = @import("root.zig").c;
 pub const ModuleEntry = c.zend_module_entry;
+const closure = @import("closure.zig");
 const errors = @import("errors.zig");
 const guard = @import("guard.zig");
 const ini_helper = @import("ini.zig");
@@ -144,6 +145,7 @@ fn makePhpModuleStartupFn(
         fn handle(module_type: c_int, module_number: c_int) callconv(.c) c.zend_result {
             tsrm.updateCache();
             tsrm.initTcbOffset();
+            closure.handler_arginfo.init();
             guard.ScopeObject.register(module_number);
 
             if (comptime has_symbols) {

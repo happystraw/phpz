@@ -9,6 +9,23 @@ const default_dllimport_data_symbols = [_][]const u8{
     "zend_one_char_string",
     "zend_string_init_existing_interned",
     "zend_string_init_interned",
+    "zend_standard_class_def",
+    "zend_tolower_map",
+    "zend_toupper_map",
+    "zend_write",
+    "zend_uv",
+    "zend_map_ptr_static_size",
+    "zend_hrtime_timer_scale",
+    "zend_flf_functions",
+    "zend_flf_handlers",
+    "php_stream_stdio_ops",
+
+    // Observer inline helpers.
+    "zend_observer_fcall_op_array_extension",
+    "zend_observer_fcall_internal_function_extension",
+    "zend_observer_errors_observed",
+    "zend_observer_function_declared_observed",
+    "zend_observer_class_linked_observed",
 
     // NTS
     "executor_globals",
@@ -16,6 +33,9 @@ const default_dllimport_data_symbols = [_][]const u8{
     "core_globals",
     "sapi_globals",
     "file_globals",
+    "ini_scanner_globals",
+    "language_scanner_globals",
+    "output_globals",
 
     // ZTS
     "executor_globals_id",
@@ -23,6 +43,9 @@ const default_dllimport_data_symbols = [_][]const u8{
     "core_globals_id",
     "sapi_globals_id",
     "file_globals_id",
+    "language_scanner_globals_id",
+    "output_globals_id",
+    "ini_scanner_globals_offset",
     "executor_globals_offset",
     "compiler_globals_offset",
     "core_globals_offset",
@@ -273,6 +296,42 @@ const Patcher = struct {
 fn fatal(comptime format: []const u8, args: anytype) noreturn {
     std.debug.print(format ++ "\n", args);
     std.process.exit(1);
+}
+
+test "default whitelist covers PHP inline data dependencies" {
+    const source =
+        \\pub extern var zend_observer_fcall_op_array_extension: c_int;
+        \\pub extern var zend_observer_fcall_internal_function_extension: c_int;
+        \\pub extern var zend_observer_errors_observed: bool;
+        \\pub extern var ini_scanner_globals_offset: usize;
+        \\pub extern const zend_tolower_map: [256]u8;
+        \\pub extern var zend_write: ?*const fn ([*c]const u8, usize) callconv(.c) usize;
+        \\pub fn inspect(internal: bool, byte: u8) usize {
+        \\    const extension = if (internal) zend_observer_fcall_internal_function_extension else zend_observer_fcall_op_array_extension;
+        \\    if (zend_observer_errors_observed) return ini_scanner_globals_offset;
+        \\    return @as(usize, @intCast(extension)) + zend_tolower_map[byte] + zend_write.?("x", 1);
+        \\}
+        \\
+    ;
+    var result = std.ArrayList(u8).empty;
+    defer result.deinit(std.testing.allocator);
+    try patch(std.testing.allocator, &result, source, .{
+        .dllimport_data_symbols = &default_dllimport_data_symbols,
+        .dllimport_data_prefixes = &default_dllimport_data_prefixes,
+    });
+    for ([_][]const u8{
+        "zend_observer_fcall_op_array_extension",
+        "zend_observer_fcall_internal_function_extension",
+        "zend_observer_errors_observed",
+        "ini_scanner_globals_offset",
+        "zend_tolower_map",
+        "zend_write",
+    }) |name| {
+        const expected = try std.fmt.allocPrint(std.testing.allocator, ".name = \"{s}\", .is_dll_import = true", .{name});
+        defer std.testing.allocator.free(expected);
+        try std.testing.expect(std.mem.indexOf(u8, result.items, expected) != null);
+    }
+    try std.testing.expect(std.mem.indexOf(u8, result.items, "@extern(*const [256]u8") != null);
 }
 
 test "patches address-of dllimport data references in function bodies" {

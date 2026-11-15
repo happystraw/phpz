@@ -7,7 +7,7 @@ Usage: $0 [OPTIONS] [-- ZIG_BUILD_ARGS...]
 
 Cross-compile the current PHPZ project on Linux for Windows x86_64 MSVC.
 
-  --php-version VERSION    PHP version (default: 8.5.10; supported: 8.2-8.6)
+  --php-version VERSION    PHP version (default: 8.6.0; supported: 8.2-8.6, including alpha/beta/RC)
   --nts / --zts            PHP thread safety (default: nts)
   --xwin-version VERSION   xwin release version (default: 0.10.0)
   --xwin-cache-dir PATH    xwin cache root (default: \${XDG_CACHE_HOME:-\$HOME/.cache}/xwin)
@@ -18,8 +18,8 @@ Dependencies: zig, curl, tar, unzip, and standard shell utilities.
 Preparing the Windows SDK accepts Microsoft's license through xwin.
 
 Examples:
-  $0 --php-version 8.5.10 --nts
-  $0 --php-version 8.5.10 --zts
+  $0 --php-version 8.6.0 --nts
+  $0 --php-version 8.6.0 --zts
   $0 -- -Doptimize=ReleaseFast
 EOF
 }
@@ -37,7 +37,7 @@ require_value() {
     case "$2" in --*) arg_error "$1 requires a value" ;; esac
 }
 
-php_version=8.5.10
+php_version=8.6.0
 php_thread_safety=nts
 xwin_version=0.10.0
 xwin_cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/xwin
@@ -77,8 +77,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-printf '%s\n' "$php_version" | grep -Eq '^8\.[2-6]\.[0-9]+$' ||
-    arg_error "unsupported PHP version: $php_version (expected stable 8.2-8.6 major.minor.patch)"
+printf '%s\n' "$php_version" | grep -Eq '^8\.[2-6]\.[0-9]+((alpha|beta|RC)[0-9]+)?$' ||
+    arg_error "unsupported PHP version: $php_version (expected 8.2-8.6 major.minor.patch with optional alpha/beta/RC suffix)"
 printf '%s\n' "$xwin_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
     arg_error "invalid xwin version: $xwin_version (expected major.minor.patch)"
 
@@ -135,8 +135,11 @@ if [ ! -f "$php_cache/.complete" ]; then
     archive_name=php-devel-pack-$php_version$thread_suffix-Win32-$vs_toolset-$ms_arch.zip
     archive=$download_dir/$archive_name
     if [ ! -f "$archive" ]; then
-        base=https://downloads.php.net/~windows/releases
-        download "$base/archives/$archive_name" "$archive" ||
+        case "$php_version" in
+        *alpha* | *beta* | *RC*) base=https://downloads.php.net/~windows/qa ;;
+        *) base=https://downloads.php.net/~windows/releases/archives ;;
+        esac
+        download "$base/$archive_name" "$archive" ||
             die "PHP development pack unavailable: $archive_name"
     fi
     mkdir -p "$run_tmp/php"
