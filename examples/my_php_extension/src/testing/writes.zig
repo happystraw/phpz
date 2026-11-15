@@ -33,6 +33,8 @@ fn checkImmutable(immutable: *phpz.zend.Array) !void {
     var count: usize = 0;
     while (entries.next()) |value| : (count += 1) {
         try expectEqual(@as(u32, c.IS_ARRAY), value.u1.type_info);
+        // Immutable arrays have no refcounted flag but a readable refcount.
+        try expect(phpz.Zval.raw.refcount(value) >= 1);
     }
     try expectEqual(@as(usize, 3), count);
 

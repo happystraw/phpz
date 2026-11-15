@@ -407,6 +407,7 @@ pub const Zval = opaque {
         raw.release(self.ptr());
     }
 
+    /// Get the payload's refcount. Requires a refcounted value or an array.
     pub inline fn refcount(self: *Zval) u32 {
         return raw.refcount(self.ptr());
     }
@@ -695,7 +696,13 @@ pub const Zval = opaque {
         /// Release one owned raw zval value using PHP's `zval_ptr_dtor`.
         /// Accepts any initialized value, including .undef; does not clear the zval.
         pub const release = c.zval_ptr_dtor;
-        pub const refcount = c.zval_refcount_p;
+        /// Get the payload's refcount. Requires a refcounted value or an array;
+        /// immutable arrays have no refcounted flag but a valid header, as in
+        /// Zend's zval_refcount_p().
+        pub inline fn refcount(z: *c.zval) u32 {
+            std.debug.assert(z.u1.v.type_flags != 0 or z.u1.v.type == c.IS_ARRAY);
+            return c.zval_refcount_p(z);
+        }
         /// Increment the refcount only when the zval is refcounted, like Z_TRY_ADDREF_P.
         ///
         /// Ownership: caller owns the added reference and must call `release()` when done.
