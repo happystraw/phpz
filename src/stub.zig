@@ -2,6 +2,8 @@
 
 const std = @import("std");
 
+const FunctionEntry = @import("zend/function_entry.zig").FunctionEntry;
+
 /// Stub-order metadata with enum lookups to avoid StaticStringMap's comptime cost.
 pub fn DeclarationTable(comptime Value: type) type {
     return struct {
@@ -43,6 +45,15 @@ pub fn DeclarationTable(comptime Value: type) type {
 /// Estimate 512 branches per declaration, plus Zig's default 1000.
 pub fn declarationQuota(comptime count: usize) u32 {
     return @intCast(1_000 + count * 512);
+}
+
+/// Reject frameless declarations at the shared Zig function/method binding check.
+/// Older PHP versions have no frameless metadata field and need no check.
+pub fn checkFunctionEntry(comptime entry: *const FunctionEntry, comptime description: []const u8) void {
+    if (entry.isFrameless()) {
+        @compileError("phpz does not support @frameless-function for '" ++ description ++
+            "'; remove the annotation from the stub and regenerate arginfo (zflf_* handlers are not exported)");
+    }
 }
 
 /// Convert a canonical PHP qualified name to gen_stub's declaration fragment.

@@ -21,6 +21,14 @@ pub const FunctionEntry = opaque {
         return self.ptr().handler;
     }
 
+    /// Whether this declaration requires frameless handlers (PHP 8.4+).
+    pub inline fn isFrameless(self: *const FunctionEntry) bool {
+        if (comptime @hasField(c.zend_function_entry, "frameless_function_infos")) {
+            return self.ptr().frameless_function_infos != null;
+        }
+        return false;
+    }
+
     pub inline fn flags(self: *const FunctionEntry) u32 {
         return self.ptr().flags;
     }

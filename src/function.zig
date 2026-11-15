@@ -270,6 +270,7 @@ pub fn checkDeclaration(
     func: anytype,
     options: struct { receiver: bool = false, result: bool = true },
 ) void {
+    stub.checkFunctionEntry(entry, description);
     if (entry.ptr().arg_info == null) return;
     const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
     const start: usize = @intFromBool(options.receiver);
