@@ -56,9 +56,17 @@ pub const Array = opaque {
         c.zend_array_destroy(self.ptr());
     }
 
-    /// Get the number of elements
+    /// Get the raw HashTable element count, including INDIRECT slots targeting UNDEF.
+    /// Use count() for Zend's logical count of symbol/property tables.
     pub inline fn len(self: *Array) usize {
         return @intCast(self.ptr().nNumOfElements);
+    }
+
+    /// Count elements using Zend's array-count semantics (not recursively).
+    /// Honors Zend's empty-INDIRECT tracking and symbol-table handling; ordinary
+    /// PHP arrays normally have the same count as len(). May update cached flags.
+    pub fn count(self: *Array) usize {
+        return @intCast(c.zend_array_count(self.ptr()));
     }
 
     /// Check if array is empty

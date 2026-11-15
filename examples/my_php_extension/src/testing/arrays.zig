@@ -16,6 +16,7 @@ pub fn arrayToList(source: *Array) *Array {
 
 pub fn checkArrayHashTable(references: *Array) !void {
     try checkReferenceCounts(raw.asUnchecked(references.find("empty").?, .array));
+    try checkArrayCount();
     try checkStringKeys();
     try checkPointerValues();
     try checkExtend();
@@ -35,6 +36,39 @@ pub fn checkArrayHashTable(references: *Array) !void {
     const missing = String.init("absent", false);
     defer missing.release();
     try expect(references.findStrDeref(missing) == null);
+}
+
+fn checkArrayCount() !void {
+    const table = Array.empty();
+    defer table.release();
+    try std.testing.expectEqual(@as(usize, 0), table.count());
+    var plain = raw.init(.int, 1);
+    _ = table.update("plain", &plain);
+    try std.testing.expectEqual(table.len(), table.count());
+
+    // Model a symbol/property table with borrowed indirect targets. Zend tracks
+    // potentially empty indirect slots using HASH_FLAG_HAS_EMPTY_IND.
+    var live = raw.init(.int, 2);
+    var missing = raw.undef;
+    var live_slot = raw.undef;
+    live_slot.value.zv = &live;
+    live_slot.u1.type_info = c.IS_INDIRECT;
+    var empty_slot = raw.undef;
+    empty_slot.value.zv = &missing;
+    empty_slot.u1.type_info = c.IS_INDIRECT;
+    _ = table.update("live", &live_slot);
+    _ = table.update("missing", &empty_slot);
+    table.ptr().u.flags |= c.HASH_FLAG_HAS_EMPTY_IND;
+    try std.testing.expectEqual(@as(usize, 3), table.len());
+    try std.testing.expectEqual(@as(usize, 2), table.count());
+    try std.testing.expectEqual(@as(usize, 2), table.count());
+    live = raw.undef;
+    try std.testing.expectEqual(@as(usize, 1), table.count());
+    try std.testing.expectEqual(@as(usize, 3), table.len());
+    live = raw.init(.int, 2);
+    missing = raw.init(.null, {});
+    try std.testing.expectEqual(@as(usize, 3), table.count());
+    try expect(table.ptr().u.flags & c.HASH_FLAG_HAS_EMPTY_IND == 0);
 }
 
 fn checkReferenceCounts(immutable: *Array) !void {
