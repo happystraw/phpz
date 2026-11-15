@@ -11,6 +11,23 @@ const zend = @import("zend.zig");
 /// `stage` identifies the lifecycle phase; `new_value` may be null.
 pub const OnModifyFn = *const fn (entry: *c.zend_ini_entry, new_value: ?*c.zend_string, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int;
 
+/// Which INI value phpinfo() asks the displayer to render.
+pub const DisplayType = enum(c_int) {
+    original = c.ZEND_INI_DISPLAY_ORIG,
+    active = c.ZEND_INI_DISPLAY_ACTIVE,
+    _,
+};
+
+pub const DisplayerFn = fn (entry: *c.zend_ini_entry, display_type: DisplayType) void;
+pub const Displayer = @FieldType(c.zend_ini_entry_def, "displayer");
+pub fn displayer(comptime callback: DisplayerFn) Displayer {
+    return @ptrCast(&struct {
+        fn display(entry: ?*c.zend_ini_entry, kind: c_int) callconv(.c) void {
+            callback(entry.?, @fromBackingInt(@intCast(kind)));
+        }
+    }.display);
+}
+
 /// Where an INI directive may be modified.
 pub const Access = enum(c_int) {
     system = c.ZEND_INI_SYSTEM,
@@ -78,6 +95,7 @@ pub fn Typed(comptime T: type) type {
             parse: ?*const ParseFn = null,
             parse_with_entry: ?*const ParseWithEntryFn = null,
             format: ?*const FormatFn = null,
+            displayer: Displayer = null,
             bind: ?type = null,
         };
 
@@ -130,7 +148,7 @@ pub fn Typed(comptime T: type) type {
                         .mh_arg2 = null,
                         .mh_arg3 = null,
                         .value = cfg.default_text,
-                        .displayer = null,
+                        .displayer = cfg.displayer,
                         .value_length = @intCast(cfg.default_text.len),
                         .name_length = @intCast(cfg.name.len),
                         .modifiable = @backingInt(cfg.access),
@@ -162,6 +180,7 @@ fn ScalarConfig(comptime T: type) type {
         default: T,
         access: Access,
         bind: ?type = null,
+        displayer: Displayer = null,
     };
 }
 
@@ -173,6 +192,7 @@ pub const string = struct {
             .default_text = cfg.default,
             .access = cfg.access,
             .bind = cfg.bind,
+            .displayer = cfg.displayer,
             .parse = parse,
             .format = format,
         });
@@ -196,6 +216,7 @@ pub const int = struct {
             .default_text = std.fmt.comptimePrint("{d}", .{cfg.default}),
             .access = cfg.access,
             .bind = cfg.bind,
+            .displayer = cfg.displayer,
             .parse_with_entry = parse,
             .format = format,
         });
@@ -220,6 +241,7 @@ pub const float = struct {
             .default_text = std.fmt.comptimePrint("{e}", .{cfg.default}),
             .access = cfg.access,
             .bind = cfg.bind,
+            .displayer = cfg.displayer,
             .parse = parse,
             .format = format,
         });
@@ -242,6 +264,7 @@ pub const boolean = struct {
             .default_text = if (cfg.default) "1" else "0",
             .access = cfg.access,
             .bind = cfg.bind,
+            .displayer = cfg.displayer,
             .parse = parse,
             .format = format,
         });

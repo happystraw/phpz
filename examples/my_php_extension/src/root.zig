@@ -42,6 +42,7 @@ fn info(m: *phpz.ModuleEntry) void {
     phpz.info.table.header(.{ "my_php_extension support", "enabled" });
     phpz.info.table.row(.{ "version", m.version });
     phpz.info.table.end();
+    phpz.info.ini(m);
 }
 
 comptime {

@@ -1,5 +1,11 @@
 const c = @import("root.zig").c;
 
+/// Display this module's INI directives in phpinfo(), including custom displayers.
+/// Call from the module's info callback; module is borrowed.
+pub fn ini(module: *c.zend_module_entry) void {
+    c.display_ini_entries(module);
+}
+
 /// HTML table helpers for phpinfo() output.
 ///
 /// Usage:
