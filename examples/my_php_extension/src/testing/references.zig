@@ -21,6 +21,20 @@ pub fn makeReference(value: *Zval) *Reference {
     return ref;
 }
 
+/// Release a shared reference, then its last owner, around an object that PHP
+/// does not hold: only the final release may run its destructor.
+pub fn checkReferenceRelease(class_name: []const u8) !void {
+    const ce = (try phpz.ClassEntry.lookup(class_name, true)) orelse return error.ClassNotFound;
+    const object = try phpz.zend.Object.init(ce);
+    const ref = Reference.init(.object, object);
+    ref.addref();
+    ref.release();
+    try std.testing.expectEqual(@as(u32, 1), ref.refcount());
+    _ = phpz.printf("released shared\n", .{});
+    ref.release();
+    _ = phpz.printf("released last\n", .{});
+}
+
 pub fn createReference(type_name: []const u8, value: *Zval) !*Reference {
     inline for (kinds) |kind| {
         if (std.mem.eql(u8, type_name, @tagName(kind))) {

@@ -58,6 +58,14 @@ pub const Reference = opaque {
         _ = c.zend_gc_addref(&self.ptr().gc);
     }
 
+    /// Release one owned reference, destroying its contents when the count reaches zero.
+    /// Destroying the contents may run PHP destructors, which can call user code or bail out.
+    /// Do not release borrowed references or references whose ownership was transferred.
+    pub fn release(self: *Reference) void {
+        var value = Zval.raw.init(.reference, self);
+        Zval.raw.release(&value);
+    }
+
     /// Decrement refcount without destroying the reference. Do not use for cleanup.
     pub fn delref(self: *Reference) void {
         _ = c.zend_gc_delref(&self.ptr().gc);

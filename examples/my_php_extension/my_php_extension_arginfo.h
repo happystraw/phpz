@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 70f5dc9b8b5fdafa72b33f86838215b0bd6c2d8c */
+ * Stub hash: 9fd3e6b6b3dc759ab06c52363ccdc33ace76a864 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -405,6 +405,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_makeReference, 1, 
 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_checkReferenceRelease, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, class, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setReference, 0, 3, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(1, target, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
@@ -702,6 +706,7 @@ ZEND_FUNCTION(MyPHPExt_Test_mutateSuperglobals);
 ZEND_FUNCTION(MyPHPExt_Test_referenceArgument);
 ZEND_FUNCTION(MyPHPExt_Test_createReference);
 ZEND_FUNCTION(MyPHPExt_Test_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_checkReferenceRelease);
 ZEND_FUNCTION(MyPHPExt_Test_setReference);
 ZEND_FUNCTION(MyPHPExt_Test_setReferenceSelf);
 ZEND_FUNCTION(MyPHPExt_Test_markOptionalReference);
@@ -1218,6 +1223,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeReference"), zif_MyPHPExt_Test_makeReference, arginfo_MyPHPExt_Test_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "makeReference"), zif_MyPHPExt_Test_makeReference, arginfo_MyPHPExt_Test_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkReferenceRelease"), zif_MyPHPExt_Test_checkReferenceRelease, arginfo_MyPHPExt_Test_checkReferenceRelease, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkReferenceRelease"), zif_MyPHPExt_Test_checkReferenceRelease, arginfo_MyPHPExt_Test_checkReferenceRelease, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReference"), zif_MyPHPExt_Test_setReference, arginfo_MyPHPExt_Test_setReference, 0, NULL, NULL)
