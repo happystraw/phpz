@@ -212,7 +212,6 @@ location:
 
 ```sh
 zig build run-tests -Dphp-include-dir=/path/to/php/include/php
-zig build run-tests -Dcheck-arginfo=false
 ```
 
 On Windows, use the MSVC target and pass the matching PHP SDK library directory:

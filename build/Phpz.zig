@@ -42,7 +42,6 @@ pub const Options = struct {
     shared: bool = true,
 
     /// Extension LTO: null keeps the platform/build-mode default.
-    /// The addExtension() command-line option -Dlto takes precedence.
     lto: ?bool = null,
 
     /// Use static TSRM caches for ZTS builds; ignored by NTS PHP.
@@ -62,6 +61,9 @@ pub const Options = struct {
     windows_zts: bool = false,
     /// Must match the Windows PHP build's debug setting.
     windows_debug: bool = false,
+
+    /// Check that each extension's generated arginfo header matches its stub.
+    check_arginfo: bool = true,
 };
 
 /// Initialize Phpz from a build dependency.
@@ -209,7 +211,7 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
         else => {},
     }
 
-    if (b.option(bool, "lto", "Enable link time optimization for the extension") orelse self.options.lto) |enabled| {
+    if (self.options.lto) |enabled| {
         lib.lto = if (enabled) .full else .none;
     } else if (self.options.shared and (lib.root_module.optimize orelse .debug) != .debug) {
         // Zig 0.17's Mach-O linker does not support LTO, and its LLD integration
@@ -217,7 +219,7 @@ pub fn addExtension(self: Phpz, b: *Build, options: Build.LibraryOptions) *Build
         lib.lto = if (lib.rootModuleTarget().ofmt == .macho) .none else .full;
     }
 
-    if (b.option(bool, "check-arginfo", "Check that the generated arginfo header matches the extension stub (default: true)") orelse true) {
+    if (self.options.check_arginfo) {
         lib.step.dependOn(addArginfoCheckStep(self, b, options.name));
     }
     return lib;

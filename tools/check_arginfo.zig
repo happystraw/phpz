@@ -30,7 +30,7 @@ pub fn main(init: std.process.Init) !void {
     };
     if (!std.mem.eql(u8, &expected, actual)) {
         fatal(
-            "stub hash mismatch between {s} and {s}\n  Expected: {s}\n  Found:    {s}" ++ regeneration_hint ++ "\nTo skip this check, pass -Dcheck-arginfo=false.",
+            "stub hash mismatch between {s} and {s}\n  Expected: {s}\n  Found:    {s}" ++ regeneration_hint ++ "\nTo skip this check, set check_arginfo = false in the Phpz options.",
             .{ arginfo_path, stub_path, &expected, actual },
         );
     }

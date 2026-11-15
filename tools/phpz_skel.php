@@ -1096,6 +1096,7 @@ pub fn build(b: *std.Build) void {
 {{PHPZ_PLATFORM_TARGET_CHECK}}
     // PHP build options.
     const shared = b.option(bool, "shared", "Build a shared PHP extension instead of a built-in extension") orelse true;
+    const lto = b.option(bool, "lto", "Enable link time optimization for the extension");
     const php_include_dir = b.option([]const u8, "php-include-dir", "PHP include directory (main/, Zend/, TSRM/, ext/)") orelse "{{PHP_INCLUDE_DIR}}";
 {{PHPZ_WINDOWS_BUILD_OPTIONS}}
     const libc_file = b.option([]const u8, "libc-file", "Libc paths file for C translation and extension compilation");
@@ -1112,6 +1113,7 @@ pub fn build(b: *std.Build) void {
         .php_include_dir = .{ .cwd_relative = php_include_dir },
 {{PHPZ_WINDOWS_INIT_OPTIONS}}
         .shared = shared,
+        .lto = lto,
     });
 
     // Build the PHP extension library.
