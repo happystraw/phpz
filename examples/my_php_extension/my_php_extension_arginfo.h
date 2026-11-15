@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 9fd3e6b6b3dc759ab06c52363ccdc33ace76a864 */
+ * Stub hash: cf90c17b1b009b954d95ad56b964e6329a9fad03 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -240,6 +240,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_compareArrays, 0, 
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_setSlicedKeys arginfo_MyPHPExt_Test_iterateWhileMutating
+
+#define arginfo_MyPHPExt_Test_checkArraySort arginfo_hello
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_copyArray, 0, 2, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, target, IS_ARRAY, 0)
@@ -671,6 +673,7 @@ ZEND_FUNCTION(MyPHPExt_Test_checkObjectCreation);
 ZEND_FUNCTION(MyPHPExt_Test_separateArray);
 ZEND_FUNCTION(MyPHPExt_Test_compareArrays);
 ZEND_FUNCTION(MyPHPExt_Test_setSlicedKeys);
+ZEND_FUNCTION(MyPHPExt_Test_checkArraySort);
 ZEND_FUNCTION(MyPHPExt_Test_copyArray);
 ZEND_FUNCTION(MyPHPExt_Test_mergeArray);
 ZEND_FUNCTION(MyPHPExt_Test_constructObject);
@@ -1048,6 +1051,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setSlicedKeys"), zif_MyPHPExt_Test_setSlicedKeys, arginfo_MyPHPExt_Test_setSlicedKeys, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setSlicedKeys"), zif_MyPHPExt_Test_setSlicedKeys, arginfo_MyPHPExt_Test_setSlicedKeys, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArraySort"), zif_MyPHPExt_Test_checkArraySort, arginfo_MyPHPExt_Test_checkArraySort, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkArraySort"), zif_MyPHPExt_Test_checkArraySort, arginfo_MyPHPExt_Test_checkArraySort, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "copyArray"), zif_MyPHPExt_Test_copyArray, arginfo_MyPHPExt_Test_copyArray, 0, NULL, NULL)

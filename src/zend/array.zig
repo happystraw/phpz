@@ -427,17 +427,26 @@ pub const Array = opaque {
     pub const SortOrder = enum(c_int) { less = -1, equal = 0, greater = 1 };
 
     /// Sort the array in-place with a custom compare function and optional renumbering.
+    /// Requires mutable, uniquely owned storage; see separate(). No automatic COW.
     /// Callback results are passed through; returning `.equal` does not stop
     /// sorting. Zend may invoke further callbacks with a pending PHP exception.
     /// Pending exceptions are reported as PhpException or UnwindExit after sorting returns;
     /// changes are not rolled back.
+    /// On PHP 8.5+, the array stays alive while sorting even if a callback
+    /// releases its last owner, and is then destroyed when sorting returns.
+    /// Earlier versions do not export that protection: callbacks must not
+    /// release the array's last owner, for example through PHP user code.
     pub fn sort(self: *Array, compare_fn: fn (*c.Bucket, *c.Bucket) SortOrder, renumber: bool) exception.Error!void {
         const Cb = struct {
             fn cb(a: ?*c.Bucket, b: ?*c.Bucket) callconv(.c) c_int {
                 return @backingInt(compare_fn(a.?, b.?));
             }
         };
-        c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
+        if (comptime c.PHP_VERSION_ID >= 80500) {
+            c.zend_array_sort(self.ptr(), Cb.cb, renumber);
+        } else {
+            c.zend_hash_sort(self.ptr(), Cb.cb, renumber);
+        }
         try exception.check();
     }
 

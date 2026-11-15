@@ -248,6 +248,7 @@ namespace MyPHPExt\Test {
     function separateArray(array $values): array {}
     function compareArrays(array $left, array $right, bool $ordered, bool $strict): int {}
     function setSlicedKeys(): array {}
+    function checkArraySort(): void {}
     function copyArray(array $target, array $source): array {}
     function mergeArray(array $target, array $source, bool $overwrite): array {}
     function constructObject(string $class, array $args, bool $guarded): object {}

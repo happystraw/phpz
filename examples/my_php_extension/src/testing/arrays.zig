@@ -279,6 +279,85 @@ fn compareIdentical(left: *const phpz.c.zval, right: *const phpz.c.zval) c_int {
     return @intFromBool(!phpz.c.zend_is_identical(a, b));
 }
 
+/// Sort results and renumbering; on PHP 8.5+ also the lifetime when a
+/// comparison releases the array's last owner.
+pub fn checkArraySort() !void {
+    const protected = comptime c.PHP_VERSION_ID >= 80500;
+    inline for (.{ false, true }) |packed_input| {
+        const table = Array.init(3);
+        defer table.release();
+        try fillSortInput(table, packed_input);
+        const Order = struct {
+            var extra_reference = true;
+            var array: *Array = undefined;
+            fn compare(a: *c.Bucket, b: *c.Bucket) Array.SortOrder {
+                if (array.refcount() < 2) extra_reference = false;
+                return compareInts(a, b);
+            }
+        };
+        Order.array = table;
+        Order.extra_reference = true;
+        try table.sort(Order.compare, false);
+        try expect(Order.extra_reference == protected and table.refcount() == 1);
+        try expectSortedValues(table);
+        if (!packed_input) try expect(raw.asUnchecked(table.find("one").?, .int) == 1);
+        try table.sort(Order.compare, true);
+        try expect(raw.asUnchecked(table.findIndex(0).?, .int) == 1);
+        try expect(raw.asUnchecked(table.findIndex(1).?, .int) == 2);
+        try expect(raw.asUnchecked(table.findIndex(2).?, .int) == 3);
+    }
+
+    // PHP < 8.5 does not export the protection, so the array would be freed mid-sort.
+    if (!protected) return;
+    inline for (.{ false, true }) |packed_input| {
+        const table = Array.init(3);
+        try fillSortInput(table, packed_input);
+        const Release = struct {
+            var array: *Array = undefined;
+            var released = false;
+            fn compare(a: *c.Bucket, b: *c.Bucket) Array.SortOrder {
+                if (!released) {
+                    released = true;
+                    array.release();
+                }
+                return compareInts(a, b);
+            }
+        };
+        Release.array = table;
+        Release.released = false;
+        // The callback releases the only owner; sort() destroys the array after sorting.
+        try table.sort(Release.compare, true);
+        try expect(Release.released);
+    }
+}
+
+fn fillSortInput(table: *Array, packed_input: bool) !void {
+    const values = [_]i64{ 3, 1, 2 };
+    const keys = [_][]const u8{ "three", "one", "two" };
+    for (values, keys) |value, key| {
+        var zv = raw.init(.int, value);
+        if (packed_input) {
+            _ = table.append(&zv) orelse return error.AppendFailed;
+        } else {
+            _ = table.update(key, &zv);
+        }
+    }
+}
+
+fn expectSortedValues(table: *Array) !void {
+    var values = table.valueIterator();
+    for ([_]i64{ 1, 2, 3 }) |expected| {
+        try expect(raw.asUnchecked(values.next().?, .int) == expected);
+    }
+    try expect(values.next() == null);
+}
+
+fn compareInts(a: *c.Bucket, b: *c.Bucket) Array.SortOrder {
+    const left = raw.asUnchecked(&a.val, .int);
+    const right = raw.asUnchecked(&b.val, .int);
+    return if (left < right) .less else if (left > right) .greater else .equal;
+}
+
 /// Keys are slices of a larger buffer, so they are not NUL-terminated:
 /// "-" and "" are followed by digits that Zend's numeric key check would read.
 pub fn setSlicedKeys(ctx: phpz.Ctx) void {
