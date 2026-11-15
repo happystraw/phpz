@@ -60,9 +60,7 @@ pub const Operator = enum(u8) {
 pub const Comparison = enum(i32) { less = -1, equal = 0, greater = 1 };
 
 const Layout = enum { std, backed };
-const MethodKind = enum { instance, static };
-const Method = struct { name: [:0]const u8, kind: MethodKind };
-const MethodTable = stub.DeclarationTable(Method);
+const MethodTable = stub.DeclarationTable(*const zend.FunctionEntry);
 const BindingStrategy = enum { automatic, explicit };
 fn Resolved(comptime T: type) type {
     return struct {
@@ -127,23 +125,20 @@ fn Resolved(comptime T: type) type {
 
                 const table = @field(c, table_name);
                 @setEvalBranchQuota(stub.declarationQuota(table.len));
-                const Pair = struct { []const u8, Method };
+                const Pair = struct { []const u8, *const zend.FunctionEntry };
                 const symbol_prefix = stub.methodSymbolPrefix(class_name);
                 var pairs: [table.len]Pair = undefined;
                 var len: usize = 0;
 
-                for (table) |fe| {
-                    const method = zend.FunctionEntry.from(&fe);
+                for (&table) |*fe| {
+                    const method = zend.FunctionEntry.from(fe);
                     if (method.handler() == null) continue;
 
                     const name = method.name() orelse continue;
                     const own_symbol = symbol_prefix ++ name;
                     if (!@hasDecl(c, own_symbol)) continue;
 
-                    pairs[len] = .{
-                        name,
-                        .{ .name = name, .kind = if (method.isStatic()) .static else .instance },
-                    };
+                    pairs[len] = .{ name, method };
                     len += 1;
                 }
 
@@ -918,7 +913,7 @@ fn bindExplicit(
     inline for (methods.entries, bound) |method, is_bound| {
         if (!is_bound) {
             mismatch = true;
-            message = message ++ "\n  missing Zig binding: " ++ method.name;
+            message = message ++ "\n  missing Zig binding: " ++ method.name().?;
         }
     }
     if (mismatch) @compileError(message);
@@ -953,7 +948,7 @@ fn bindAutomatic(
 
     inline for (methods.entries, bound) |method, is_bound| {
         if (!is_bound) {
-            @compileError("Class " ++ class_name ++ " does not implement required stub method '" ++ method.name ++ "'");
+            @compileError("Class " ++ class_name ++ " does not implement required stub method '" ++ method.name().? ++ "'");
         }
     }
 }
@@ -963,20 +958,27 @@ fn bind(
     comptime T: type,
     comptime ClassType: type,
     comptime class_layout: Layout,
-    comptime method: Method,
+    comptime method: *const zend.FunctionEntry,
     comptime func: anytype,
 ) void {
+    const name = method.name().?;
+    const constructor = class_layout == .backed and std.mem.eql(u8, name, "__construct");
+    comptime functions.checkDeclaration(class_name ++ "::" ++ name ++ "()", method, func, .{
+        .receiver = class_layout == .backed and !method.isStatic() and !constructor,
+        .result = !constructor,
+    });
     if (class_layout == .std) {
-        functions.method(class_name, method.name, func);
+        functions.method(class_name, name, func);
         return;
     }
-    if (std.mem.eql(u8, method.name, "__construct")) {
+    if (constructor) {
         bindConstructor(class_name, T, ClassType, func);
         return;
     }
-    switch (method.kind) {
-        .static => functions.method(class_name, method.name, func),
-        .instance => bindInstanceMethod(class_name, T, ClassType, method.name, func),
+    if (method.isStatic()) {
+        functions.method(class_name, name, func);
+    } else {
+        bindInstanceMethod(class_name, T, ClassType, name, func);
     }
 }
 

@@ -50,6 +50,13 @@ pub fn setReferenceSelf(ref: *Reference) !void {
     try ref.set(.mixed, ref.val());
 }
 
+/// Typed optional by-reference parameter: mark the reference when passed.
+pub fn markOptionalReference(ref: ?*Reference) !bool {
+    const target = ref orelse return false;
+    try target.set(.string, "marked");
+    return true;
+}
+
 pub fn createReferenceCopy(ref: *Reference) *Reference {
     // Copy from the outer reference too; init must not nest reference containers.
     var outer = Zval.raw.init(.reference, ref);

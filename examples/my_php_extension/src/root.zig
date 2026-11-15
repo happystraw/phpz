@@ -91,6 +91,7 @@ comptime {
         .@"MyPHPExt\\Test\\makeReference" = references.makeReference,
         .@"MyPHPExt\\Test\\setReference" = references.setReference,
         .@"MyPHPExt\\Test\\setReferenceSelf" = references.setReferenceSelf,
+        .@"MyPHPExt\\Test\\markOptionalReference" = references.markOptionalReference,
         .@"MyPHPExt\\Test\\createReferenceCopy" = references.createReferenceCopy,
         .@"MyPHPExt\\Test\\createResource" = resources.createResource,
         .@"MyPHPExt\\Test\\readResource" = resources.readResource,

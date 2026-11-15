@@ -14,22 +14,22 @@ const Stream = @import("stream.zig").Stream;
 
 pub const Handler = fn (?*c.zend_execute_data, ?*c.zval) callconv(abi.fn_cc) void;
 
-const FunctionTable = stub.DeclarationTable(void);
+const FunctionTable = stub.DeclarationTable(*const zend.FunctionEntry);
 const required_functions = blk: {
     if (!@hasDecl(c, "ext_functions")) break :blk FunctionTable.initComptime(.{});
 
     const table = c.ext_functions;
     @setEvalBranchQuota(stub.declarationQuota(table.len));
-    const Pair = struct { []const u8, void };
+    const Pair = struct { []const u8, *const zend.FunctionEntry };
     var pairs: [table.len]Pair = undefined;
     var len: usize = 0;
 
-    for (table) |raw| {
-        const entry = zend.FunctionEntry.from(&raw);
+    for (&table) |*raw| {
+        const entry = zend.FunctionEntry.from(raw);
         const name = entry.name() orelse continue;
         const handler_symbol = stub.functionSymbolName(name);
         if (!@hasDecl(c, handler_symbol)) continue;
-        pairs[len] = .{ name, {} };
+        pairs[len] = .{ name, entry };
         len += 1;
     }
 
@@ -176,6 +176,13 @@ pub fn functions(comptime T: type, comptime options: struct { namespace: []const
 /// `[:0]const u8` borrows a NUL-terminated string slice, preserving embedded NULs.
 /// String slice returns are copied using their full length.
 ///
+/// The signature must follow the stub declaration. Parameter counts, optional
+/// and variadic parameters, by-reference parameters and a by-reference return
+/// are checked against the generated arginfo at compile time; a by-reference
+/// parameter takes `*zend.Reference` or `*Zval`, and a by-reference function
+/// returns `*zend.Reference`. Parameter and return types are not checked and
+/// must match the stub.
+///
 /// When the function takes neither a context nor PHP parameters, extra arguments
 /// are rejected. A context-only handler retains control of its own parsing.
 ///
@@ -226,6 +233,10 @@ pub fn function(comptime func_name: [:0]const u8, comptime func: anytype) void {
 }
 
 fn exportFunction(comptime func_name: [:0]const u8, comptime func: anytype) void {
+    comptime {
+        const entry = required_functions.entries[required_functions.getIndex(func_name).?];
+        checkDeclaration(func_name ++ "()", entry, func, .{});
+    }
     const symbol = stub.functionSymbolName(func_name);
     const handler = createHandler(func_name ++ "()", func);
     @export(&handler, .{ .name = symbol });
@@ -240,6 +251,71 @@ pub fn method(comptime class_name: [:0]const u8, comptime func_name: [:0]const u
     comptime {
         const handler = createHandler(class_name ++ "::" ++ func_name ++ "()", func);
         @export(&handler, .{ .name = stub.methodSymbolName(class_name, func_name) });
+    }
+}
+
+/// Check a typed handler against its generated arginfo at compile time.
+///
+/// Only declarations that affect memory safety are compared: parameter counts,
+/// optional and variadic parameters, by-reference parameters and returns.
+/// Mismatched counts let Zend read past the arginfo, and mismatched reference
+/// flags break its reference invariants. Parameter and return types are not
+/// compared; keep them in line with the stub, as ZPP and Zend report type
+/// errors at runtime. Context-only handlers parse their own arguments, which
+/// expectArgs() checks in Debug builds, and context handlers returning void
+/// set the result themselves.
+pub fn checkDeclaration(
+    description: []const u8,
+    entry: *const zend.FunctionEntry,
+    func: anytype,
+    options: struct { receiver: bool = false, result: bool = true },
+) void {
+    if (entry.ptr().arg_info == null) return;
+    const params = @typeInfo(@TypeOf(func)).@"fn".param_types;
+    const start: usize = @intFromBool(options.receiver);
+    const has_context = params.len > start and (params[start] == Ctx or params[start] == GuardCtx);
+    const types = params[start + @intFromBool(has_context) ..];
+    @setEvalBranchQuota(stub.declarationQuota(params.len));
+
+    if (!has_context or types.len != 0) {
+        const variadic = types.len != 0 and types[types.len - 1] == argument.Variadic;
+        var required: usize = 0;
+        for (types) |T| {
+            const spec = specFor(T.?);
+            if (spec != .variadic and !spec.isOptional()) required += 1;
+        }
+        const fixed = types.len - @intFromBool(variadic);
+        if (fixed != entry.fixedParamCount() or required != entry.requiredParamCount() or variadic != entry.isVariadic()) {
+            @compileError(std.fmt.comptimePrint(
+                "{s}: Zig requires {d} of {d} parameters (variadic {}), PHP declares {d} of {d} (variadic {})",
+                .{ description, required, fixed, variadic, entry.requiredParamCount(), entry.fixedParamCount(), entry.isVariadic() },
+            ));
+        }
+        for (types[0..fixed], 0..) |T, i| {
+            const spec = specFor(T.?);
+            const by_ref = entry.isParamByReference(i);
+            // A raw zval keeps the reference; Mixed unions only match values.
+            const raw = spec == .mixed and spec.mixed.one_of == null;
+            if ((spec == .reference) != by_ref and !(by_ref and raw)) {
+                @compileError(std.fmt.comptimePrint(
+                    "{s}: parameter ${s} is {s}declared by reference; take {s}",
+                    .{ description, entry.paramName(i), if (by_ref) "" else "not ", if (by_ref) "*zend.Reference or *Zval" else "a value" },
+                ));
+            }
+        }
+    }
+
+    if (!options.result) return;
+    const R = ResultType(func);
+    if ((R == void and has_context) or R == noreturn) return;
+    const Result = if (@typeInfo(R) == .optional) @typeInfo(R).optional.child else R;
+    const by_ref = entry.returnsReference();
+    // A null optional would leave a non-reference result.
+    if (if (by_ref) R != *zend.Reference else Result == *zend.Reference) {
+        @compileError(description ++ if (by_ref)
+            ": PHP declares a by-reference return; return *zend.Reference"
+        else
+            ": PHP declares a by-value return; do not return *zend.Reference");
     }
 }
 

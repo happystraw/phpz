@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: f849f248f55d33be06a21799af9fe641d1809d42 */
+ * Stub hash: c24867269212b26a280a2c654399040dd53e5b7d */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hello, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -413,6 +413,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_setReferenceSelf, 
 	ZEND_ARG_TYPE_INFO(1, target, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_markOptionalReference, 0, 0, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(1, value, IS_MIXED, 0, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_createReferenceCopy, 1, 1, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO(1, source, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -697,6 +701,7 @@ ZEND_FUNCTION(MyPHPExt_Test_createReference);
 ZEND_FUNCTION(MyPHPExt_Test_makeReference);
 ZEND_FUNCTION(MyPHPExt_Test_setReference);
 ZEND_FUNCTION(MyPHPExt_Test_setReferenceSelf);
+ZEND_FUNCTION(MyPHPExt_Test_markOptionalReference);
 ZEND_FUNCTION(MyPHPExt_Test_createReferenceCopy);
 ZEND_FUNCTION(MyPHPExt_Test_optionalReferenceArgument);
 ZEND_FUNCTION(MyPHPExt_Test_createResource);
@@ -1215,6 +1220,11 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReferenceSelf"), zif_MyPHPExt_Test_setReferenceSelf, arginfo_MyPHPExt_Test_setReferenceSelf, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "setReferenceSelf"), zif_MyPHPExt_Test_setReferenceSelf, arginfo_MyPHPExt_Test_setReferenceSelf, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "markOptionalReference"), zif_MyPHPExt_Test_markOptionalReference, arginfo_MyPHPExt_Test_markOptionalReference, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "markOptionalReference"), zif_MyPHPExt_Test_markOptionalReference, arginfo_MyPHPExt_Test_markOptionalReference, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "createReferenceCopy"), zif_MyPHPExt_Test_createReferenceCopy, arginfo_MyPHPExt_Test_createReferenceCopy, 0, NULL, NULL)

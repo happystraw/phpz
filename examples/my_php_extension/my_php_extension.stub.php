@@ -335,6 +335,7 @@ namespace MyPHPExt\Test {
     function &makeReference(mixed $value): mixed {}
     function setReference(mixed &$target, string $type, mixed $value): void {}
     function setReferenceSelf(mixed &$target): void {}
+    function markOptionalReference(mixed &$value = null): bool {}
     function &createReferenceCopy(mixed &$source): mixed {}
     function optionalReferenceArgument(string $mode, string $type, bool $single, mixed &$value = null): string {}
 
