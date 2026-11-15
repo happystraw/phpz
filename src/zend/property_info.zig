@@ -1,5 +1,7 @@
+const property_name = @import("property_name.zig");
 const c = @import("../root.zig").c;
 const ClassEntry = @import("class_entry.zig").ClassEntry;
+const String = @import("string.zig").String;
 
 pub const PropertyInfo = opaque {
     pub const Error = error{
@@ -16,10 +18,17 @@ pub const PropertyInfo = opaque {
         return @ptrCast(@alignCast(self));
     }
 
-    /// Get the property name as a byte slice
+    /// Borrow the raw Zend property name, including private/protected scope prefixes.
+    /// Ownership: borrowed metadata string; do not modify or release it.
+    pub fn rawName(self: *PropertyInfo) *String {
+        return .from(self.ptr().name);
+    }
+
+    /// Get the unmangled property name, without private/protected scope prefixes.
+    /// The returned slice is borrowed from the property metadata.
+    /// Requires valid Zend property-name metadata.
     pub fn name(self: *PropertyInfo) [:0]const u8 {
-        const n = self.ptr().name;
-        return n.*.val()[0..n.*.len :0];
+        return property_name.unmangleName(self.rawName()) orelse unreachable;
     }
 
     /// Get the declaring class entry.

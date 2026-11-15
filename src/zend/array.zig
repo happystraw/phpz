@@ -465,7 +465,8 @@ pub const Array = opaque {
 
     pub const Key = union(enum) {
         int: isize,
-        string: [:0]const u8,
+        /// Ownership: borrowed key string owned by the array bucket.
+        str: *String,
     };
 
     pub const Entry = struct {
@@ -494,7 +495,7 @@ pub const Array = opaque {
     inline fn keyAt(ht: *c.HashTable, pos: u32) Key {
         if (isPacked(ht)) return .{ .int = @intCast(pos) };
         const bucket = &buckets(ht)[pos];
-        return if (bucket.key) |k| .{ .string = String.from(k).slice() } else .{ .int = @bitCast(bucket.h) };
+        return if (bucket.key) |k| .{ .str = .from(k) } else .{ .int = @bitCast(bucket.h) };
     }
 
     /// First used slot at or after `pos`, or nNumUsed. Mirrors _zend_hash_get_valid_pos().
@@ -656,7 +657,7 @@ pub const Array = opaque {
     ///     fn callback(e: Array.Entry, ctx: *Ctx) void {
     ///         switch (e.key) {
     ///             .int => |i| // numeric key
-    ///             .string => |s| // string key
+    ///             .str => |s| // string key, s.slice() for bytes
     ///         }
     ///     }
     /// }.callback, .{&ctx});
@@ -682,7 +683,7 @@ pub const Array = opaque {
                     continue;
                 }
                 const key: Key = if (bucket.key) |k|
-                    .{ .string = String.from(k).slice() }
+                    .{ .str = String.from(k) }
                 else
                     .{ .int = @bitCast(bucket.h) };
                 @call(.always_inline, callback, .{Entry{ .key = key, .value = &bucket.val }} ++ args);
@@ -993,7 +994,7 @@ pub const Array = opaque {
                     self.cursor += self.stride;
                     self.pos += 1;
                     const key: Key = if (bucket.key) |k|
-                        .{ .string = String.from(k).slice() }
+                        .{ .str = String.from(k) }
                     else
                         .{ .int = @bitCast(bucket.h) };
                     if (Zval.raw.is(zv, .undef)) {
@@ -1033,7 +1034,7 @@ pub const Array = opaque {
                     cursor += self.stride;
                     p += 1;
                     const key: Key = if (bucket.key) |k|
-                        .{ .string = String.from(k).slice() }
+                        .{ .str = String.from(k) }
                     else
                         .{ .int = @bitCast(bucket.h) };
                     if (Zval.raw.is(zv, .undef)) {

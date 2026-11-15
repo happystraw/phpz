@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const phpz = @import("phpz");
 
 /// PHP: MyPHPExt\Dumper::dump(mixed ...$values): void
@@ -48,10 +46,10 @@ fn dumpValue(value: *phpz.Zval, depth: usize) phpz.exception.Error!void {
                 indent(depth + 1);
                 switch (entry.key) {
                     .int => |index| _ = phpz.printf("[%ld] =>\n", .{index}),
-                    .string => |key| _ = phpz.printf("[\"%.*s\"] =>\n", .{
-                        key.len,
-                        key.ptr,
-                    }),
+                    .str => |key| {
+                        const name = key.slice();
+                        _ = phpz.printf("[\"%.*s\"] =>\n", .{ name.len, name.ptr });
+                    },
                 }
                 try dumpValue(.from(entry.value), depth + 1);
             }
@@ -92,7 +90,7 @@ fn dumpValue(value: *phpz.Zval, depth: usize) phpz.exception.Error!void {
                     indent(depth + 1);
                     switch (entry.key) {
                         .int => |index| _ = phpz.printf("[%ld]", .{index}),
-                        .string => |name| printPropertyVisibility(name),
+                        .str => |name| printPropertyVisibility(name),
                     }
                     _ = phpz.printf(" =>\n", .{});
 
@@ -160,22 +158,18 @@ fn indent(depth: usize) void {
     }
 }
 
-fn printPropertyVisibility(raw: []const u8) void {
-    if (raw.len > 0 and raw[0] == 0) {
-        if (raw.len > 2 and raw[1] == '*') {
-            const name = raw[3..];
-            _ = phpz.printf("protected $%.*s", .{ name.len, name.ptr });
-            return;
-        }
-
-        if (std.mem.lastIndexOfScalar(u8, raw, 0)) |last| {
-            const name = raw[last + 1 ..];
-            _ = phpz.printf("private $%.*s", .{ name.len, name.ptr });
-            return;
-        }
-    }
-
-    _ = phpz.printf("public $%.*s", .{ raw.len, raw.ptr });
+fn printPropertyVisibility(key: *phpz.zend.String) void {
+    const property = phpz.zend.property_name.unmangle(key) orelse {
+        const raw = key.slice();
+        _ = phpz.printf("public $%.*s", .{ raw.len, raw.ptr });
+        return;
+    };
+    const visibility: [:0]const u8 = switch (property.scope) {
+        .public => "public",
+        .protected => "protected",
+        .private => "private",
+    };
+    _ = phpz.printf("%s $%.*s", .{ visibility.ptr, property.name.len, property.name.ptr });
 }
 
 pub const Class = phpz.ClassDecl("MyPHPExt\\Dumper", .{

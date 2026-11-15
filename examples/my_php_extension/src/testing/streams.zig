@@ -159,7 +159,8 @@ fn persistentId(stream: *Stream) !*phpz.zend.String {
     while (it.next()) |entry| {
         const res = entry.value.value.res;
         if (res.*.type == Stream.persistentResourceTypeId() and res.*.ptr == @as(?*anyopaque, @ptrCast(stream))) {
-            return phpz.zend.String.init(entry.key.string, false);
+            // Registry keys are persistent; copy into a request string.
+            return phpz.zend.String.init(entry.key.str.slice(), false);
         }
     }
     return error.PersistentStreamNotFound;

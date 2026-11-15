@@ -38,7 +38,7 @@ pub fn mapValues(ctx: phpz.Ctx, values: *phpz.zend.Array, mapper: *phpz.zend.Cal
 
         try mapper.call(&mapped, .{entry.value.*}, null);
         switch (entry.key) {
-            .string => |key| result.set(.mixed, key, &mapped),
+            .str => |key| result.set(.mixed, key.slice(), &mapped),
             .int => |key| try result.setAt(.mixed, key, &mapped),
         }
     }

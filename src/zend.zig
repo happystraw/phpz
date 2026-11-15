@@ -12,6 +12,7 @@ pub const FunctionEntry = @import("zend/function_entry.zig").FunctionEntry;
 pub const Object = @import("zend/object.zig").Object;
 pub const ObjectIterator = @import("zend/object_iterator.zig").ObjectIterator;
 pub const PropertyInfo = @import("zend/property_info.zig").PropertyInfo;
+pub const property_name = @import("zend/property_name.zig");
 pub const Reference = @import("zend/reference.zig").Reference;
 pub const Resource = @import("zend/resource.zig").Resource;
 pub const signal = @import("zend/signal.zig");

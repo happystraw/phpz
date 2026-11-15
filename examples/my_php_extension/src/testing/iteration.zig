@@ -22,7 +22,7 @@ fn appendEntry(out: *List, key: Array.Key, value: *c.zval) !void {
     errdefer Zval.raw.release(&pair_storage);
     switch (key) {
         .int => |index| try pair.append(.int, index),
-        .string => |name| try pair.append(.string, name),
+        .str => |name| try pair.append(.string, name.slice()),
     }
     try appendCopy(pair, value);
     try out.append(.mixed, &pair_storage);
@@ -85,7 +85,7 @@ pub fn iterateArray(ctx: phpz.Ctx, values: *Array) !void {
         const recorded = pair.findIndex(0).?;
         switch (key) {
             .int => |index| try std.testing.expectEqual(index, Zval.raw.asUnchecked(recorded, .int)),
-            .string => |name| try std.testing.expectEqualStrings(name, Zval.raw.asUnchecked(recorded, .string)),
+            .str => |name| try std.testing.expectEqualStrings(name.slice(), Zval.raw.asUnchecked(recorded, .string)),
         }
     }
     try std.testing.expect(pairs.next() == null);
@@ -106,7 +106,7 @@ pub fn iterateWhileMutating(ctx: phpz.Ctx) !void {
     while (iterator.next()) |entry| {
         const key: i64 = switch (entry.key) {
             .int => |index| index,
-            .string => -1,
+            .str => -1,
         };
         try out.append(.int, key);
         if (key == 0) try ht.deleteIndex(1);

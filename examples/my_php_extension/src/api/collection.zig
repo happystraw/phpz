@@ -122,7 +122,7 @@ const Collection = struct {
         if (self.iterator.currentKey()) |key_value| {
             return switch (key_value) {
                 .int => |index| .{ .int = index },
-                .string => |key_name| .{ .string = key_name },
+                .str => |key_name| .{ .string = key_name.slice() },
             };
         }
         return .null;

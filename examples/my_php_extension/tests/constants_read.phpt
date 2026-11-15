@@ -13,7 +13,14 @@ define('ReadTest\NIL', null);
 check(readConstant('\\readtest\\TEXT', false) === "a\0b");
 check(readConstant('ReadTest\NIL', false) === null);
 
-class ConstantParent { public const VALUES = [1, 2]; private const SECRET = 42; protected const HIDDEN = 7; }
+class ConstantParent {
+    public const VALUES = [1, 2];
+    private const SECRET = 42;
+    protected const HIDDEN = 7;
+    public $visible;
+    protected $hidden;
+    private $secret;
+}
 class ConstantChild extends ConstantParent {}
 class BrokenConstant { const VALUE = MISSING_CONSTANT_VALUE; }
 checkConstantMetadata();

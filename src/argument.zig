@@ -104,7 +104,7 @@ pub const Variadic = struct {
             }
             if (self.named) |*named| {
                 if (named.next()) |entry| {
-                    return .{ .identifier = .{ .name = entry.key.string }, .value = .from(entry.value) };
+                    return .{ .identifier = .{ .name = entry.key.str.slice() }, .value = .from(entry.value) };
                 }
             }
             return null;
