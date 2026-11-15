@@ -779,6 +779,70 @@ pub const Array = opaque {
         }
     };
 
+    /// Registered Zend iterator for insertion/deletion, growth and rehash between steps.
+    /// Borrows the same HashTable throughout: keep it alive until deinit(), and do
+    /// not replace it through COW. Mutations still require writable, unique storage.
+    /// Does not snapshot entries. Call reset() after clear() or explicit sorting;
+    /// these operations do not preserve a meaningful traversal position.
+    /// Request/thread-local registration: do not copy this iterator; call deinit()
+    /// exactly once per registration (including on early exit).
+    pub const MutableIterator = struct {
+        ht: *c.HashTable,
+        index: ?u32,
+
+        pub fn init(array: *Array) MutableIterator {
+            std.debug.assert(!array.isImmutable());
+            const ht = array.ptr();
+            return .{ .ht = ht, .index = c.zend_hash_iterator_add(ht, validPos(ht, 0)) };
+        }
+
+        /// Unregister before releasing the borrowed array. Safe to call repeatedly
+        /// on the same instance; copies must not independently deinitialize it.
+        pub fn deinit(self: *MutableIterator) void {
+            if (self.index) |index| {
+                c.zend_hash_iterator_del(index);
+                self.index = null;
+            }
+        }
+
+        fn position(self: *MutableIterator) c.HashPosition {
+            return validPos(self.ht, c.zend_hash_iterator_pos(self.index.?, self.ht));
+        }
+
+        fn setPosition(self: *MutableIterator, pos: c.HashPosition) void {
+            // Reacquire the slots each time: registering other iterators may
+            // reallocate EG(ht_iterators), even while this iterator is alive.
+            globals.executor().ptr().ht_iterators[self.index.?].pos = pos;
+        }
+
+        pub fn reset(self: *MutableIterator) void {
+            self.setPosition(validPos(self.ht, 0));
+        }
+
+        /// Borrow the current entry without advancing. Entry pointers and key
+        /// strings are not retained: reacquire them after any table mutation.
+        pub fn current(self: *MutableIterator) ?Entry {
+            const pos = self.position();
+            if (pos >= self.ht.nNumUsed) return null;
+            return .{ .key = keyAt(self.ht, pos), .value = valueAt(self.ht, pos) };
+        }
+
+        /// Return a borrowed entry and register the next position before the
+        /// caller can mutate the table. Appended entries may also be visited.
+        pub fn next(self: *MutableIterator) ?Entry {
+            const pos = self.position();
+            if (pos >= self.ht.nNumUsed) return null;
+            const entry: Entry = .{ .key = keyAt(self.ht, pos), .value = valueAt(self.ht, pos) };
+            self.setPosition(validPos(self.ht, pos + 1));
+            return entry;
+        }
+
+        pub fn advance(self: *MutableIterator) void {
+            const pos = self.position();
+            self.setPosition(if (pos < self.ht.nNumUsed) validPos(self.ht, pos + 1) else pos);
+        }
+    };
+
     pub const KeyIterator = struct {
         ht: *c.HashTable,
         pos: c.HashPosition,
@@ -1116,11 +1180,18 @@ pub const Array = opaque {
         };
     }
 
-    /// Create a HashPosition iterator (key + value). It re-validates its position
-    /// against the table on every step, like zend_hash_*_ex(), so it tolerates
-    /// deletions and reallocation between steps. Prefer `fastIterator` for read-only loops.
+    /// Create an unregistered HashPosition iterator (key + value).
+    /// Revalidates bounds and skips deleted slots, but does not track positions
+    /// moved by compaction/rehash; structural mutations may skip or repeat entries.
+    /// Use mutableIterator() for mutation between steps, or fastIterator() for reads.
     pub fn iterator(self: *Array) Iterator {
         return Iterator.init(self);
+    }
+
+    /// Create a registered iterator supporting mutation between steps.
+    /// Borrows this array; keep it alive and defer iterator.deinit().
+    pub fn mutableIterator(self: *Array) MutableIterator {
+        return MutableIterator.init(self);
     }
 
     /// Create a HashPosition key-only iterator; see iterator().
@@ -1149,6 +1220,7 @@ pub const Array = opaque {
 test {
     @import("std").testing.refAllDecls(Array);
     @import("std").testing.refAllDecls(Array.Iterator);
+    @import("std").testing.refAllDecls(Array.MutableIterator);
     @import("std").testing.refAllDecls(Array.KeyIterator);
     @import("std").testing.refAllDecls(Array.ValueIterator);
     @import("std").testing.refAllDecls(Array.FastIterator);

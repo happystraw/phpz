@@ -78,6 +78,29 @@ pub fn iterateArray(ctx: phpz.Ctx, values: *Array) !void {
         try expectSameValues(entries, list.zendArray());
     }
 
+    // Registered iteration also preserves keys and reference-holding values.
+    // Duplicate first: registering an iterator requires mutable table storage.
+    {
+        const copy = values.dupe();
+        defer copy.release();
+        var registered = copy.mutableIterator();
+        defer registered.deinit();
+        var expected = entries.fastValueIterator();
+        while (registered.next()) |entry| {
+            const pair = Zval.raw.asUnchecked(expected.next().?, .array);
+            switch (entry.key) {
+                .int => |index| try std.testing.expectEqual(index, Zval.raw.asUnchecked(pair.findIndex(0).?, .int)),
+                .str => |name| try std.testing.expectEqualStrings(name.slice(), Zval.raw.asUnchecked(pair.findIndex(0).?, .string)),
+            }
+            const value = if (Zval.raw.is(entry.value, .reference))
+                Zval.raw.asUnchecked(entry.value, .reference).val()
+            else
+                entry.value;
+            try std.testing.expect(c.zend_is_identical(pair.findIndex(1).?, value));
+        }
+        try std.testing.expect(expected.next() == null);
+    }
+
     var keys = values.keyIterator();
     var pairs = entries.fastValueIterator();
     while (keys.next()) |key| {
@@ -92,9 +115,9 @@ pub fn iterateArray(ctx: phpz.Ctx, values: *Array) !void {
 }
 
 /// PHP: MyPHPExt\Test\iterateWhileMutating(): array
-/// Deleting the current element and growing the table between steps must
-/// behave like Zend's HashPosition API: the next step resumes at the next live slot.
+/// Registered Zend positions track deletion, growth and packed-to-mixed changes.
 pub fn iterateWhileMutating(ctx: phpz.Ctx) !void {
+    try checkMutableIterator();
     var table_storage = Zval.raw.undef;
     defer Zval.raw.release(&table_storage);
     const table = List.init(&table_storage, 8);
@@ -102,7 +125,8 @@ pub fn iterateWhileMutating(ctx: phpz.Ctx) !void {
     const ht = table.zendArray();
 
     const out = List.empty(ctx.retval.ptr());
-    var iterator = ht.iterator();
+    var iterator = ht.mutableIterator();
+    defer iterator.deinit();
     while (iterator.next()) |entry| {
         const key: i64 = switch (entry.key) {
             .int => |index| index,
@@ -115,6 +139,67 @@ pub fn iterateWhileMutating(ctx: phpz.Ctx) !void {
         if (key == 3) table.set(.int, "named", 7);
         if (out.len() > 32) return error.IteratorDidNotFinish;
     }
+}
+
+fn checkMutableIterator() !void {
+    const table = Array.init(8);
+    defer table.release();
+    for (0..8) |i| {
+        var buffer: [16]u8 = undefined;
+        const key = try std.fmt.bufPrint(&buffer, "k{d}", .{i});
+        var value = Zval.raw.init(.int, @intCast(i));
+        _ = table.update(key, &value);
+    }
+    var iterator = table.mutableIterator();
+    defer iterator.deinit();
+    for (0..3) |i| {
+        try std.testing.expectEqual(@as(i64, @intCast(i)), Zval.raw.asUnchecked(iterator.next().?.value, .int));
+    }
+    // Delete both visited entries and the pending next entry, then force mixed
+    // bucket compaction and growth. A plain HashPosition would lose its place.
+    try table.delete("k0");
+    try table.delete("k1");
+    try table.delete("k3");
+    var eight = Zval.raw.init(.int, 8);
+    _ = table.update("k8", &eight);
+    table.rehash();
+    try std.testing.expectEqual(@as(i64, 4), Zval.raw.asUnchecked(iterator.current().?.value, .int));
+
+    // More than the inline Zend iterator slots forces registry reallocation.
+    // Deinitializing these must not affect the original registered position.
+    {
+        var nested: [24]Array.MutableIterator = undefined;
+        for (&nested) |*it| it.* = table.mutableIterator();
+        defer for (&nested) |*it| it.deinit();
+        for (&nested) |*it| {
+            try std.testing.expectEqual(@as(i64, 2), Zval.raw.asUnchecked(it.next().?.value, .int));
+        }
+        for (9..40) |i| {
+            var buffer: [16]u8 = undefined;
+            const key = try std.fmt.bufPrint(&buffer, "k{d}", .{i});
+            var value = Zval.raw.init(.int, @intCast(i));
+            _ = table.update(key, &value);
+        }
+        try std.testing.expectEqual(@as(i64, 4), Zval.raw.asUnchecked(iterator.next().?.value, .int));
+    }
+    for (5..40) |i| {
+        const entry = iterator.next() orelse return error.MissingValue;
+        try std.testing.expectEqual(@as(i64, @intCast(i)), Zval.raw.asUnchecked(entry.value, .int));
+    }
+    try std.testing.expect(iterator.next() == null);
+    iterator.reset();
+    try std.testing.expectEqual(@as(i64, 2), Zval.raw.asUnchecked(iterator.current().?.value, .int));
+    iterator.advance();
+    try std.testing.expectEqual(@as(i64, 4), Zval.raw.asUnchecked(iterator.current().?.value, .int));
+    table.clear();
+    try std.testing.expect(iterator.next() == null);
+    iterator.reset();
+    var after_clear = Zval.raw.init(.int, 100);
+    _ = table.append(&after_clear);
+    try std.testing.expectEqual(@as(i64, 100), Zval.raw.asUnchecked(iterator.next().?.value, .int));
+    iterator.deinit();
+    iterator.deinit();
+    try std.testing.expectEqual(@as(u8, 0), table.ptr().u.v.nIteratorsCount);
 }
 
 /// PHP: MyPHPExt\Test\buildList(int $count, int $capacity, mixed $value): array
