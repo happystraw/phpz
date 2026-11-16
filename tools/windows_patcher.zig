@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const default_dllimport_data_symbols = [_][]const u8{
+    "empty_fcall_info",
+    "empty_fcall_info_cache",
     "std_object_handlers",
     "zend_empty_array",
     "zend_empty_string",
@@ -332,6 +334,26 @@ test "default whitelist covers PHP inline data dependencies" {
         try std.testing.expect(std.mem.indexOf(u8, result.items, expected) != null);
     }
     try std.testing.expect(std.mem.indexOf(u8, result.items, "@extern(*const [256]u8") != null);
+}
+
+test "default whitelist patches PHP 8.3 and 8.4 empty fcall constants" {
+    const source =
+        \\pub extern const empty_fcall_info: zend_fcall_info;
+        \\pub extern const empty_fcall_info_cache: zend_fcall_info_cache;
+        \\pub fn reset(fci: *zend_fcall_info, fcc: *zend_fcall_info_cache) void {
+        \\    fci.* = empty_fcall_info;
+        \\    _ = memcpy(fcc, &empty_fcall_info_cache, @sizeOf(zend_fcall_info_cache));
+        \\}
+        \\
+    ;
+    var result = std.ArrayList(u8).empty;
+    defer result.deinit(std.testing.allocator);
+    try patch(std.testing.allocator, &result, source, .{
+        .dllimport_data_symbols = &default_dllimport_data_symbols,
+        .dllimport_data_prefixes = &default_dllimport_data_prefixes,
+    });
+    try std.testing.expect(std.mem.indexOf(u8, result.items, "fci.* = (@extern(*const zend_fcall_info, .{ .name = \"empty_fcall_info\", .is_dll_import = true }).*)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.items, "memcpy(fcc, @extern(*const zend_fcall_info_cache, .{ .name = \"empty_fcall_info_cache\", .is_dll_import = true })") != null);
 }
 
 test "patches address-of dllimport data references in function bodies" {
