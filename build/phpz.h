@@ -20,6 +20,7 @@
 #include "ext/standard/flock_compat.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_var.h"
+#include "ext/json/php_json.h"
 #include "Zend/zend_smart_str.h"
 #include "main/SAPI.h"
 #include "main/php_main.h"

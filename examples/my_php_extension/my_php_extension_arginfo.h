@@ -1,5 +1,5 @@
 /* This is a generated file, edit my_php_extension.stub.php instead.
- * Stub hash: 96b7f75053cd52ee5c517ed047b08401fea7ccae */
+ * Stub hash: 3bd4b4ea82029f2c5098114798065a419ac08a77 */
 
 #include "zend_attributes.h"
 #include "zend_constants.h"
@@ -44,6 +44,24 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_unserializeValue, 
 ZEND_END_ARG_INFO()
 
 #define arginfo_MyPHPExt_Test_checkSerializationOptions arginfo_hello
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_encodeJson, 0, 1, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, partial, _IS_BOOL, 0, "false")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_decodeJson, 0, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, input, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, associative, _IS_BOOL, 0, "false")
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_exportValue arginfo_MyPHPExt_Test_serializeValue
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_dumpValue, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_checkJsonOptions arginfo_hello
 
 #define arginfo_MyPHPExt_Test_checkStreams arginfo_hello
 
@@ -640,6 +658,11 @@ ZEND_FUNCTION(MyPHPExt_makeReference);
 ZEND_FUNCTION(MyPHPExt_Test_serializeValue);
 ZEND_FUNCTION(MyPHPExt_Test_unserializeValue);
 ZEND_FUNCTION(MyPHPExt_Test_checkSerializationOptions);
+ZEND_FUNCTION(MyPHPExt_Test_encodeJson);
+ZEND_FUNCTION(MyPHPExt_Test_decodeJson);
+ZEND_FUNCTION(MyPHPExt_Test_exportValue);
+ZEND_FUNCTION(MyPHPExt_Test_dumpValue);
+ZEND_FUNCTION(MyPHPExt_Test_checkJsonOptions);
 ZEND_FUNCTION(MyPHPExt_Test_checkStreams);
 ZEND_FUNCTION(MyPHPExt_Test_checkSocketOptions);
 ZEND_FUNCTION(MyPHPExt_Test_openStream);
@@ -829,6 +852,31 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSerializationOptions"), zif_MyPHPExt_Test_checkSerializationOptions, arginfo_MyPHPExt_Test_checkSerializationOptions, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSerializationOptions"), zif_MyPHPExt_Test_checkSerializationOptions, arginfo_MyPHPExt_Test_checkSerializationOptions, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "encodeJson"), zif_MyPHPExt_Test_encodeJson, arginfo_MyPHPExt_Test_encodeJson, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "encodeJson"), zif_MyPHPExt_Test_encodeJson, arginfo_MyPHPExt_Test_encodeJson, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "decodeJson"), zif_MyPHPExt_Test_decodeJson, arginfo_MyPHPExt_Test_decodeJson, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "decodeJson"), zif_MyPHPExt_Test_decodeJson, arginfo_MyPHPExt_Test_decodeJson, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "exportValue"), zif_MyPHPExt_Test_exportValue, arginfo_MyPHPExt_Test_exportValue, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "exportValue"), zif_MyPHPExt_Test_exportValue, arginfo_MyPHPExt_Test_exportValue, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "dumpValue"), zif_MyPHPExt_Test_dumpValue, arginfo_MyPHPExt_Test_dumpValue, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "dumpValue"), zif_MyPHPExt_Test_dumpValue, arginfo_MyPHPExt_Test_dumpValue, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkJsonOptions"), zif_MyPHPExt_Test_checkJsonOptions, arginfo_MyPHPExt_Test_checkJsonOptions, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkJsonOptions"), zif_MyPHPExt_Test_checkJsonOptions, arginfo_MyPHPExt_Test_checkJsonOptions, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0, NULL, NULL)

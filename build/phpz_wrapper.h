@@ -18,6 +18,8 @@ static zend_always_inline php_stream *phpz_stream_opendir(const char *path, int 
     return php_stream_opendir(path, options, NULL);
 }
 
+php_json_error_code phpz_json_last_error(void);
+
 bool phpz_stream_is_persistent(php_stream *stream);
 void phpz_stream_to_zval(php_stream *stream, zval *value);
 

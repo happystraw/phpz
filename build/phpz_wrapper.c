@@ -1,5 +1,13 @@
 #include "phpz.h"
 
+php_json_error_code phpz_json_last_error(void) {
+#if PHP_VERSION_ID >= 80600
+    return JSON_G(error_details).code;
+#else
+    return JSON_G(error_code);
+#endif
+}
+
 void *phpz_hash_index_update_ptr(HashTable *ht, zend_ulong h, void *data) {
     return zend_hash_index_update_ptr(ht, h, data);
 }

@@ -13,6 +13,8 @@ pub const tsrm = @import("tsrm.zig");
 
 pub const closure = @import("closure.zig");
 pub const serialization = @import("serialization.zig");
+pub const json = @import("json.zig");
+pub const variable = @import("variable.zig");
 
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
@@ -95,6 +97,8 @@ test {
     _ = @import("class.zig");
     _ = @import("closure.zig");
     _ = @import("serialization.zig");
+    _ = @import("json.zig");
+    _ = @import("variable.zig");
     _ = @import("errors.zig");
     _ = @import("exception.zig");
     _ = @import("function.zig");
