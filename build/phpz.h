@@ -19,6 +19,8 @@
 #include "ext/standard/file.h"
 #include "ext/standard/flock_compat.h"
 #include "ext/standard/info.h"
+#include "ext/standard/php_var.h"
+#include "Zend/zend_smart_str.h"
 #include "main/SAPI.h"
 #include "main/php_main.h"
 #include "main/php_variables.h"

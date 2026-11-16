@@ -15,6 +15,7 @@ const named_arguments = @import("testing/named_arguments.zig");
 const closure_tests = @import("testing/closures.zig");
 const gc = @import("testing/gc.zig");
 const serialization = @import("testing/serialization.zig");
+const serialization_api = @import("testing/serialization_api.zig");
 const class_new = @import("testing/class_new.zig");
 const operators = @import("testing/operators.zig");
 const stream_tests = @import("testing/streams.zig");
@@ -73,6 +74,9 @@ comptime {
         .@"MyPHPExt\\Test\\checkStringArguments" = typed_arguments.checkStringArguments,
         .@"MyPHPExt\\Test\\checkZvalStrings" = typed_arguments.checkZvalStrings,
         .@"MyPHPExt\\Test\\checkStringWriteFailure" = typed_arguments.checkStringWriteFailure,
+        .@"MyPHPExt\\Test\\checkSerializationOptions" = serialization_api.checkSerializationOptions,
+        .@"MyPHPExt\\Test\\serializeValue" = serialization_api.serializeValue,
+        .@"MyPHPExt\\Test\\unserializeValue" = serialization_api.unserializeValue,
         .hello = functions.hello,
         .greet = functions.greet,
         .@"MyPHPExt\\increment" = functions.increment,

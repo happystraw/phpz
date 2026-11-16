@@ -184,6 +184,9 @@ namespace MyPHPExt {
 }
 
 namespace MyPHPExt\Test {
+    function serializeValue(mixed $value): string {}
+    function unserializeValue(string $input, ?array $options = null): mixed {}
+    function checkSerializationOptions(): void {}
     function checkStreams(): void {}
     /** @param resource $stream */
     function checkSocketOptions($stream): void {}

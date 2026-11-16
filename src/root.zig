@@ -12,6 +12,7 @@ pub const sapi = @import("sapi.zig");
 pub const tsrm = @import("tsrm.zig");
 
 pub const closure = @import("closure.zig");
+pub const serialization = @import("serialization.zig");
 
 pub const heap = @import("heap.zig");
 pub const ini = @import("ini.zig");
@@ -93,6 +94,7 @@ test {
     _ = @import("ctx.zig");
     _ = @import("class.zig");
     _ = @import("closure.zig");
+    _ = @import("serialization.zig");
     _ = @import("errors.zig");
     _ = @import("exception.zig");
     _ = @import("function.zig");

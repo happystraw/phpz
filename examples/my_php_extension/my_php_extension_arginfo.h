@@ -1,5 +1,5 @@
 /* This is a generated file, edit my_php_extension.stub.php instead.
- * Stub hash: cf90c17b1b009b954d95ad56b964e6329a9fad03 */
+ * Stub hash: 96b7f75053cd52ee5c517ed047b08401fea7ccae */
 
 #include "zend_attributes.h"
 #include "zend_constants.h"
@@ -33,6 +33,17 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_MyPHPExt_makeReference, 0, 1, Closure, 0)
 	ZEND_ARG_TYPE_INFO(1, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_serializeValue, 0, 1, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_MyPHPExt_Test_unserializeValue, 0, 1, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, input, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+#define arginfo_MyPHPExt_Test_checkSerializationOptions arginfo_hello
 
 #define arginfo_MyPHPExt_Test_checkStreams arginfo_hello
 
@@ -626,6 +637,9 @@ ZEND_FUNCTION(MyPHPExt_mapValues);
 ZEND_FUNCTION(MyPHPExt_makeSumClosure);
 ZEND_FUNCTION(MyPHPExt_makeCounter);
 ZEND_FUNCTION(MyPHPExt_makeReference);
+ZEND_FUNCTION(MyPHPExt_Test_serializeValue);
+ZEND_FUNCTION(MyPHPExt_Test_unserializeValue);
+ZEND_FUNCTION(MyPHPExt_Test_checkSerializationOptions);
 ZEND_FUNCTION(MyPHPExt_Test_checkStreams);
 ZEND_FUNCTION(MyPHPExt_Test_checkSocketOptions);
 ZEND_FUNCTION(MyPHPExt_Test_openStream);
@@ -800,6 +814,21 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0, NULL, NULL)
 #else
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt", "makeReference"), zif_MyPHPExt_makeReference, arginfo_MyPHPExt_makeReference, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "serializeValue"), zif_MyPHPExt_Test_serializeValue, arginfo_MyPHPExt_Test_serializeValue, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "serializeValue"), zif_MyPHPExt_Test_serializeValue, arginfo_MyPHPExt_Test_serializeValue, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "unserializeValue"), zif_MyPHPExt_Test_unserializeValue, arginfo_MyPHPExt_Test_unserializeValue, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "unserializeValue"), zif_MyPHPExt_Test_unserializeValue, arginfo_MyPHPExt_Test_unserializeValue, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSerializationOptions"), zif_MyPHPExt_Test_checkSerializationOptions, arginfo_MyPHPExt_Test_checkSerializationOptions, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkSerializationOptions"), zif_MyPHPExt_Test_checkSerializationOptions, arginfo_MyPHPExt_Test_checkSerializationOptions, 0)
 #endif
 #if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY(ZEND_NS_NAME("MyPHPExt\\Test", "checkStreams"), zif_MyPHPExt_Test_checkStreams, arginfo_MyPHPExt_Test_checkStreams, 0, NULL, NULL)
