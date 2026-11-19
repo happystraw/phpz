@@ -21,7 +21,7 @@ work="$repo/build/sapi-tests"
 spc="$repo/build/spc"
 php=$(command -v php)
 zig=$(command -v zig)
-export PHP_BUILD_VERSION=${PHP_BUILD_VERSION:-8.5}
+export PHP_BUILD_VERSION=${PHP_BUILD_VERSION:-8.6}
 
 run() {
     printf '+ ' >&2
@@ -54,7 +54,13 @@ test_configuration() {
         cd "$spc"
         # Prepare SPC-managed tools, including compiler wrappers and Windows utilities.
         run "$php" "$spc/bin/spc" doctor --auto-fix --no-interaction --no-ansi -vvv
-        run "${command[@]}"
+        if [[ $system == Windows && $PHP_BUILD_VERSION == 8.6 ]]; then
+            # PHP 8.6 uses TransmitFile; link it in both SPC's embed smoke test and our executable.
+            LINK="${LINK:+$LINK }mswsock.lib" run "${command[@]}"
+            extra+=(-Dlink-lib=mswsock)
+        else
+            run "${command[@]}"
+        fi
         flags=$(run "$php" "$spc/bin/spc" spc-config bcmath --with-packages=php --libs-only-deps --no-ansi)
         # SPC's short library names have no spaces; never evaluate linker output.
         flags=${flags//$'\r'/}
@@ -114,7 +120,8 @@ test_configuration() {
         mkdir -p "$source"
         tar -C "$repo/build/php-src" --exclude=.git -cf - . | tar -C "$source" -xf -
         cd "$source"
-        command=(./configure --disable-all --disable-cli --disable-cgi --disable-phpdbg --enable-embed=shared)
+        # PHP 8.6+ requires the CLI SAPI when building embed (do_php_cli).
+        command=(./configure --disable-all --enable-cli --disable-cgi --disable-phpdbg --enable-embed=shared)
         if [[ $ts == ts ]]; then command+=(--enable-zts); else command+=(--disable-zts); fi
         if [[ $build_type == debug ]]; then command+=(--enable-debug); else command+=(--disable-debug); fi
         run "${command[@]}"

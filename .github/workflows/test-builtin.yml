@@ -36,7 +36,7 @@ on:
       php:
         description: PHP version
         type: choice
-        default: "8.5"
+        default: "8.6"
         options: ["8.2", "8.3", "8.4", "8.5", "8.6"]
 
 permissions:
@@ -44,16 +44,20 @@ permissions:
 
 jobs:
   test:
-    name: builtin (PHP ${{ inputs.php || '8.5' }}, ${{ matrix.os }})
+    name: builtin (PHP ${{ inputs.php || '8.6' }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-2022, macos-latest, macos-15-intel]
+        os:
+          - ubuntu-latest
+          - ${{ (inputs.php || '8.6') == '8.6' && 'windows-2025-vs2026' || 'windows-2022' }}
+          - macos-latest
+          - macos-15-intel
     env:
-      PHP_BUILD_VERSION: ${{ inputs.php || '8.5' }}
-      CI_PHP: ${{ inputs.php || '8.5' }}
+      PHP_BUILD_VERSION: ${{ inputs.php || '8.6' }}
+      CI_PHP: ${{ inputs.php || '8.6' }}
       NO_INTERACTION: "1"
       REPORT_EXIT_STATUS: "1"
     steps:
@@ -93,6 +97,8 @@ jobs:
           Import-Module "$env:GITHUB_WORKSPACE\build\php-windows-builder\php\BuildPhp" -Force
           Set-Location "$env:GITHUB_WORKSPACE\build"
           Get-PhpSdk
+          # Verify once before running all builtin variants.
+          Get-VsVersion -PhpVersion $env:CI_PHP
       - name: Preparation complete
         id: ready
         run: echo 'Dependencies and source ready'
@@ -156,6 +162,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: builtin-${{ matrix.os }}-php-${{ inputs.php || '8.5' }}-logs
+          name: builtin-${{ matrix.os }}-php-${{ inputs.php || '8.6' }}-logs
           path: build/ci-results/
           if-no-files-found: ignore
