@@ -44,10 +44,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
+        php: ["8.2", "8.3", "8.4", "8.5", "8.6"]
     env:
       XWIN_VERSION: "0.10.0"
-      VS_VERSION: ${{ (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
+      VS_VERSION: ${{ matrix.php == '8.6' && 'vs18' || (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -90,10 +90,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
+        php: ["8.2", "8.3", "8.4", "8.5", "8.6"]
     env:
       XWIN_VERSION: "0.10.0"
-      VS_VERSION: ${{ (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
+      VS_VERSION: ${{ matrix.php == '8.6' && 'vs18' || (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5

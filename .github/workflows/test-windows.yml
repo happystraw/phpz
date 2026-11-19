@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 jobs:
-  # PHP 8.2-8.5 all map to windows-2022 in php/php-windows-builder v1.
+  # setup-php-windows.ps1 installs the matching toolset, including VS18 for PHP 8.6.
   test:
     name: test (PHP ${{ matrix.php }}, x64)
     runs-on: windows-2022
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
+        php: ["8.2", "8.3", "8.4", "8.5", "8.6"]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
