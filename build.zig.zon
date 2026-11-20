@@ -14,6 +14,7 @@
         "build",
         "build.zig",
         "build.zig.zon",
+        "docs",
         "examples",
         "src",
         "scripts/build-windows.sh",

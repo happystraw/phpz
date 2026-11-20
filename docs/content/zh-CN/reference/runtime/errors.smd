@@ -1,0 +1,68 @@
+---
+.title = "错误与异常",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/errors",
+.custom = { "section": "运行时接口" },
+---
+
+PHP 异常是引擎中的待处理状态；Zig 错误联合类型（error union）表达本地错误传播。`phpz.exception` 管理 PHP Throwable 和内部退出信号；`phpz.errors` 管理 `E_*` 诊断及最近错误记录。
+
+# [参数错误]($heading.id('argument-errors'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+if (args[0] < 0) {
+    return phpz.exception.argumentValueError(1, "must be non-negative", .{});
+}
+ctx.ret(.int, args[0]);
+```
+
+这是对应 `function nonNegative(int $value): int` 的函数体片段。参数索引从 1 开始。`exception.argumentTypeError`、`argumentValueError` 等函数设置 PHP 异常并返回 Zig 错误标记。应 `return` 或 `try` 传播，避免异常挂起时继续执行。
+
+# [普通错误与异常]($heading.id('errors-and-exceptions'))
+
+```zig
+return phpz.exception.throwError(null, "Operation is unavailable", .{});
+```
+
+以上是处理器中的返回语句。`exception.throwException(ce, message, code)` 使用指定异常类条目（class entry）；`throwExceptionEx` 接受格式化文本，以下片段假定已有 `exception_class` 和整数 `value`：
+
+```zig
+return phpz.exception.throwExceptionEx(
+    exception_class,
+    0,
+    "invalid value: %d",
+    .{value},
+);
+```
+
+格式化函数使用 PHP C API 的 `%s`、`%d` 等规则，不是 `std.fmt` 的 `{s}` 语法。
+
+上述辅助函数返回 `exception.Error`：普通 PHP Throwable（包括 `TypeError`、`ValueError`）统一标记为 `error.PhpException`，内部退出信号标记为 `error.UnwindExit`。不要用 Zig 错误名判断 PHP 异常类，应通过 `exception.get()` 取得待处理对象并检查类。
+
+包装器保留已存在的 PHP 异常；没有待处理异常时，将未处理的普通 Zig 错误转为 PHP `Error`。`exception.hasPending()` 检查是否有待处理状态，`get()` 返回借用的对象，`pending()` 返回可选错误标记，`check()` 可用 `try` 传播当前标记。读取这些状态不会消费异常。
+
+`exception.throwExceptionObject` / `throwExceptionObjectEx` 设置异常并返回借用对象，不增加引用，也不返回 Zig 错误；需要传播时再调用 `try exception.check()`。`exception.clear()` 清除状态；`exception.report(level)` 报告并消费当前待处理异常，没有待处理异常时什么也不做。报告可能运行 `__toString()` 等 PHP 代码并 bailout，只在明确负责处理普通异常的路径中使用。
+
+## [内部退出信号]($heading.id('unwind-exit'))
+
+`UnwindExit` 可能来自 `exit` / `die` 或延迟内存错误，不能视为可恢复的业务异常。扩展处理器完成原生清理后应直接传播；不能清除它再继续 PHP 执行。独立宿主的 `exception.takeUnwindExit()` 和请求关闭规则见[执行 PHP 代码与脚本]($link.page('reference/runtime/scripts').ref('exit-and-shutdown'))。
+
+# [警告与致命错误]($heading.id('warnings-and-fatal-errors'))
+
+`errors.warning`、`notice`、`deprecated` 等输出对应级别的 PHP 错误。用户错误处理器可能改变后续控制流。
+
+`ZendBailout`、`UnwindExit` 和 `OutOfMemory` 是特殊终止路径，不应包装成成功返回。它们与 PHP 可捕获异常的区别，以及原生资源清理方式，见[Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+# [最近错误记录]($heading.id('last-error'))
+
+`phpz.errors.last()` 返回 `?errors.LastError`，读取与 PHP `error_get_last()` 相同的记录；无记录时返回 null。字段包括 `level: errors.Level`、借用的 `message: [:0]const u8`、可选 `file: ?[:0]const u8` 和 `line: u32`。`level.matches(mask)` 检查级别位，`isCore()` / `isFatal()` 分别检查 PHP 的 core / fatal 掩码。
+
+该接口不分配、不消费记录，也不检查待处理 Throwable。记录被 PHP 替换、清除或请求结束后，借用的消息和文件名失效，需提前复制。它只读取已记录的诊断，不能捕获致命错误或 bailout，也不能代替 `exception.pending()`。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/errors.zig](https://github.com/happystraw/phpz/blob/dev/src/errors.zig)
+- [src/exception.zig](https://github.com/happystraw/phpz/blob/dev/src/exception.zig)
+- [src/function.zig](https://github.com/happystraw/phpz/blob/dev/src/function.zig)

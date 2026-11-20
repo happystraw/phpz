@@ -1,0 +1,43 @@
+---
+.title = "变量转储与导出",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/variables",
+.custom = { "section": "运行时接口" },
+---
+
+`phpz.variable` 提供两个调试接口：`inspect()` 对应 `var_export($value, true)`，把值转换成 PHP 代码文本；`dump()` 对应 `var_dump()`，把内容写入当前输出。行为与同名 PHP 函数一致，包括 `__debugInfo()` 和递归引用的表示方式。
+
+# [导出文本]($heading.id('inspect'))
+
+```zig
+/// PHP: function export_value(mixed $value): string
+pub fn exportValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.variable.inspect(value);
+}
+```
+
+借用输入，返回新的 Zend 字符串，调用者负责 `release()`；作为返回值交给 PHP 时所有权转移。输出与 `var_export($value, true)` 相同：标量使用 PHP 字面量，数组和对象展开为数组语法，适合生成代码或比较结构。循环引用按 PHP 规则产生警告并写成 `NULL`；无法导出时返回 `error.ExportFailed`，用户错误处理器抛出的异常以 `error.PhpException` 返回。
+
+# [转储到输出]($heading.id('dump'))
+
+```zig
+/// PHP: function dump_value(mixed $value): void
+pub fn dumpValue(value: *phpz.Zval) !void {
+    try phpz.variable.dump(value);
+}
+```
+
+`dump()` 把 `var_dump()` 的完整输出写入当前 SAPI 输出，包括类型、长度和缩进，并调用对象的 `__debugInfo()`。它要求当前处于活动请求中，bailout 直接传播。输出经过 PHP 的输出缓冲，`ob_start()` 捕获到的内容与原生 `var_dump()` 一致。
+
+# [使用建议]($heading.id('usage'))
+
+- 两者都是调试接口。面向调用者的结果用 `ctx.ret(...)` 返回，普通日志用 `phpz.printf`。
+- `dump()` 直接写输出，不适合作为扩展的对外行为；需要断言输出时用 PHP 的输出缓冲。
+- `inspect()` 生成的是 PHP 代码，回写脚本或交给 `eval` 之前必须自行确认内容来源。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/variable.zig](https://github.com/happystraw/phpz/blob/dev/src/variable.zig)
+- [examples/my_php_extension/src/testing/json.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/testing/json.zig)
+- [tests/variable_api.phpt](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/tests/variable_api.phpt)

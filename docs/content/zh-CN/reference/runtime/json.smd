@@ -1,0 +1,74 @@
+---
+.title = "JSON 编解码",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/json",
+.custom = { "section": "运行时接口" },
+---
+
+`phpz.json` 封装 PHP 内置的 `json_encode()` / `json_decode()`，复用同一套 C 实现：选项、`JsonSerializable` 钩子、深度限制和 `json_last_error()` 状态都与 PHP 一致。PHP 8 始终启用 ext/json，不需要额外依赖或链接参数。
+
+# [编码]($heading.id('encode'))
+
+```zig
+/// PHP: function encode_json(mixed $value, bool $partial = false): string
+pub fn encodeJson(value: *phpz.Zval, partial: ?bool) !*phpz.zend.String {
+    return phpz.json.encode(value, .{
+        .flags = .{ .partial_output_on_error = partial orelse false },
+    });
+}
+```
+
+`phpz.json.encode(value, options)` 借用输入 zval，返回新的 Zend 字符串；调用者负责 `release()`，直接作为返回值交给 PHP 时所有权随之转移。它要求当前处于活动请求中。
+
+失败返回 `error.JsonEncodeFailed`，同时更新 `json_last_error()`；打开 `partial_output_on_error` 后按 PHP 语义返回部分结果（非法 UTF-8、资源等写成 `null`）而不报错。`JsonSerializable::jsonSerialize()` 中抛出的 PHP 异常保持待处理，以 `error.PhpException` 返回，不会转成编码失败；bailout 直接传播。
+
+# [解码]($heading.id('decode'))
+
+```zig
+/// PHP: function decode_json(string $json, bool $associative = false): mixed
+pub fn decodeJson(ctx: phpz.Ctx, json: []const u8, associative: ?bool) !void {
+    try phpz.json.decode(ctx.retval, json, .{
+        .flags = .{ .object_as_array = associative orelse false },
+    });
+}
+```
+
+`phpz.json.decode(destination, input, options)` 把结果写入目标 zval。目标在调用前必须是未定义状态（`Zval.raw.undef`）或 `null`，这是 Debug 构建的断言。成功后调用者负责 `release()`；失败时目标可能未被写入，丢弃前统一 `release()` 即可。输入不是合法 JSON 时返回 `error.JsonDecodeFailed`。解码成功不会重置 `json_last_error()`。
+
+JSON 对象默认解码为 `stdClass`，打开 `object_as_array` 后得到数组。超出深度限制或多于一个根值时同样失败。
+
+# [选项]($heading.id('options'))
+
+`EncodeOptions` / `DecodeOptions` 的 `depth` 默认 512，`flags` 是对应 PHP 常量的完整布尔集合：
+
+| 结构 | 字段 |
+| --- | --- |
+| `EncodeFlags` | `hex_tag`、`hex_amp`、`hex_apos`、`hex_quot`、`force_object`、`numeric_check`、`unescaped_slashes`、`pretty_print`、`unescaped_unicode`、`partial_output_on_error`、`preserve_zero_fraction`、`unescaped_line_terminators`、`invalid_utf8_ignore`、`invalid_utf8_substitute` |
+| `DecodeFlags` | `object_as_array`、`bigint_as_string`、`invalid_utf8_ignore`、`invalid_utf8_substitute` |
+
+```zig
+/// PHP: function encode_pretty(mixed $value): string
+pub fn encodePretty(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.json.encode(value, .{
+        .depth = 64,
+        .flags = .{ .pretty_print = true, .unescaped_unicode = true },
+    });
+}
+```
+
+`_reserved*` 字段必须保持 0，Debug 构建会断言。编译期会把每个标志与当前 PHP 头文件的常量核对，头文件变动导致不一致时直接编译失败。`invalid_utf8_ignore` 与 `invalid_utf8_substitute` 同时打开时按 PHP 规则由 ignore 生效。
+
+`depth` 的边界与 PHP 相同，但编码和解码的计数不同：`depth = 0` 或超出 C `int` 范围返回 `error.InvalidDepth`；解码 `[[1]]` 需要 `depth >= 3`，编码同样的值需要 `depth >= 2`。处理外部输入时按实际结构设置上限。
+
+# [注意事项]($heading.id('notes'))
+
+- 编码失败的判断同时覆盖返回值和 `json_last_error()`，因此 INF/NAN、资源和递归引用这类只在错误码中体现的失败也会返回错误。
+- 解码结果是完整的 PHP 值，限制输入长度和嵌套深度由调用方负责。
+- 接口本身不抛出 `JsonException`，异常只来自用户钩子；需要与 PHP 扩展行为完全一致时，可以在失败后读取 `json_last_error()` 再构造异常。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/json.zig](https://github.com/happystraw/phpz/blob/dev/src/json.zig)
+- [examples/my_php_extension/src/testing/json.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/testing/json.zig)
+- [tests/json_api.phpt](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/tests/json_api.phpt)

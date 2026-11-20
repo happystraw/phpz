@@ -1,0 +1,71 @@
+---
+.title = "PHP 序列化",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/serialization",
+.custom = { "section": "运行时接口" },
+---
+
+`phpz.serialization` 调用 PHP 的 `serialize()` / `unserialize()` 实现，输出与原生格式完全一致，并保留对象钩子（`__serialize` / `__unserialize`）、引用关系和递归结构。PHP 8.1 起 `Serializable` 已弃用，新代码使用这两个钩子。
+
+# [序列化]($heading.id('serialize'))
+
+```zig
+/// PHP: function serialize_value(mixed $value): string
+pub fn serializeValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.serialization.serialize(value);
+}
+```
+
+`serialize(value)` 借用输入 zval，返回新的 Zend 字符串，调用者负责 `release()`；作为返回值交给 PHP 时所有权转移。它要求当前处于活动请求中。`__serialize()` 抛出的 PHP 异常保持待处理，函数以 `error.PhpException` 返回，不会返回拼接一半的字符串。
+
+# [反序列化]($heading.id('unserialize'))
+
+```zig
+/// PHP: function unserialize_value(string $input, ?array $options = null): mixed
+pub fn unserializeValue(ctx: phpz.Ctx, input: []const u8) !void {
+    try phpz.serialization.unserialize(ctx.retval, input, .{});
+}
+```
+
+目标 zval 在调用前必须是未定义状态或 `null`，成功后由调用者负责 `release()`。输入非法时不返回 Zig 错误：按 PHP 语义把 `false` 写入目标，并可能触发警告；`false` 本身也是合法的解码结果，需要区分时应先校验输入。`__unserialize()` 中的异常、以及用户错误处理器抛出的异常，以 `error.PhpException` 返回；bailout 直接传播。
+
+**不要反序列化不可信输入**，即使设置了类限制：解码会实例化类并执行对象钩子。
+
+# [选项]($heading.id('options'))
+
+```zig
+/// PHP: function unserialize_restricted(string $input): mixed
+pub fn unserializeRestricted(ctx: phpz.Ctx, input: []const u8) !void {
+    const options: phpz.serialization.UnserializeOptions = .{
+        .allowed_classes = .{ .only = &.{ "MyPHPExt\\Point", "stdClass" } },
+        .max_depth = 128,
+    };
+    try phpz.serialization.unserialize(ctx.retval, input, options);
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `allowed_classes = .all` | 允许所有类，默认值 |
+| `allowed_classes = .none` | 不允许任何类，结果得到 `__PHP_Incomplete_Class` |
+| `allowed_classes = .{ .only = &.{...} }` | 只允许列出的类名；空列表等同于不允许 |
+| `max_depth = null` | 使用 INI 默认值或继承的上限 |
+| `max_depth = 0` | 关闭深度限制 |
+| `max_depth = 128` | 显式上限 |
+
+类名按借用切片传入，调用期间必须保持有效（例如编译期常量或上游数组中的字符串），不要传临时格式化结果。`max_depth` 超出 PHP 整数范围时返回 `error.InvalidMaxDepth`。
+
+`options.toArray()` 把选项转换成 PHP 期望的选项数组（`allowed_classes`、`max_depth`），返回的数组由调用者 `release()`。`unserialize` 内部已经完成这一步，只有在需要把同样的选项交给其他 PHP 接口时才直接使用。
+
+# [注意事项]($heading.id('notes'))
+
+- 引用关系、递归结构和对象钩子都与原生接口一致，生成的数据可以直接和 PHP 互相读写。
+- 反序列化不调用构造器；backing 类需要在 `__unserialize` 中建立有效字段状态，约束见[对象生命周期与垃圾回收]($link.page('advanced/objects').ref('serialization'))。
+- 解码结果可能包含任意对象图，限制输入大小、深度和允许的类由调用方负责。
+
+# [源码与示例]($heading.id('source-and-examples'))
+
+- [src/serialization.zig](https://github.com/happystraw/phpz/blob/dev/src/serialization.zig)
+- [examples/my_php_extension/src/testing/serialization_api.zig](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/src/testing/serialization_api.zig)
+- [tests/serialization_api.phpt](https://github.com/happystraw/phpz/blob/dev/examples/my_php_extension/tests/serialization_api.phpt)
