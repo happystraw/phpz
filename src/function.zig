@@ -400,7 +400,7 @@ pub fn ResultType(comptime func: anytype) type {
     return if (@typeInfo(R) == .error_union) @typeInfo(R).error_union.payload else R;
 }
 
-pub fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!ResultType(func) {
+pub inline fn invoke(comptime func: anytype, ctx: anytype, receiver: anytype) anyerror!ResultType(func) {
     const param_types = @typeInfo(@TypeOf(func)).@"fn".param_types;
     @setEvalBranchQuota(comptime stub.declarationQuota(param_types.len));
     const has_receiver = @TypeOf(receiver) != void;
@@ -460,7 +460,7 @@ inline fn unwrapReturnReference(execute_data: *c.zend_execute_data, return_value
     if (comptime c.PHP_VERSION_ID >= 80600) c.zend_return_unwrap_ref(execute_data, return_value);
 }
 
-pub fn setReturnValue(ctx: anytype, value: anytype) anyerror!void {
+fn setReturnValue(ctx: anytype, value: anytype) anyerror!void {
     const retval = ctx.retval;
     const T = @TypeOf(value);
     if (T == void) {
@@ -515,7 +515,7 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) H
     return struct {
         fn call(ctx: Context) anyerror!void {
             const value = try invoke(func, ctx, {});
-            try setReturnValue(ctx, value);
+            try @call(.always_inline, setReturnValue, .{ ctx, value });
         }
 
         fn handle(execute_data: ?*c.zend_execute_data, return_value: ?*c.zval) callconv(abi.fn_cc) void {
@@ -529,7 +529,7 @@ pub fn createHandler(comptime func_desc: [:0]const u8, comptime func: anytype) H
                         .retval = .from(return_value.?),
                         .guard_scope = &scope,
                     }});
-                } else call(.{ .call = .from(execute_data.?), .retval = .from(return_value.?) }),
+                } else @call(.always_inline, call, .{Context{ .call = .from(execute_data.?), .retval = .from(return_value.?) }}),
             ) catch |err| {
                 zend.bailout.propagate(err);
                 if (!exception.hasPending()) {
