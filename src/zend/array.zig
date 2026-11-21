@@ -237,6 +237,11 @@ pub const Array = opaque {
         return c.zend_hash_find(self.ptr(), key.ptr());
     }
 
+    /// Like symtableFind(), with a borrowed Zend string key.
+    pub fn symtableFindStr(self: *Array, key: *String) ?*c.zval {
+        return c.zend_symtable_find(self.ptr(), key.ptr());
+    }
+
     /// Like find(), unwrapping PHP references but not IS_INDIRECT.
     /// The result is borrowed; keep its owner and entry valid while using it.
     pub fn findDeref(self: *Array, key: []const u8) ?*c.zval {
