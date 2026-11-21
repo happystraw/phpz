@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
         .php_lib_dir = if (php_lib_dir) |lib_dir| .{ .cwd_relative = lib_dir } else null,
         .windows_zts = windows_zts,
         .windows_debug = windows_debug,
+        .lto = false,
     });
 
     // Build the PHP extension library.
@@ -58,28 +59,4 @@ pub fn build(b: *std.Build) void {
     const extension_file = std.Build.Step.UpdateSourceFiles.create(b);
     extension_file.addCopyFileToSource(extension.getEmittedBin(), b.fmt("modules/{s}", .{extension_filename}));
     b.getInstallStep().dependOn(&extension_file.step);
-
-    // Add PHPT test step.
-    const run_tests_step = b.step("run-tests", "Run PHPT tests");
-    const test_phpt_cmd = addRunPhpTool(b, phpz_dep.path("tools/php/run-tests.php"), "run-tests.php");
-    test_phpt_cmd.addArgs(&.{
-        "-q",
-        "--show-diff",
-        "-d",
-        b.fmt("extension=modules/{s}", .{extension_filename}),
-    });
-    test_phpt_cmd.step.dependOn(b.getInstallStep());
-    run_tests_step.dependOn(&test_phpt_cmd.step);
-}
-
-// Update the project-local tool from the bundle before running it.
-fn addRunPhpTool(b: *std.Build, source: std.Build.LazyPath, destination: []const u8) *std.Build.Step.Run {
-    const copy = std.Build.Step.UpdateSourceFiles.create(b);
-    copy.addCopyFileToSource(source, destination);
-
-    const run = b.addSystemCommand(&.{ "php", destination });
-    run.setCwd(b.path("."));
-    run.has_side_effects = true;
-    run.step.dependOn(&copy.step);
-    return run;
 }

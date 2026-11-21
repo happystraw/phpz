@@ -2,6 +2,7 @@
 #define BENCH_ZIG_H
 
 #include "phpz.h"
+#include "ext/standard/php_string.h"
 #include "bench_zig_arginfo.h"
 
 extern zend_module_entry bench_zig_module_entry;

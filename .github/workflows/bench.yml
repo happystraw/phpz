@@ -1,32 +1,32 @@
-name: Benchmark
+name: Benchmark checks
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   bench:
-    name: bench (PHP ${{ matrix.php }}, ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
+    name: Benchmark checks (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
-        arch: [x86_64, aarch64]
-        include:
-          - arch: x86_64
-            os: ubuntu-latest
-          - arch: aarch64
-            os: ubuntu-24.04-arm
+        php: ["8.4", "8.5"]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
       - uses: mlugg/setup-zig@v2
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           tools: php-config
+          coverage: none
 
-      - name: Run benchmark
-        run: bench/run.sh
+      - name: Install PHPX build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libmpfr-dev
+
+      - name: Build and check all three extensions
+        run: benchmark/run.sh --check
