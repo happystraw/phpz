@@ -83,10 +83,22 @@ fn invoke(ctx: phpz.Ctx, mode: []const u8, callback: *phpz.zend.Callable, params
         }
         return;
     }
-    if (std.mem.eql(u8, mode, "callable-cleanup")) {
+    const exclusive_cleanup = std.mem.eql(u8, mode, "callable-exclusive-cleanup");
+    if (exclusive_cleanup or std.mem.eql(u8, mode, "callable-cleanup")) {
         // Native output also works after bailout has cleared the PHP execute frame.
         defer std.debug.print("Zig cleanup\n", .{});
-        const result = if (guarded) callback.tryCall(null, params, named_params) else callback.call(null, params, named_params);
+        const result = if (exclusive_cleanup)
+            callback.tryCallAssumeExclusive(null, params, named_params)
+        else if (guarded)
+            callback.tryCall(null, params, named_params)
+        else
+            callback.call(null, params, named_params);
+        if (exclusive_cleanup) {
+            try std.testing.expect(callback.fci.retval == null);
+            try std.testing.expect(callback.fci.params == null);
+            try std.testing.expectEqual(@as(u32, 0), callback.fci.param_count);
+            try std.testing.expect(callback.fci.named_params == null);
+        }
         result catch |err| {
             std.debug.print("Zig error: {s}\n", .{@errorName(err)});
             return err;
