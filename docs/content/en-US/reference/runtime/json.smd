@@ -1,0 +1,42 @@
+---
+.title = "JSON and PHP serialization",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/json",
+.custom = { "section": "Runtime APIs" },
+---
+
+Use JSON for data exchanged across languages. Use PHP serialization to preserve references between PHP values or to invoke object hooks such as `__serialize()` and `__unserialize()`.
+
+# [JSON encoding and decoding]($heading.id('encode'))
+
+```zig
+pub fn encodeJson(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.json.encode(value, .{ .flags = .{ .unescaped_unicode = true } });
+}
+
+pub fn decodeJson(ctx: phpz.Ctx, input: []const u8) !void {
+    try phpz.json.decode(ctx.retval, input, .{ .flags = .{ .object_as_array = true } });
+}
+```
+
+JSON objects decode to `stdClass` by default. This example selects `object_as_array` to produce PHP arrays. Invalid JSON returns `error.JsonDecodeFailed`. For external input, limit both the input length and nesting depth (`depth` defaults to 512).
+
+# [PHP serialization and unserialization]($heading.id('serialize'))
+
+```zig
+pub fn serializeValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.serialization.serialize(value);
+}
+
+pub fn restoreValue(ctx: phpz.Ctx, input: []const u8) !void {
+    try phpz.serialization.unserialize(ctx.retval, input, .{
+        .allowed_classes = .none,
+        .max_depth = 128,
+    });
+}
+```
+
+**Never unserialize untrusted input.** `allowed_classes = .none` prevents reconstruction of the original classes but does not validate the input. Malformed serialized data typically writes `false` to the result and may emit a PHP warning. A valid serialized value can also decode to `false`.
+
+Both interfaces require an active PHP request. Encoding and serialization borrow the input and return a new string. The examples transfer ownership to PHP. If you keep the string yourself, call `release()` when done. Decoding and unserialization write directly to `ctx.retval`. Initialize a local destination zval to undefined or `null` and release it when finished. Exceptions from object hooks remain pending and the Zig call returns `error.PhpException`.

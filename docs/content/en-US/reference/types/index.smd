@@ -1,0 +1,80 @@
+---
+.title = "PHP and Zig types",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/index",
+.custom = { "section": "Types and values" },
+---
+
+PHP represents arguments and return values as zvals. phpz wraps each in `Zval` and reads it as a Zig scalar, a borrowed slice or a Zend pointer according to its `Zval.Kind`.
+
+# [Type mapping]($heading.id('type-mapping'))
+
+| PHP value | PHP C type | `Zval.Kind` | Zig type |
+| --- | --- | --- | --- |
+| `int $a` | `zend_long` | `.int` | `i64` |
+| `float $f` | `double` | `.float` | `f64` |
+| `bool $b` | `zend_bool` | `.bool` | `bool` |
+| `string $s` | `zend_string *` | `.string` | `[]const u8` |
+| `string $s` (Zend string view) | `zend_string *` | `.str` | `*phpz.zend.String` |
+| `null $n` | — | `.null` | `void` |
+| `array $arr` | `zend_array *` | `.array` | `*phpz.zend.Array` |
+| `object $obj` | `zend_object *` | `.object` | `*phpz.zend.Object` |
+| `resource $res` | `zend_resource *` | `.resource` | `*phpz.zend.Resource` |
+| `&$ref` | `zend_reference *` | `.reference` | `*phpz.zend.Reference` |
+
+The C types in the table describe zval contents or pointers to Zend structures for the 64-bit targets supported by phpz.
+
+- PHP stores integers as `zend_long` and floats as `double`.
+- A bool's value is encoded in the zval type tag, `IS_TRUE` or `IS_FALSE`.
+- `null` and `undef` have no payload to read. Test the type tag.
+- PHP strings contain arbitrary bytes. `asUnchecked(.string)` borrows those bytes without requiring UTF-8.
+- A PHP array is an ordered map. `zend.Array` provides a view of the Zend array.
+- Access objects, resources and references through pointers. PHP and Zend manage their lifetimes.
+
+`Zval.Kind` is the type tag and `Zval.Type(kind)` gives the corresponding Zig read type. Use `is` or `kind` to test a value and `as` for checked access. Call `asUnchecked` only after confirming the type. Returned slices and Zend wrappers borrow the value. Copy or retain it before the owning zval expires. For PHP conversions, use `cast` and `convert`. See [Type conversions]($link.page('reference/types/conversions')) and [Ownership and reference counting]($link.page('reference/types/ownership')).
+
+A manual `.mixed` argument specification without a union borrows a `*Zval`. `Zval.Type(.mixed)` gives a raw `*c.zval`. Refer to the specific API's signature and ownership rules when working with raw pointers and wrappers.
+
+# [PHP resources]($heading.id('php-resources'))
+
+`zend.Resource` wraps `zend_resource *`. Define custom types with `Resource.Typed(T, .{ .name, .destroy })` and include the resulting type in `module.resources`. phpz calls its `register(module_number)` during MINIT:
+
+```zig
+const Value = struct { number: i64 };
+
+fn destroy(value: *Value) void {
+    phpz.heap.php_allocator.destroy(value);
+}
+
+const ValueResource = phpz.zend.Resource.Typed(Value, .{
+    .name = "my_php_extension.value",
+    .destroy = destroy,
+});
+
+pub fn createValue(number: i64) !*phpz.zend.Resource {
+    const value = try phpz.heap.php_allocator.create(Value);
+    value.* = .{ .number = number };
+    return ValueResource.init(value);
+}
+
+pub fn readValue(resource: *phpz.zend.Resource) !i64 {
+    const value = try ValueResource.fetch(resource);
+    return value.number;
+}
+```
+
+`init(value)` transfers the payload to the resource and returns one owned resource reference. Transfer that reference to PHP or release it yourself. `fetch(resource)` borrows the payload after Zend checks the resource type ID and open state. A mismatch or closed resource returns `PhpException` or `UnwindExit` and preserves PHP diagnostics. `data()` alone cannot validate an arbitrary resource's type.
+
+| Method | Behavior |
+| --- | --- |
+| `close()` | Close the payload for every alias without releasing the current reference |
+| `release()` | Release one owned resource reference and invoke destruction when the count reaches zero |
+| `handle()` | Return the handle in Zend's resource table |
+| `typeId()` / `typeName()` | Read the type ID or name. `typeName()` returns null for a closed or unknown type |
+| `data()` | Return the unchecked payload pointer, or null if closed |
+| `refcount()` / `addref()` / `delref()` | Access the reference count. `delref()` only decrements and cannot destroy the resource |
+
+Register a resource type ID once for the module lifetime. Request resources are still released with their request. `close()` followed by `release()` is a common pattern. Releasing the last reference to an open resource invokes `destroy` on the payload. For native cleanup on bailout, see [Bailouts and cleanup]($link.page('advanced/bailout')).
+
+`phpz.Stream.fromResource()` validates and borrows ordinary and persistent PHP streams. A handler can also declare a `*phpz.Stream` parameter. See [PHP streams]($link.page('reference/runtime/streams')) for I/O, directories and ownership.

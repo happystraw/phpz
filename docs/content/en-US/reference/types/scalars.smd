@@ -1,0 +1,40 @@
+---
+.title = "Scalars",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/scalars",
+.custom = { "section": "Types and values" },
+---
+
+PHP `int`, `float` and `bool` map to Zig `i64`, `f64` and `bool`. Read arguments with `expectArgs` and set a PHP return value with `ctx.ret`.
+
+# [Read and return]($heading.id('read-and-return'))
+
+```zig
+/// PHP: function scale(int $value, float $factor, bool $enabled): float
+pub fn scale(ctx: phpz.Ctx) !void {
+    // args = .{i64, f64, bool}
+    const args = try ctx.call.expectArgs(&.{
+        .{ .int = .{} },
+        .{ .float = .{} },
+        .{ .bool = .{} },
+    }, {});
+    const base: f64 = @floatFromInt(args[0]);
+    const scaled = if (args[2]) base * args[1] else base;
+    ctx.ret(.float, scaled); // return f64
+}
+```
+
+This function implements `function scale(int $value, float $factor, bool $enabled): float`. Keep the specification consistent with the stub. `expectArgs` follows Zend parameter parsing: weak calls accept conversions such as numeric strings, strict calls reject weak conversions, and `.float` accepts integers in either mode. Failed conversions raise PHP `TypeError`. Write the specification explicitly. For nullable values and numeric ranges, see [Typed handler signatures]($link.page('reference/registration/arguments').ref('typed-signatures')).
+
+# [Return scalars]($heading.id('return-scalars'))
+
+Each line shows an alternative return value. Choose one per invocation:
+
+```zig
+ctx.ret(.int, 42);
+ctx.ret(.float, 3.5);
+ctx.ret(.bool, true);
+```
+
+A zval stores these scalars directly. They require no reference counting or separate release. Match the PHP return declaration to the type written.

@@ -1,0 +1,88 @@
+---
+.title = "Working with zvals",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/zval",
+.custom = { "section": "Types and values" },
+---
+
+`phpz.Zval` is a zero-overhead wrapper around `*c.zval`. It does not allocate storage, increment references or release values automatically. `ctx.retval` points to PHP's return slot. `ctx.ret(kind, value)` calls `ctx.retval.set(kind, value)`.
+
+# [Local temporary values]($heading.id('local-temporary-values'))
+
+```zig
+var temporary = phpz.Zval.raw.undef;
+defer phpz.Zval.raw.release(&temporary);
+
+const value = phpz.Zval.from(&temporary);
+value.set(.string, "phpz");
+ctx.ret(.mixed, value.ptr());
+```
+
+`set(.string, ...)` creates a string. `ctx.ret(.mixed, ...)` copies the dereferenced value and retains it as needed, so the temporary still requires release. `release()` accepts Zend `undef`. Zig `undefined` storage must be initialized first.
+
+A native Zend bailout can skip this Zig `defer`. See [Bailouts and cleanup]($link.page('advanced/bailout')) for cleanup boundaries.
+
+# [Set values]($heading.id('set-values'))
+
+`set(kind, value)` writes a type and value without destroying the old contents. Before overwriting an owned value, release it.
+
+| `kind` | Zig argument | Behavior |
+| --- | --- | --- |
+| `.undef` | `{}` | Write Zend's internal undefined state. Avoid exposing it as a public return value |
+| `.null` | `{}` | Write PHP `null` |
+| `.int` | `i64` | Store the integer directly |
+| `.float` | `f64` | Store the floating-point value directly |
+| `.bool` | `bool` | Encode `true` or `false` in the type tag |
+| `.string` | `[]const u8` | Copy the bytes by length. The zval owns the string |
+| `.str` | `*phpz.zend.String` | Transfer one string reference without copying bytes. Call `copy()` on a borrowed input first |
+| `.array` | `*phpz.zend.Array` | Store the pointer without `addref` |
+| `.object` | `*phpz.zend.Object` | Store the pointer without `addref` |
+| `.resource` | `*phpz.zend.Resource` | Store the pointer without `addref` |
+| `.reference` | `*phpz.zend.Reference` | Store the pointer without `addref` |
+| `.mixed` | `*c.zval` | Copy the dereferenced value and increment its reference count as needed |
+
+`.indirect` and `.ptr` are internal Zend states and cannot be written with `set`. For a PHP return value use `ctx.ret(kind, value)`.
+
+# [Reading values and checking types]($heading.id('read-and-type-check'))
+
+| Operation | Behavior |
+| --- | --- |
+| `kind()` | Return the `Zval.Kind` |
+| `is(kind)` | Test for the specified type |
+| `as(kind)` | Check the type and read it, or return `error.TypeMismatch` |
+| `asOrDefault(kind, default)` | Return the default if `as` fails |
+| `asUnchecked(kind)` | Read without checking. Use only with a confirmed type |
+| `ptr()` | Borrow the underlying `*c.zval` |
+
+```zig
+if (value.is(.int)) {
+    const n = value.asUnchecked(.int);
+    _ = n;
+}
+
+const count = value.asOrDefault(.int, 0);
+```
+
+Use `cast(kind)` for a PHP explicit cast or `convert(kind)` to replace the current value in place. See [Type conversions]($link.page('reference/types/conversions')) for effects on the source and reference counts.
+
+# [Ownership and release]($heading.id('ownership-and-release'))
+
+Read operations usually borrow arrays, objects, resources and reference wrappers. Call `addref` or `copy` as appropriate to extend a value's lifetime. Use the following operations to manage ownership:
+
+| Operation | Behavior |
+| --- | --- |
+| `release()` | Release one owned value and destroy it at count zero. Accepts `undef` and leaves the slot uncleared |
+| `makeRef()` | Wrap the value in a PHP reference in place. An existing reference stays unchanged. A new container starts at count 1 |
+| `addref()` / `tryAddref()` | Retain a reference and preserve the PHP reference wrapper. The former requires a refcounted value and the latter checks first |
+| `delref()` / `tryDelref()` | Only decrement, even at zero. The former requires a refcounted value and the latter checks first |
+| `refcount()` | Read the payload count. Requires a refcounted value or an array, asserted in Debug builds |
+| `Zval.raw.copy(dst, src)` | Copy the zval, retaining as needed and preserving the reference wrapper |
+| `Zval.raw.copyDeref(dst, src)` | Dereference the source, then copy and retain as needed |
+| `Zval.raw.copyValue(dst, src)` | Copy just the type and value without incrementing a reference |
+
+`Zval.raw` provides the same reference count and release operations. `Zval.raw.makeRef(zv)` corresponds to `ZVAL_MAKE_REF`. It wraps the current value without copying its contents or nesting an existing reference. For PHP by-reference returns, use it on an existing value or call `zend.Reference.init` directly. Avoid `refcount()` on a non-countable value or at count zero.
+
+Use `release()` for cleanup. To reuse a released temporary zval, set it to `Zval.raw.undef` first.
+
+`undef` is Zend's internal undefined state. To return PHP null, use `set(.null, {})`.

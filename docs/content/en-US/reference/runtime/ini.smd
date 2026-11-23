@@ -1,0 +1,81 @@
+---
+.title = "INI settings",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/ini",
+.custom = { "section": "Runtime APIs" },
+---
+
+# [Declaration and registration]($heading.id('declaration-and-registration'))
+
+```zig
+const greeting = phpz.ini.string.new(.{
+    .name = "my_php_extension.greeting",
+    .default = "Hello",
+    .access = .all,
+});
+
+const workers = phpz.ini.int.new(.{
+    .name = "my_php_extension.workers",
+    .default = 4,
+    .access = .all,
+});
+
+const debug = phpz.ini.boolean.new(.{
+    .name = "my_php_extension.debug",
+    .default = false,
+    .access = .all,
+});
+```
+
+Add the definitions to `phpz.module` as `.ini = &.{ greeting, workers, debug }`. phpz registers them at module startup and unregisters them at shutdown.
+
+# [Read values]($heading.id('read-values'))
+
+Read the settings in a handler:
+
+```zig
+ctx.ret(.string, try greeting.get());
+```
+
+String results borrow the current configuration data. Copy the bytes before retaining them across configuration changes.
+
+| Access | Meaning |
+| --- | --- |
+| `.system` | System-level configuration |
+| `.user` | User-level configuration, writable from scripts with `ini_set()` |
+| `.perdir` | Per-directory configuration, set in `php.ini` or the SAPI's directory configuration |
+| `.all` | All configuration levels |
+
+PHP's INI access level controls which settings can be changed with `php -d`, `php.ini` and `ini_set()`.
+
+# [Custom types and bindings]($heading.id('custom-types-and-bindings'))
+
+`phpz.ini.Typed(T).new` takes `parse`, `format` and `default_text` and can map text to a Zig enum. `.bind = Globals.iniField("mode")` binds the parsed result to a module globals field.
+
+Use `get()` to read the field for the current thread. On a parse failure, return an error and preserve the previous state.
+
+# [phpinfo() displayers]($heading.id('phpinfo-displayers'))
+
+Scalar and `Typed` INI entries accept `.displayer`. Adapt the callback for Zend with `phpz.ini.displayer(callback)`:
+
+```zig
+fn displayDebug(entry: *phpz.c.zend_ini_entry, kind: phpz.ini.DisplayType) void {
+    const modified = if (comptime @TypeOf(entry.modified) == bool) entry.modified else entry.modified != 0;
+    const value = if (kind == .original and modified) entry.orig_value else entry.value;
+    const text = if (value) |str| phpz.zend.String.from(str).slice() else "";
+    const label: [:0]const u8 = if (phpz.ini.parseBool(text)) "on" else "off";
+    _ = phpz.printf("%s", .{label.ptr});
+}
+
+const debug = phpz.ini.boolean.new(.{
+    .name = "my_php_extension.debug",
+    .default = false,
+    .access = .all,
+    .displayer = phpz.ini.displayer(displayDebug),
+});
+```
+
+The callback receives the INI entry and a `DisplayType`. `.active` requests the effective value. For `.original`, inspect `modified` and use `orig_value` when the setting has changed. The representation of `modified` varies between PHP versions around 8.6. Check the headers for a bool or integer.
+
+A displayer writes directly to phpinfo output with `phpz.printf`. Escape dynamic text before including it in HTML. In a custom `info_fn`, call [phpz.info.ini(module)]($link.page('reference/runtime/output').ref('extension-information')) to list the module's INI entries. PHP lists them automatically with its default information output when the module declares a version.

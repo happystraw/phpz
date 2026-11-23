@@ -1,0 +1,85 @@
+---
+.title = "Requirements and installation",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/installation",
+.custom = { "section": "Getting started" },
+---
+
+To develop a phpz extension, install a Zig toolchain and a PHP development environment that meet these requirements:
+
+| Component | Supported configuration |
+| --- | --- |
+| Zig | **0.17.0** |
+| PHP | **8.2–8.6**, NTS and ZTS |
+| Linux | x86_64, aarch64 |
+| macOS | x86_64 (Intel), aarch64 (Apple Silicon) |
+| Windows | x64, MSVC ABI |
+
+# [Zig toolchain]($heading.id('zig-toolchain'))
+
+The repository and generated skeleton require Zig `0.17.0` or later and use `translate-c 2.0.2` to generate C bindings.
+
+Install the toolchain for your OS and architecture, add its directory to `PATH`, and check the full version with `zig version`. Whether you use a system package or a [Zig download](https://ziglang.org/download/), compare the full version against the project manifest. Development snapshots with the same version prefix can differ.
+
+# [PHP development environment]($heading.id('php-development-environment'))
+
+Install PHP with your package manager or build it from source. Extension development requires the PHP CLI, the tokenizer extension and matching development headers. Match the PHP version, architecture, thread-safety mode (NTS/ZTS) and debug configuration across the runtime and development files.
+
+## [Install using a package manager]($heading.id('install-using-a-package-manager'))
+
+Choose the commands for your platform:
+
+```sh
+# Arch Linux
+pacman -S php
+# Debian / Ubuntu
+apt install php-cli php-dev
+# Fedora
+dnf install php-cli php-devel
+# macOS (Homebrew)
+brew install php
+```
+
+On Linux and macOS, verify that `php` and `php-config` are on your path. Use `php-config --include-dir` to locate the headers.
+
+## [Windows]($heading.id('windows'))
+
+On Windows, download the **Development package** matching your runtime from the [PHP downloads page](https://www.php.net/downloads.php?os=windows). It contains the headers and import library.
+
+See [Building with MSVC on Windows]($link.page('development/windows').ref('windows-msvc')) for development package configuration and build instructions.
+
+## [Build PHP from source]($heading.id('build-php-from-source'))
+
+For extension development, a **debug build of PHP** provides debug symbols, Zend assertions and memory leak reports. Configure PHP with `--enable-debug` for development and testing. Use a release build for performance measurements.
+
+For the Linux and macOS build process, see [Building PHP](https://www.phpinternalsbook.com/php7/build_system/building_php.html) in the PHP Internals Book. Select a PHP version in the supported range above.
+
+After installing the compiler and development dependencies, use the following commands to build a debug PHP from the PHP 8.6 branch and install it under your home directory:
+
+```sh
+# Clone PHP and check out the release branch
+git clone https://github.com/php/php-src.git
+cd php-src
+git checkout PHP-8.6
+./buildconf
+
+PHP_PREFIX="${HOME}/build/php"
+./configure --prefix="${PHP_PREFIX}" \
+    --disable-all \
+    --enable-tokenizer \
+    --enable-debug
+make -j
+make install
+export PATH="${PHP_PREFIX}/bin:$PATH"
+php -v
+php-config --include-dir
+```
+
+For a thread-safe build, add `--enable-zts` to `./configure`.
+
+This `PATH` setting applies to the current shell.
+
+# [Next steps]($heading.id('next-steps'))
+
+Once the environment is ready, continue with [Your first PHP extension]($link.page('getting-started/hello-world')).

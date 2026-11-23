@@ -1,0 +1,31 @@
+---
+.title = "Integration with the PHP build system",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/php-build-system",
+.custom = { "section": "Build and test" },
+---
+
+The integration files let PHP's build system invoke Zig to compile an extension.
+
+# [Generate integration files]($heading.id('generate-integration-files'))
+
+Generate the skeleton with `--with-php-build-system` for `config.m4`, `config.w32`, `Makefile.frag` and the module header.
+
+# [Unix shared extensions]($heading.id('unix-shared-extensions'))
+
+In the generated extension directory, run:
+
+```sh
+phpize
+./configure --enable-my_php_extension
+make
+```
+
+For `my_php_extension` the default mode is `ReleaseSafe`. Override it with `MY_PHP_EXTENSION_ZIG_FLAGS`.
+
+# [Built-in extensions]($heading.id('built-in-extensions'))
+
+Place the project under `ext/` in the PHP source tree and enable the extension when configuring PHP.
+
+`zig build -Dshared=false` produces the static library. Link it into PHP and enable its module to complete a built-in build. Static archives cannot be loaded through `extension=`.

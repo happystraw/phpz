@@ -1,0 +1,130 @@
+---
+.title = "PHP streams",
+.date = .date("2026-10-07T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/streams",
+.custom = { "section": "Runtime APIs" },
+---
+
+`phpz.Stream` wraps PHP streams for files, stream wrappers, directories and existing stream resources. Operations follow the underlying PHP stream's blocking behavior. The API provides no asynchronous scheduler.
+
+# [Borrowing a PHP stream]($heading.id('borrow-stream'))
+
+This Zig handler reads up to `length` bytes and returns the newly allocated Zend string to PHP:
+
+```zig
+pub fn readStream(stream: *phpz.Stream, length: usize) !*phpz.zend.String {
+    return stream.readToStr(length);
+}
+```
+
+Declare resource parameters in a stub comment. PHP has no native `resource` parameter type:
+
+```php
+/** @param resource $stream */
+function readStream($stream, int $length): string {}
+```
+
+Call it from PHP:
+
+```php
+$stream = fopen('php://memory', 'w+b');
+fwrite($stream, 'hello');
+rewind($stream);
+echo readStream($stream, 3); // hel
+fclose($stream);
+```
+
+A `*Stream` parameter accepts regular and persistent stream resources. Keep the resource alive and open while borrowed. The handler must leave the caller's stream open. The equivalent manual specification is `.resource = .{ .as = .stream }`, with optional `optional` or `nullable` flags. `Stream.fromResource()` checks and borrows an existing `*zend.Resource` and sets a PHP `TypeError` on a mismatch.
+
+# [Opening a stream and transferring it to PHP]($heading.id('open-and-transfer'))
+
+```zig
+pub fn openMemory(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    const stream = try phpz.Stream.open("php://memory", "w+b", .{});
+    stream.toZval(ctx.retval);
+}
+```
+
+Declare the function in the stub:
+
+```php
+/** @return resource */
+function openMemory() {}
+```
+
+`open()` returns one owned request resource reference. `toZval()` transfers it into an `undef` or `null` destination without incrementing its reference count. After transfer, do not close or transfer that same reference again. Handlers cannot directly return `*Stream`.
+
+`open(path, mode, options)` requires a NUL-terminated path and mode and takes no explicit stream context. Its main options are:
+
+| Option | Behavior |
+| --- | --- |
+| `use_path` | Search PHP's `include_path` |
+| `ignore_url` | Skip URL wrapper lookup and treat the path as a local filename |
+| `report_errors` | Allow PHP to report open failures |
+| `must_seek` | Request a seekable read stream. PHP may return a temporary copy whose writes do not reach the original stream |
+| `persistent` | Request a new or reused persistent stream, if supported by the wrapper |
+
+All options default to false. Failure returns `OpenFailed`. PHP warnings, exceptions and bailouts follow the engine's rules.
+
+# [Reading, writing and seeking]($heading.id('operations'))
+
+| API | Behavior |
+| --- | --- |
+| `read(buffer)` | Return bytes actually read. Zero can mean EOF or temporarily unavailable data |
+| `readToStr(len)` | Return an owned `*zend.String` to release or transfer to PHP. EOF yields an empty string |
+| `getLine(buffer)` | Borrow a slice of the buffer, retaining the newline and reserving a byte for NUL. Null can indicate no data, failure or insufficient space |
+| `write(bytes)` | Return bytes actually written. Short and zero-length writes are possible |
+| `copyTo(destination, limit, &copied)` | Borrow both streams. A null limit copies until EOF or no data is available. After failure the count is not a reliable resume offset |
+| `seek(offset, .start/.current/.end)` / `rewind()` | Seek or return an error if unsupported |
+| `tell()` / `eof()` | Query the position and EOF state tracked by PHP |
+| `flush()` | Flush stream buffers. Durability on disk is separate |
+| `truncate(size)` / `sync(data_only)` | Resize or request filesystem synchronization if supported. Flush separately before syncing |
+
+For complete writes, handle short writes and decide when a zero-progress result should trigger a retry or failure. Calling a PHP user stream wrapper may raise an exception or bail out even when the Zig method has an error return.
+
+# [Stream options and locking]($heading.id('stream-options'))
+
+`supportsSync()`, `supportsTruncate()` and `supportsLock()` query current capabilities. The operation itself can still fail. Common options include:
+
+| API | Behavior and errors |
+| --- | --- |
+| `lock(mode, non_blocking)` / `unlock()` | Use `LockMode.shared` or `.exclusive`. Unsupported locking returns `UnsupportedOperation`, nonblocking contention may return `WouldBlock` and other failures return `LockFailed` |
+| `setBlocking(blocking)` | Set blocking mode. Unsupported wrappers return `UnsupportedOperation` |
+| `setReadTimeout(seconds, microseconds)` | Set a read timeout. Microseconds must be below 1,000,000 and seconds must fit the target `timeval` |
+| `setReadBuffer(size)` / `setWriteBuffer(size)` | Zero disables buffering. A nonzero size requests full buffering and the wrapper may refuse |
+| `setChunkSize(size)` | Set the internal chunk size from 1 through `INT_MAX` and return the previous size |
+| `stat()` | Return `Stream.Stat` (`zend_stat_t`) without changing position, or return `StatFailed` |
+
+Depending on the option, failures include `UnsupportedOperation`, `SetOptionFailed`, `InvalidTimeout`, `InvalidChunkSize` and `StatFailed`. For example, `php://memory` generally lacks locking, blocking mode and sync. The fallback for read buffering may toggle buffering while ignoring its requested size. Call `flush()` before changing write buffering. Closing the stream releases its locks. `FreeOptions` defaults to no flags. Select `.close` or, for persistent streams, `.close_persistent` when freeing an owned stream.
+
+# [Directories]($heading.id('directories'))
+
+`Stream.openDir(path, .{})` returns an owned directory stream. Call `close()` when finished. Use `readDir(&buffer)` only on directory streams:
+
+```zig
+// Inside a function with an open directory stream.
+var buffer: phpz.Stream.DirBuffer = undefined;
+while (stream.readDir(&buffer)) |name| {
+    _ = phpz.printf("%s\n", .{name.ptr});
+}
+```
+
+Names borrow the caller's buffer until the next read. Copy them for later use. Null denotes either end of directory or a read failure. Entries can include `.` and `..`. Use `rewind()` to start again.
+
+# [Closing streams and working with persistent streams]($heading.id('ownership'))
+
+| Source or operation | Ownership and cleanup |
+| --- | --- |
+| Argument parsing, `fromResource` or `from` | Borrowed. Leave closing and transfer to the owner |
+| `open` / `openDir` | Owned. Transfer to PHP or close during normal cleanup |
+| `fromPersistentId(id)` | Null if absent, error on a type mismatch. Success gives one owned request resource reference |
+| `toZval` | Transfer an owned reference to PHP |
+| `close` | Consume an owned nonpersistent stream and preserve the PHP return code, including a process stream's exit status |
+| `closePersistent` | Consume an owned persistent stream reference and remove the persistent registration, invalidating aliases |
+| `free(options)` | Release with PHP's low-level flags. `FreeOptions` enables none by default. Standard close flags include `.close`, `.close_casted` and `.close_persistent`. Use only with known ownership |
+
+Choose the closing operation with `isPersistent()`. Even on a nonzero result, a closed pointer cannot be retried or reused. A persistent stream's request resource reference still belongs to the current request.
+
+`defer close()` runs during normal Zig unwinding and may be skipped by PHP bailout. Closing a PHP stream may itself enter PHP. Guard cleanup callbacks that must avoid PHP cannot use it. See [Bailouts and cleanup]($link.page('advanced/bailout')) for ownership and bailout boundaries.

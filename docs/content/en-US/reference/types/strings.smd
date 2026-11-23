@@ -1,0 +1,76 @@
+---
+.title = "Strings",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/strings",
+.custom = { "section": "Types and values" },
+---
+
+PHP strings are binary-safe byte sequences with explicit lengths. They can contain arbitrary bytes, including embedded `\0`. A `[]const u8` parameter borrows the current zval. Copy the bytes before retaining them beyond the call frame.
+
+# [Read and return]($heading.id('read-and-return'))
+
+```zig
+/// PHP: function echoBytes(string $value): string
+pub fn echoBytes(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+    }, {});
+    ctx.ret(.string, args[0]);
+}
+```
+
+A `[]const u8` from `expectArgs` is valid only in the current call frame. `ctx.ret(.string, slice)` copies the specified length immediately. It can safely copy a local buffer or borrowed slice and preserves bytes after an embedded `\0`.
+
+Typed handlers can take `[:0]const u8`. The manual equivalent is `.string = .{ .as = .cstr }`. It borrows the Zend string's terminating NUL without allocation or a reference increment, preserving length and embedded NULs. Keep the source alive and unchanged. A C string function passed `.ptr` sees only the bytes before the first NUL.
+
+# [Zend strings]($heading.id('zend-strings'))
+
+```zig
+const value = phpz.zend.String.init("hello", false);
+defer value.release();
+
+ctx.ret(.string, value.slice());
+```
+
+`String.init` returns a new `*zend.String`. With `persistent = false` the allocation belongs to the request. Call `release()` when finished. `slice()` borrows a view, `copy()` retains a reference that requires release, and `String.from` wraps an existing pointer without retaining it.
+
+# [Common operations]($heading.id('common-operations'))
+
+| Method | Behavior |
+| --- | --- |
+| `toLower` / `toUpper` | Return an owned string reference. Zend may reuse the original if no conversion is needed. Ensure exclusivity before writing |
+| `concat` / `concat3` | Concatenate bytes and return a new string |
+| `equals` / `startsWith` | Compare by bytes |
+| `hash` | Get the Zend string hash |
+
+These operations preserve the original string. Release returned `*zend.String` references when done unless you transfer ownership to another Zend API.
+
+# [Mutable strings]($heading.id('mutable-strings'))
+
+`alloc(length, persistent)` allocates uninitialized bytes and sets the trailing NUL. This handler fills the bytes and returns the string:
+
+```zig
+/// PHP: function makeBytes(): string
+pub fn makeBytes() *phpz.zend.String {
+    const value = phpz.zend.String.alloc(5, false);
+    @memcpy(value.mutableSlice(), "hello");
+    return value;
+}
+```
+
+`mutableSlice()` requires a non-interned string with a single reference. It clears cached hash and UTF-8 flags. Finish writing before hashing, sharing or resizing the string and preserve the terminating NUL.
+
+| Method | Ownership and constraints |
+| --- | --- |
+| `dupe(persistent)` | Borrow the source and return an owned result. Interned strings may be reused, so the result need not be writable |
+| `separate(persistent)` | Consume one reference and return an exclusively owned writable string |
+| `extend(length, persistent)` | Consume one reference and extend the string. Initialize the new bytes |
+| `truncate(length, persistent)` | Consume one reference and shorten the string |
+
+For the last three methods, replace the old pointer with the result. Earlier slices may be invalidated. For non-interned strings, `persistent` must match the original allocation. For a borrowed string, `copy()` before `separate()`. `extend` requires a length at least as large as the old one and `truncate` at most as large.
+
+# [Bytes and text]($heading.id('bytes-and-text'))
+
+- Define character counts, case mapping and encoding conversions according to your protocol. A Zend string carries no UTF-8 guarantee.
+- `cstr()` returns a NUL-terminated pointer. C string functions stop at an embedded `\0`. Use `len()` or `slice()` for the entire value.

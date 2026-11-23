@@ -1,0 +1,44 @@
+---
+.title = "PHP API declarations (stub files)",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/stub",
+.custom = { "section": "Declarations and registration" },
+---
+
+A PHP stub file (`.stub.php`) declares the extension's namespaces, function signatures, properties, constants and classes. PHP's [stub generator](https://php.github.io/php-src/miscellaneous/stubs.html) reads these declarations and writes a C header.
+
+# [Minimal declaration]($heading.id('minimal-declaration'))
+
+```php
+<?php
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ */
+function hello(): void {}
+function greet(string $name): string {}
+```
+
+`@generate-class-entries` enables registration code generation. The legacy marker requests arginfo compatible with PHP 8.2. Keep the header supplied by the skeleton.
+
+# [Update workflow]($heading.id('update-workflow'))
+
+1. Edit `my_php_extension.stub.php`.
+2. Run `zig build gen-stub`.
+3. Update the Zig function or method implementations or class bindings.
+4. Run `zig build run-tests`.
+
+`zig build gen-stub` and `zig build run-tests` use the respective `gen_stub.php` and `run-tests.php` scripts shipped with phpz.
+
+The generated `*_arginfo.h` typically contains `ext_functions`, function arginfo, `register_class_*` and, when needed, `register_<name>_symbols`. Include `phpz.h` and the arginfo header in the extension header to expose these declarations to Zig's C translation.
+
+Typed functions and methods check required, fixed and variadic parameters, by-reference parameters and direct return reference flags against arginfo at compile time. A mismatch fails the build. Keep PHP types and defaults consistent with runtime parameter parsing and the implementation. For context-only handlers, `expectArgs` checks counts and related metadata in Debug builds. See [Compile-time and Debug declaration checks]($link.page('reference/registration/arguments').ref('debug-declaration-checks')) for the scope and the generic closure exception.
+
+The `@frameless-function` annotation fails at the binding site. phpz does not export `zflf_*` handlers. Remove the annotation and regenerate arginfo.
+
+# [Names and aliases]($heading.id('names-and-aliases'))
+
+`functions`, `namedFunctions` and class method bindings check case-sensitive names and implementation coverage at compile time. Lookup uses a compile-time enum table in stub order and preserves PHP registration order and runtime lookup behavior. Explicit `@alias` declarations reuse existing handlers.
+
+Types and metadata depend on the PHP version. When importing PHP's built-in stubs, use paths the generator can resolve, such as `Zend/zend_attributes.stub.php` in the attribute example. See [Skeleton and code generation]($link.page('getting-started/tools')) for generator updates and documentation.

@@ -5,6 +5,8 @@ on:
     branches: ["dev"]
     paths:
       - "src/**"
+      - "build/**"
+      - "docs/**"
       - "build.zig"
       - "build.zig.zon"
       - ".github/workflows/docs.yml"
@@ -29,7 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Setup Pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v5
+      # setup-zine reads the version from zine.ziggy in the checkout root.
+      - run: ln -s docs/zine.ziggy zine.ziggy
+      - uses: kristoff-it/setup-zine@v2
       - uses: mlugg/setup-zig@v2
       - name: Install PHP development headers
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -40,10 +45,12 @@ jobs:
         run: |
           PHP_INCLUDE_DIR=$(php-config --include-dir)
           zig build docs -Dphp-include-dir="$PHP_INCLUDE_DIR"
+      - name: Index documentation for search
+        run: npx --yes pagefind@1.6.0 --site docs/public/phpz
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "zig-out/docs/lib"
+          path: "docs/public/phpz"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

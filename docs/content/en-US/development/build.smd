@@ -1,0 +1,48 @@
+---
+.title = "Building and loading extensions",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/build",
+.custom = { "section": "Build and test" },
+---
+
+Build in the extension directory and load it with PHP of the same version, architecture, thread safety and debug configuration. For Windows and cross-compilation see [Building for Windows]($link.page('development/windows')).
+
+# [Linux and macOS]($heading.id('unix'))
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+php -n -dextension=./modules/my_php_extension.so -r 'hello();'
+```
+
+The skeleton produces `modules/my_php_extension.so`. `-n` skips `php.ini` and `-dextension` loads the module for that process. This example calls the skeleton's `hello()` function.
+
+Debug is the default. For an optimized build with Zig runtime safety checks, use:
+
+```sh
+zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+See [Build options]($link.page('advanced/build-options')) for LTO and ZTS resource caching.
+
+# [Loading the extension with php.ini]($heading.id('configure-loading'))
+
+After testing a single load, add `extension=/absolute/path/to/my_php_extension.so` to the target PHP configuration. Use the actual DLL path on Windows. Use `php --ini` to locate the CLI configuration and `php --ri my_php_extension` to verify the module. PHP-FPM and Apache may read different configuration files. Reload or restart the service.
+
+# [Troubleshooting]($heading.id('troubleshooting'))
+
+| Symptom | What to check |
+| --- | --- |
+| Missing PHP headers | Check `php-config --include-dir`. Use the full path to the target's `php-config` if multiple versions are installed. |
+| Load failure or ABI mismatch | Compare `php -v`, `php-config --version`, architecture, NTS/ZTS and debug settings. On Windows also match the import library. |
+| One-off load works but configured load fails | Use `php --ini` for the CLI. Check the service SAPI's configuration and reload its processes. |
+| Old signature or binding after editing a stub | Run `zig build gen-stub`, rebuild and load the new module. |
+| `Zig requires ... parameters` or a reference declaration error | Fix differences in argument counts, optional or variadic parameters and reference flags. Use a context-only handler for manual parsing when appropriate. |
+| `@frameless-function` binding fails | phpz does not export frameless handlers. Remove the annotation and regenerate arginfo. |
+| `gen-stub` fails | Check tokenizer, write access to `build/` and network and download tools for the initial PHP-Parser installation. |
+| `evaluation exceeded ... backwards branches` | phpz sets internal compile-time branch quotas based on declarations or parameter counts. Check whether the diagnostic points into phpz or your own `comptime` code. |
+| `expectArgs declaration mismatch` | Zig Debug detected inconsistent required/fixed counts or a variadic flag between arginfo and the parser specification. Synchronize the stub, generated header and handler. |
+
+Function and method binding, argument parsing, INI collection and module registration adjust their own quotas. Ordinary extensions do not need a global `@setEvalBranchQuota`. Manage quotas for your own compile-time work separately.
+
+Run [PHPT tests]($link.page('development/testing')) after building. For `phpize` or PHP source builds see [Integration with the PHP build system]($link.page('development/php-build-system')).

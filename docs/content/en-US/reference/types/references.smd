@@ -1,0 +1,73 @@
+---
+.title = "PHP references",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/references",
+.custom = { "section": "Types and values" },
+---
+
+A PHP reference lets several zvals alias a single value. phpz wraps the shared reference container with `zend.Reference`.
+
+# [Reference arguments]($heading.id('reference-arguments'))
+
+Declare a by-reference parameter in the stub:
+
+```php
+function increment(int &$value, int $by = 1): void {}
+```
+
+Read it with a `.reference` specification in `expectArgs`:
+
+```zig
+pub fn increment(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .reference = .{ .kind = .int, .as = .value } },
+        .{ .int = .{ .optional = true } },
+    }, {});
+    const value = args[0];
+    value.set(.int, value.asUnchecked(.int) +| (args[1] orelse 1));
+}
+```
+
+`.reference.as` selects which view to borrow:
+
+| `as` | Zig type | View |
+| --- | --- | --- |
+| `.reference` | `*zend.Reference` | Reference container |
+| `.zval` | `*Zval` | Outer reference zval |
+| `.value` | `*Zval` | Zval containing the referenced value |
+
+`zend.Reference.val()` borrows a pointer to the referenced value. To preserve aliasing, use `.as = .zval` and `Zval.raw.copy` the outer reference into your own zval. Release it when done. `addref()` also preserves the wrapper, but cannot extend the lifetime of the original zval's storage. `copyDeref` and `set(.mixed, ...)` copy the dereferenced value.
+
+A typed handler can declare a by-reference parameter as `*zend.Reference`. Compile-time checks compare the reference flag with arginfo. A raw `*Zval` can also receive a by-reference parameter and preserve the outer reference.
+
+# [Create and assign]($heading.id('create-and-assign'))
+
+```zig
+const ref = phpz.zend.Reference.init(.int, 42);
+defer ref.release();
+
+const value = ref.val(); // Borrowed *Zval
+_ = value;
+try ref.set(.string, "phpz"); // Replaces and releases the old contents
+```
+
+`Reference.init(kind, value)` creates an owned reference with count 1. Call `release()` when done. A PHP reference cannot contain another reference. The kind cannot be `.undef`, `.reference`, `.indirect` or `.ptr`. Use `.mixed` to dereference and copy a PHP value. `.string` copies bytes. Pointer kinds such as `.array`, `.object`, `.resource` and `.str` transfer one reference. Retain borrowed refcounted inputs first.
+
+`Reference.set(kind, value)` releases the previous contents, preserves other aliases and enforces PHP property type constraints. An input pointer reference is consumed even on failure. Failures return the pending `PhpException` or `UnwindExit`. If an assignment could alias `self`, copy any state you will need before it releases the old value.
+
+An existing zval can also become a PHP reference in place:
+
+```zig
+var value = phpz.Zval.raw.init(.int, 42);
+const wrapped = phpz.Zval.from(&value);
+wrapped.makeRef();
+const ref = wrapped.asUnchecked(.reference);
+defer ref.release();
+```
+
+`makeRef()` moves the current value into a new reference container or preserves an existing reference. Its Zig return type is `void`. To return by reference from a typed handler, return `Reference.init(...)` or call `makeRef()` and retrieve `wrapped.asUnchecked(.reference)`. The latter needs an owned reference to transfer. Once transferred to PHP, omit the example's `release()`.
+
+# [Release]($heading.id('release'))
+
+`Reference.release()` releases one owned reference. At zero it destroys the contents and container. Destruction may invoke PHP destructors, call user code or bail out. `delref()` only decrements. `refcount()` reads the count and `addref()` adds a reference. Never release a borrowed or already transferred reference.

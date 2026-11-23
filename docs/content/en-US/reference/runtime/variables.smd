@@ -1,0 +1,36 @@
+---
+.title = "Inspecting and dumping values",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/variables",
+.custom = { "section": "Runtime APIs" },
+---
+
+`phpz.variable` provides two inspection tools. `inspect()` produces PHP source text like `var_export($value, true)`. `dump()` writes diagnostic output like `var_dump()`.
+
+# [Inspect]($heading.id('inspect'))
+
+```zig
+/// PHP: function exportValue(mixed $value): string
+pub fn exportValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.variable.inspect(value);
+}
+```
+
+`inspect()` borrows its input and returns an owned Zend string. Call `release()` or transfer it to PHP as a result. Like `var_export($value, true)`, it emits literals for scalars, array syntax for arrays, typically `ClassName::__set_state(...)` for ordinary objects and `(object) array(...)` for `stdClass`. The class must implement `__set_state()` to reconstruct an ordinary object. Cycles emit a PHP warning and produce `NULL`. Export failures return `error.ExportFailed` and exceptions thrown by a user error handler return `error.PhpException`.
+
+# [Dump]($heading.id('dump'))
+
+```zig
+/// PHP: function dumpValue(mixed $value): void
+pub fn dumpValue(value: *phpz.Zval) !void {
+    try phpz.variable.dump(value);
+}
+```
+
+`dump()` writes full `var_dump()` output through the active SAPI, including types, lengths and indentation. It invokes object `__debugInfo()` hooks, requires an active request and propagates bailouts. PHP output buffering applies, so `ob_start()` captures the same output as native `var_dump()`.
+
+# [Usage]($heading.id('usage'))
+
+- To pass a result to the caller, return it from the handler or use `ctx.ret(...)`. `dump()` and `phpz.printf()` write to PHP output and can become part of an HTTP response. Use PHP output buffering to test this output.
+- `inspect()` produces PHP code. Verify its source before writing it to a script or evaluating it.

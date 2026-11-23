@@ -1,0 +1,112 @@
+---
+.title = "Custom SAPI (experimental)",
+.date = .date("2026-10-07T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/sapi",
+.custom = { "section": "Advanced topics" },
+---
+
+**Custom SAPI support is experimental.** The interface may change. A Zig executable can host the PHP engine and supply input, output and request metadata. The example runs files and `-r` code without an HTTP server or thread scheduler.
+
+# [Building a standalone host]($heading.id('build'))
+
+From the repository root, enter the example and supply matching PHP embed headers and libraries.
+
+```sh
+cd examples/custom_sapi
+zig build install run-tests \
+  -Dphp-include-dir=/path/to/php/include/php \
+  -Dphp-lib-dir=/path/to/php/lib
+./zig-out/bin/custom-sapi hello.php
+./zig-out/bin/custom-sapi -r 'echo custom_sapi_greeting(), PHP_EOL;'
+```
+
+The example defaults to static PHP linkage using `libphp.a` on Unix or `php8embed.lib` on Windows. See `examples/custom_sapi` for SPC v3 build instructions. Its `run-tests` step uses the PHP CLI on `PATH` to launch host tests.
+
+With PHP 8.6 and later, enable the CLI SAPI (`--enable-cli`) when configuring embed to satisfy its link dependencies. Windows PHP 8.6 uses `TransmitFile` and also needs `-Dlink-lib=mswsock`. See `.github/scripts/test-sapi.sh` for the CI setup.
+
+| Build option | Purpose |
+| --- | --- |
+| `-Dshared=true` | Link a shared PHP library. On Unix, build PHP with `--enable-embed=shared`. |
+| `-Dlink-lib=NAME` | Add a transitive library dependency. Repeat as needed. |
+| `-Dlink-framework=NAME` | Add a macOS framework. Repeat as needed. |
+| `-Dforce-undefined-symbol=NAME` | Retain a symbol from a static library. Repeat as needed. |
+| `-Dtarget=...` | Match the PHP library's architecture and libc. |
+| `-Dwindows-zts=true` / `-Dwindows-debug=true` | Match Windows PHP thread safety and debug settings. |
+| `-Dlibc-file=...` | Supply libc and SDK path configuration. |
+
+`Phpz.addSapiExecutable()` adds the phpz module to the executable and links PHP. `Phpz.Options.shared` defaults to true, but this example sets it to false. Link modes do not fall back to each other. A statically linked PHP library can still leave the executable with dynamic dependencies. Shared builds on Windows need the matching runtime DLL.
+
+Use separate `Phpz` instances for an extension and its host. Match headers, libraries, architecture, libc, thread safety and debug mode. See `.github/scripts/test-sapi.sh` for host link dependencies.
+
+# [Backend and callbacks]($heading.id('backend'))
+
+`phpz.sapi.Sapi(T, options)` generates a SAPI type from compile-time callbacks. This backend assumes `std` and `phpz` have been imported.
+
+```zig
+const Backend = struct {
+    output: std.ArrayList(u8) = .empty,
+    allocator: std.mem.Allocator,
+
+    fn write(self: *Backend, bytes: []const u8) !void {
+        try self.output.appendSlice(self.allocator, bytes);
+    }
+};
+
+const Sapi = phpz.sapi.Sapi(Backend, .{
+    .name = "custom_sapi",
+    .ub_write = Backend.write,
+});
+```
+
+Supply `name` and `ub_write`. `Sapi.setContext(&backend)` associates the current thread's `SG(server_context)` with the backend instance. The host owns it and must keep it alive and bound through request shutdown. Make request body and cookie data available before startup.
+
+| Callback | Contract |
+| --- | --- |
+| `ub_write(*T, []const u8) !void` | Write all bytes or return an error. Borrow the slice for the callback only. |
+| `flush(*T) !void` | Flush backend buffers. A write or flush error marks the connection aborted. PHP termination depends on `ignore_user_abort`. |
+| `send_headers(*T, *Headers) !void` | Borrow response headers, preserving order and duplicates. Errors are reported to PHP. |
+| `read_post(*T, []u8) !usize` | Fill the buffer unless the body ends. A short read means EOF. Handle transport short reads internally and never return zero for EAGAIN. |
+| `read_cookies(*T) !?[:0]u8` | Return borrowed cookie text that remains valid through request shutdown. |
+| `register_server_variables(*T, *ServerVars) !void` | Populate server variables. Access to `$_SERVER` can invoke this lazily. |
+| `activate(*T) !void` | Runs after POST prereading and cookie retrieval. |
+| `deactivate(*T) !void` | Notification after I/O cleanup and header release. It can be skipped. Errors are logged. |
+| `log_message(*T, []const u8, i32) void` | Receive a borrowed message and PHP syslog level. phpz uses −1 for callback errors. |
+
+Errors in body, cookie, server-variable and activation callbacks can trigger a bailout. Keep ownership and cleanup of essential resources in the host outside the bailout boundary. `deactivate` alone cannot ensure cleanup.
+
+In `send_headers` use `Headers.status()` and `iterator()` for the status and fields. `shouldSendDefaultContentType()` reads the default Content-Type flag without sending headers.
+
+# [Process and request lifecycle]($heading.id('lifecycle'))
+
+The runnable example in `src/main.zig` uses this order:
+
+1. Call `try phpz.tsrm.startup()`, then `phpz.zend.signal.startup()`.
+2. Initialize the SAPI with `var host = Sapi.init(config)`. Schedule module shutdown only after module startup succeeds.
+3. Call `try host.startup(&addon_module)`. Pass null for no additional module.
+4. Bind `Sapi.setContext(&backend)`, set request metadata and call `try phpz.sapi.request.startup()`.
+5. Execute PHP in the request. Release script handles and temporary PHP values, then call `phpz.sapi.request.shutdown()` on the same thread.
+6. Shutdown can execute user functions and produce output. After it completes, read the final exit status, clear the context and release the backend.
+7. After all requests and worker threads finish, call `host.shutdown()`, `host.deinit()` and `phpz.tsrm.shutdown()` in that order.
+
+Only one SAPI can be active per process. Keep the instance alive through `deinit()` and the INI text and additional module entry alive through module shutdown. Do not move the instance while holding `host.ptr()`.
+
+Schedule request shutdown only after successful request startup. Failed startup can leave partial engine state. Terminate the host and clean up modules, SAPI and TSRM while borrowed resources remain valid. Do not retry or serve subsequent requests with that runtime.
+
+TSRM wrappers do nothing under NTS. ZTS workers call `tsrm.initThread()` before accessing PHP and `tsrm.freeThread()` after finishing requests and cleaning up. ZTS neither schedules threads nor allows sharing request zvals or migrating requests across threads.
+
+# [Request and response]($heading.id('request-and-response'))
+
+Use `phpz.globals.sapi().requestInfo()` to set the method, URI, script path, query string, content type and length. String setters **borrow** their input. Keep its storage valid through request shutdown.
+
+Activation resets some fields. Call `setProtocol()` from the activation callback and `setNoHeaders()` there or after request startup.
+
+Use `sapi.addHeader()`, `replaceHeader()`, `deleteHeader()`, `deleteAllHeaders()`, `setResponseCode()`, `sendHeaders()` and `requestTime()` within the request. Header operations copy input bytes and may bail out. `sapi.flush()` calls the SAPI flush hook without draining PHP's output buffers.
+
+`ServerVars.registerVariableSafe()` copies the string and normalizes the name according to PHP rules. `registerVariableEx()` and `registerKnownVariable()` consume the input zval contents without clearing the source. The latter requires a valid name and cannot be used for the cookie array. See its source contract.
+
+# [Additional modules and execution results]($heading.id('module-and-execution'))
+
+`phpz.initModuleEntry()` creates a module entry without exporting a dynamic load symbol. Pass it at PHP module startup to register functions and classes built into the host. Shared extensions use `phpz.module()`.
+
+Use `tryEval()` for code and `tryExecuteScript()` for files. Their exception, bailout and `exit(0)` behavior differs, and shutdown can fail. See [Executing PHP code and scripts]($link.page('reference/runtime/scripts')). The example tests file and `-r` execution, exceptions, fatal errors, exit and shutdown. HTTP backends require separate testing.

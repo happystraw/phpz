@@ -1,0 +1,56 @@
+---
+.title = "Zend and the PHP C API",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/zend",
+.custom = { "section": "Advanced topics" },
+---
+
+`phpz.c` exposes the translated C bindings from the project's headers. `phpz.zend` wraps common Zend structures. Use these when the higher-level interfaces do not expose the operation you need.
+
+# [Wrappers and raw pointers]($heading.id('wrappers-and-raw-pointers'))
+
+```zig
+const raw: *phpz.c.zval = ctx.retval.ptr();
+const wrapped = phpz.Zval.from(raw);
+wrapped.set(.int, 42);
+```
+
+Wrapping and unwrapping allocate nothing and do not increment the reference count. To preserve a value beyond its scope, follow its ownership contract. A pointer to a stack zval alone is insufficient.
+
+# [Engine globals and metadata]($heading.id('engine-globals-and-metadata'))
+
+| Interface | Behavior |
+| --- | --- |
+| `zend.ClassEntry.internal("Exception")` | Resolves the built-in class symbol at compile time and reads its global entry without table lookup or autoloading. |
+| `zend.ClassEntry.find("name")` | Searches `CG(class_table)` in MINIT or a request. Supply a lowercase name without a leading backslash. |
+| `zend.ClassEntry.lookup("Name", autoload)` | Normalizes the name and optionally autoloads. Requires an initialized request and executor. |
+| `globals.compiler().classes()` | Borrows the current thread's compiler class table, including classes registered at MINIT. |
+| `globals.executor().constants()` | Borrows the current thread's global constants table. |
+| `globals.sapiModule()` | Borrows the process-wide SAPI module definition. `globals.sapi()` accesses thread-local SAPI globals. |
+
+Inspect generated declarations with `zend.FunctionEntry.requiredParamCount()`, `fixedParamCount()`, `isVariadic()`, `returnsReference()`, `paramName(index)` and `isParamByReference(index)`. Use `zend.property_name.mangle` / `unmangle` for property names. For `zend.ObjectIterator`, `zend.Resource.Typed` and `zend.Callable.Cache` see [Object iteration]($link.page('reference/types/objects').ref('object-iteration')), [PHP resources]($link.page('reference/types').ref('php-resources')) and [Keeping a callback across calls]($link.page('reference/runtime/calls').ref('retain-callable')).
+
+Respect the lifetime of borrowed pointers and tables. The active class table can differ between MINIT and a request. For cross-request use, resolve a built-in symbol with `ClassEntry.internal` or look up the entry again when needed.
+
+# [Reading the underlying C API]($heading.id('check-source-contracts'))
+
+1. Identify the exact PHP version and build configuration.
+2. Read the signature in the corresponding `Zend/` or `main/` header.
+3. Check the implementation and its callers for borrowing, transfers, exceptions and bailouts.
+4. Check whether phpz already provides a wrapper.
+5. Load the extension into PHP and exercise a minimal call.
+
+Verify C macros, varargs and calling conventions against their definitions. For macros or control flow that need a C boundary, see `build/phpz_wrapper.c` and its header.
+
+# [Common risks]($heading.id('common-risks'))
+
+| Situation | What to check |
+| --- | --- |
+| Returning `zend_object*` | Does the caller own a reference or borrow an object? |
+| Writing a zval | Who destroys the old value? Is a PHP reference wrapper preserved? |
+| Calling userland PHP | Can the call throw or bail out? |
+| Retaining an engine pointer | Can the request, thread or a table mutation invalidate it? |
+| Linking across platforms | Do the PHP ABI, thread safety and debug settings match? |
+
+Use the source for the exact PHP and phpz versions you build against.

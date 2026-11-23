@@ -1,0 +1,68 @@
+---
+.title = "PHPT tests",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/testing",
+.custom = { "section": "Build and test" },
+---
+
+A PHPT file contains PHP code and its expected output. `run-tests.php` executes and compares them. See [Writing Tests](https://php.github.io/php-src/miscellaneous/writing-tests.html) and [Running Tests](https://php.github.io/php-src/miscellaneous/running-tests.html).
+
+# [Minimal test]($heading.id('minimal-test'))
+
+The skeleton's `hello()` function can be tested in `tests/hello.phpt`.
+
+```
+--TEST--
+hello() prints a greeting
+--FILE--
+<?php
+hello();
+?>
+--EXPECT--
+Hello from Zig!
+```
+
+`TEST` describes the case, `FILE` contains the PHP to execute and `EXPECT` gives the expected output. Pass the file to the test runner.
+
+# [Run tests]($heading.id('run-tests'))
+
+From the generated extension project, run:
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+The step copies the bundled `run-tests.php` to the project root, builds and loads the extension, then runs the tests. On Windows add `run-tests` after `zig build` in the PowerShell command from [Building with MSVC on Windows]($link.page('development/windows').ref('windows-msvc')), keeping its target, include and library paths.
+
+Once built, you can rerun a single case:
+
+```sh
+php run-tests.php -q --show-diff -d extension=modules/my_php_extension.so tests/hello.phpt
+```
+
+Use `modules/php_my_php_extension.dll` on Windows. Rebuild after changing Zig code. Regenerate arginfo first with `zig build gen-stub` if the stub changed.
+
+# [Results]($heading.id('results'))
+
+`PASS` indicates a match. For `FAIL`, inspect the terminal diff and the `.out` (actual), `.exp` (expected) and `.diff` files beside the test.
+
+Use `EXPECTF` for variable paths or line numbers, `SKIPIF` for environment-specific skips and `INI` for test-specific configuration. The PHP test documentation describes the syntax.
+
+# [Repository CI]($heading.id('repository-ci'))
+
+The shared-extension workflows configure PHP 8.2–8.6, with separate source trees, build caches and temporary directories for ABI variants.
+
+| Platform | PHP configuration |
+| --- | --- |
+| Linux x86_64 / aarch64 | Release PHP, NTS and ZTS |
+| macOS aarch64 | Release and debug PHP, each in NTS and ZTS builds |
+| Windows x64 | Release PHP, NTS and ZTS |
+
+Each variant checks the runtime and header ABI before running unit tests and PHPTs for both examples. Debug PHP is tested with Zig Debug and ReleaseSafe. Release PHP adds ReleaseFast and, on Unix, ReleaseSmall. PHP debug settings and Zig optimization modes are independent.
+
+The built-in workflow defaults to PHP 8.6 and allows manually selecting 8.2–8.6. It covers NTS/ZTS and release/debug PHP on Linux, Windows and macOS. Experimental SAPI also defaults to 8.6. Both use `windows-2025-vs2026` for PHP 8.6 and `windows-2022` for older versions.
+
+The Windows shared-extension workflow uses `windows-2022` for all versions. Its toolset matches the PHP SDK: VS16 for PHP 8.2/8.3, VS17 for 8.4/8.5 and VS18 for 8.6.
+
+Shared and built-in workflows upload logs, PHPT diffs and summaries from `build/ci-results/`. Consult the corresponding Actions run for pass/fail results. Validate header and ABI changes on newer PHP versions by building and running PHPTs against that target.

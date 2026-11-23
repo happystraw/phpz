@@ -1,0 +1,81 @@
+---
+.title = "INI 配置",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/ini",
+.custom = { "section": "运行时接口" },
+---
+
+# [声明与注册]($heading.id('declaration-and-registration'))
+
+```zig
+const greeting = phpz.ini.string.new(.{
+    .name = "my_php_extension.greeting",
+    .default = "Hello",
+    .access = .all,
+});
+
+const workers = phpz.ini.int.new(.{
+    .name = "my_php_extension.workers",
+    .default = 4,
+    .access = .all,
+});
+
+const debug = phpz.ini.boolean.new(.{
+    .name = "my_php_extension.debug",
+    .default = false,
+    .access = .all,
+});
+```
+
+将定义加入 `phpz.module` 的 `.ini = &.{ greeting, workers, debug }`，phpz 在模块启动时注册、关闭时注销。
+
+# [读取]($heading.id('read-values'))
+
+在处理器中使用：
+
+```zig
+ctx.ret(.string, try greeting.get());
+```
+
+字符串结果借用当前配置数据，不应在配置改变后继续使用该指针。需要长时间保存时复制数据。
+
+| access | 含义 |
+| --- | --- |
+| `.system` | 系统级配置 |
+| `.user` | 用户级配置，可在脚本中用 `ini_set()` 修改 |
+| `.perdir` | 目录级配置，可在 `php.ini` 或相应 SAPI 的目录配置中设置 |
+| `.all` | 允许各级配置 |
+
+`php -d`、php.ini 与 `ini_set()` 的适用范围由 PHP INI 访问级别控制。
+
+# [自定义类型与绑定]($heading.id('custom-types-and-bindings'))
+
+`phpz.ini.Typed(T).new` 接受 `parse`、`format` 和 `default_text`，可把字符串配置转换为 Zig 枚举。`.bind = Globals.iniField("mode")` 将结果绑定到模块全局变量中的对应字段。
+
+使用 `get()` 读取绑定字段可适配当前线程。配置解析失败时应返回错误，不要保留部分更新的业务状态。
+
+# [自定义 phpinfo 显示]($heading.id('phpinfo-displayers'))
+
+标量 INI 和 `Typed` 配置都接受 `.displayer`。使用 `phpz.ini.displayer(callback)` 把回调转换成 Zend 的 displayer：
+
+```zig
+fn displayDebug(entry: *phpz.c.zend_ini_entry, kind: phpz.ini.DisplayType) void {
+    const modified = if (comptime @TypeOf(entry.modified) == bool) entry.modified else entry.modified != 0;
+    const value = if (kind == .original and modified) entry.orig_value else entry.value;
+    const text = if (value) |str| phpz.zend.String.from(str).slice() else "";
+    const label: [:0]const u8 = if (phpz.ini.parseBool(text)) "on" else "off";
+    _ = phpz.printf("%s", .{label.ptr});
+}
+
+const debug = phpz.ini.boolean.new(.{
+    .name = "my_php_extension.debug",
+    .default = false,
+    .access = .all,
+    .displayer = phpz.ini.displayer(displayDebug),
+});
+```
+
+回调接收当前 INI 条目和 `DisplayType`：`.active` 表示当前生效值，`.original` 表示原始值。`.original` 时通常读取 `orig_value`，并在 `modified` 为真时区分是否被修改；`modified` 在 PHP 8.6 前后可能是 `bool` 或整数，编写兼容代码时应按实际头文件判断。
+
+displayer 通过 `phpz.printf` 直接写入 phpinfo 输出，不会自动进行 HTML 转义。只输出固定标签或已转义文本，避免把用户可控值直接拼入 HTML。模块提供自定义 `info_fn` 时，在其中调用 [phpz.info.ini(module)]($link.page('reference/runtime/output').ref('extension-information')) 即可列出模块的 INI 条目。模块声明了版本号并使用 PHP 的默认信息输出时，PHP 会自行列出这些条目。

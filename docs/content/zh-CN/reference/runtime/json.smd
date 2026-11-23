@@ -1,0 +1,42 @@
+---
+.title = "JSON 与 PHP 序列化",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/json",
+.custom = { "section": "运行时接口" },
+---
+
+跨语言交换数据时使用 JSON；需要保留 PHP 值之间的引用关系，或调用对象的 `__serialize()` / `__unserialize()` 方法时，使用 PHP 原生序列化格式。
+
+# [JSON 编解码]($heading.id('encode'))
+
+```zig
+pub fn encodeJson(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.json.encode(value, .{ .flags = .{ .unescaped_unicode = true } });
+}
+
+pub fn decodeJson(ctx: phpz.Ctx, input: []const u8) !void {
+    try phpz.json.decode(ctx.retval, input, .{ .flags = .{ .object_as_array = true } });
+}
+```
+
+默认情况下，JSON 对象解码为 `stdClass`；示例使用 `object_as_array` 将其解码为 PHP 数组。非法 JSON 返回 `error.JsonDecodeFailed`。处理外部输入时应限制输入长度和嵌套深度（`depth` 默认 512）。
+
+# [PHP 序列化与反序列化]($heading.id('serialize'))
+
+```zig
+pub fn serializeValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.serialization.serialize(value);
+}
+
+pub fn restoreValue(ctx: phpz.Ctx, input: []const u8) !void {
+    try phpz.serialization.unserialize(ctx.retval, input, .{
+        .allowed_classes = .none,
+        .max_depth = 128,
+    });
+}
+```
+
+**不要反序列化不可信输入。** `allowed_classes = .none` 禁止还原原始类，但不是安全校验。与 JSON 解码不同，格式错误通常会将 `false` 写入结果，并可能触发 PHP 警告；`false` 本身也是合法的序列化值。
+
+这两组接口都在 PHP 请求中使用。编码和序列化借用输入，返回新字符串；示例直接把所有权交给 PHP，自行持有时则须调用 `release()`。解码和反序列化直接写入 `ctx.retval`；若改用本地 zval，调用前须初始化为未定义或 `null`，用完后释放。对象钩子抛出的 PHP 异常会保留，Zig 调用返回 `error.PhpException`。

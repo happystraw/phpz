@@ -1,0 +1,149 @@
+---
+.title = "对象",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/objects",
+.custom = { "section": "类型与值" },
+---
+
+phpz 提供两层对象包装：
+
+- `phpz.zend.Object` 包装底层 `zend_object *`，用于属性访问、方法调用和对象判断。
+- `phpz.Zval.Object` 包装持有对象的 zval，可通过 `zval.object()` 获取，再调用 `.zendObject()` 取得底层对象指针。
+
+`ctx.call.this()` 返回当前对象的 `?*zend.Object`；`ctx.call.thisValue()` 返回 `?*Zval.Object`。当前调用没有 `$this` 时返回 `null`，使用前应解包。函数参数和属性读取结果通常是借用值。
+
+# [读取属性]($heading.id('read-properties'))
+
+```zig
+const object = ctx.call.this() orelse return;
+
+var scratch = phpz.Zval.raw.undef;
+defer phpz.Zval.raw.release(&scratch);
+
+const name = try object.property("name", false, &scratch);
+ctx.ret(.string, try name.as(.string));
+```
+
+`property()` 返回的指针可能借用对象自身，也可能指向调用者提供的 `scratch`。属性读取可能触发 `__get`、可见性检查和 PHP 异常；如果结果需要长期保存，先复制或增加引用，并在释放对象和临时 zval 之前完成。
+
+# [写入与检查属性]($heading.id('write-and-check-properties'))
+
+```zig
+try object.setProperty(.string, "name", "phpz");
+try object.unsetProperty("name");
+const exists = try object.hasProperty("name", .exists);
+```
+
+| 操作 | 含义 |
+| --- | --- |
+| `property(name, silent, scratch)` | 通过对象处理器读取属性 |
+| `propertyStr(name, silent, scratch)` / `setPropertyStr(kind, name, value)` | 用借用的 `*zend.String` 属性名读取或写入 |
+| `readProperty(name, mode, scratch)` / `writeProperty(name, value)` | 在当前 PHP 作用域直接调用属性处理器，返回原始借用 zval；有对应 Str 变体 |
+| `readStdProperty(...)` | 绕过自定义处理器，使用标准属性读取 |
+| `setProperty(kind, name, value)` | 通过对象处理器写入属性 |
+| `hasProperty(name, check)` / `hasStdProperty(...)` | `.isset` 对应 `isset`，`.not_empty` 对应 `!empty`，`.exists` 对应 `property_exists` |
+| `unsetProperty(name)` / `unsetStdProperty(name)` | 删除属性 |
+
+两层对象包装的写入接口有不同的所有权约定：
+
+| 接口 | 输入值的所有权 |
+| --- | --- |
+| `zend.Object.setProperty(...)` | 借用输入。成功或返回 PHP 异常时，调用者仍拥有原有引用；属性处理器保留所需的引用 |
+| `Zval.Object.set(.mixed, key, value)` | 借用已解引用的 zval，调用者仍拥有原值 |
+| `Zval.Object.set(.array/.object/.resource, key, value)` | 消耗一份引用（不可变数组不增加计数）；原生辅助函数在属性处理器返回后释放该引用，即使此时有待处理的 PHP 异常 |
+| 两个接口的标量和 `.string` 写入 | 复制值或字节内容 |
+
+因此，借用对象传给 `setProperty(.object, ...)` 时不需要额外 `addref`；传给 `Zval.Object.set(.object, ...)` 时需要先增加一份引用。若输入本来由调用者拥有，使用前者后仍应释放该引用，使用后者后不能再释放已消耗的引用。写入不可变数组时不要 `addref`，也不要在写入后假设数组有可修改的引用计数。
+
+两个接口都不接受 `.reference`，`.mixed` 输入也不能包含引用包装；应先用 `reference.val()` 取得被引用的值。写入可能触发用户代码、类型检查和 PHP 异常，异常通过 `error.PhpException` 返回。原生 bailout 可能跳过上述临时引用清理，处理方式见 [Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+`property` / `setProperty` 使用对象类的作用域；`readProperty` / `writeProperty` 保留当前 PHP 作用域，访问非 public 属性时两者的行为可能不同。底层写入也借用已解引用的输入；`writeProperty` 返回可空的借用指针，可能与输入重合。
+
+# [属性视图与下标访问]($heading.id('property-views-and-dimensions'))
+
+`properties()` 通过对象处理器取得借用的属性表，不能释放；`stdProperties()` 则走标准处理器。`propertiesFor(purpose)` 按 `.debug`、`.array_cast`、`.serialize`、`.var_export` 或 `.json` 取得只读视图，必须用 `Object.releaseProperties(view)` 配对释放，不能当作普通数组直接修改。
+
+以下完整处理器统计用于数组转换的属性数量：
+
+```zig
+/// PHP: function propertyCount(object $object): int
+pub fn propertyCount(object: *phpz.zend.Object) !usize {
+    const view = try object.propertiesFor(.array_cast);
+    defer phpz.zend.Object.releaseProperties(view);
+    return if (view) |properties| properties.len() else 0;
+}
+```
+
+对象下标操作通过 dimension 处理器分派，可触发 `ArrayAccess` 用户代码：
+
+| 接口 | 行为 |
+| --- | --- |
+| `readDimension(offset, mode, scratch)` | 读取下标；结果借用对象或指向 scratch |
+| `writeDimension(offset, value)` | 借用下标和已解引用的值，`offset = null` 表示追加 |
+| `hasDimension(offset, check)` | `.isset` 检查 `isset`，`.not_empty` 检查 `!empty` |
+| `unsetDimension(offset)` | 删除下标 |
+
+读取前把 scratch 初始化为 `IS_UNDEF`，完成或发生 PHP 异常时释放 scratch；不要直接释放借用的返回指针。所有这些操作都可能调用用户代码并返回 `error.PhpException`。
+
+# [创建与构造]($heading.id('creation-and-construction'))
+
+- `zend.Object.init(ce)`：通过 `object_init_ex` 创建实例，不调用 PHP 构造器。
+- `zend.Object.new(ce, params, named_params)`：创建实例并调用构造器。
+- `zend.Object.tryNew(...)`：与 `new` 相同，但把 Zend bailout 转为 `error.ZendBailout`。
+- `zend.Object.std()`：创建 `stdClass`。
+- `Zval.Object.initWithProperties(zv, ce, properties)`：不调用构造器，用属性表初始化对象；`properties` 借用，整数键转为字符串属性名。
+- `Zval.Object.stdWithProperties(zv, properties)`：用属性表创建 `stdClass`，等价于 PHP 的 `(object)$array`。
+- `clone()`：遵循对象的克隆处理器。
+
+这些操作成功后返回拥有的对象引用。可以 `release()`，或通过 `ctx.ret(.object, object)` 转移给 PHP 返回值。创建和构造可能触发 Zend bailout，相关边界见 [Bailout 与清理边界]($link.page('advanced/bailout'))。
+
+`initWithProperties` 要求目标类没有 `create_object` 处理器且没有声明属性，否则返回 `error.UnsupportedClass` 且不修改 `zv`；抽象类或接口等被 Zend 拒绝时返回 `PhpException` 或 `UnwindExit`。属性直接写入属性表，不经过 `write_property`、`__set` 或动态属性弃用检查。成功时调用者拥有 `zv` 中的对象；`properties` 仍由调用者持有，对象与属性表通过写时复制共享。
+
+# [对象操作]($heading.id('object-operations'))
+
+```zig
+const class = object.class();
+const is_user = object.instanceof(user_class);
+
+try object.call("methodname", null, .{arg1, arg2}, null);
+try object.tryCall("methodname", null, .{}, null);
+```
+
+`call` / `tryCall` 的方法名必须使用 PHP 存储的小写形式。`class()` 和 `instanceof()` 返回/使用借用指针；对象方法调用可能抛出 `error.PhpException`。
+
+`callIfExists` / `tryCallIfExists` 在方法不存在时返回 `error.MethodCallFailed`；其他调用规则与 `call` / `tryCall` 相同。`retval` 可传 null 丢弃结果；传入时结果由调用者拥有，接口不释放其旧内容。方法不存在时，传入的 `retval` 会被设为 `undef`。丢弃结果可能在销毁临时值时执行 PHP 析构器。
+
+类注册与 Zig 实例数据 是另一层职责，见[类、属性与方法]($link.page('reference/registration/classes'))。
+
+# [遍历 Traversable 对象]($heading.id('object-iteration'))
+
+`zend.ObjectIterator` 调用对象的 `get_iterator`，适用于 `Iterator`、`IteratorAggregate`、`Generator` 和其他内部可遍历对象。`init(object, by_ref)` 取得迭代器并执行 rewind；调用者拥有迭代器，结束时必须 `release()`。对象不是 Traversable 时设置 PHP `TypeError` 并返回 `PhpException`。
+
+```zig
+const iterator = try phpz.zend.ObjectIterator.init(object, false);
+defer iterator.release();
+
+while (try iterator.valid()) {
+    const value = try iterator.current() orelse break; // 借用，可能保留引用包装
+    var key = try iterator.key(); // 拥有，需要释放或转移
+    defer phpz.Zval.raw.release(&key);
+    _ = value;
+    _ = key;
+    try iterator.advance();
+}
+```
+
+`current()` 返回借用的 `?*c.zval`，`key()` 返回拥有的 zval（没有 key 回调时使用递增整数键）。`key()` 或 `valid()` 可能调用用户代码并产生异常；回调失败时 `current()` 的借用值可能失效，需要保留时先复制。`advance()` 使当前借用值失效。`by_ref = true` 请求按引用遍历，Zend 会检查对象是否支持；不支持时按引擎规则报错。`release()` 可能留下待处理异常，bailout 则直接传播。
+
+# [属性名编解码]($heading.id('property-names'))
+
+`PropertyInfo.rawName()` 返回包含 private / protected 作用域前缀的原始 `*zend.String`；`name()` 返回去掉前缀的借用切片。需要自己处理属性键时使用 `zend.property_name`：
+
+| 接口 | 行为 |
+| --- | --- |
+| `mangle(Unmangled{ .name, .scope }, persistent)` | 按 Zend 规则编码属性名；返回调用者拥有的字符串 |
+| `unmangle(raw)` | 解码为 `.name` 和 `.scope`（`.public` / `.protected` / `.private`） |
+| `unmangleName(raw)` | 只返回解码后的名称，失败返回 null |
+
+作用域为 private 时，名称是声明类名；匿名类名可能包含内嵌 NUL。格式错误的属性名会让 Zend 发出 notice 并返回 null，二者都借用输入字符串，输入必须保持存活。`PropertyInfo.name()` 依赖合法的属性元数据。

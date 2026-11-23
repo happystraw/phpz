@@ -1,0 +1,83 @@
+---
+.title = "Object lifetime and garbage collection",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/objects",
+.custom = { "section": "Advanced topics" },
+---
+
+When a Zig struct with fields backs a PHP object, phpz connects its creation, destruction, cloning and GC callbacks. PHP properties and Zig instance fields have separate lifetimes.
+
+# [Initialization and destruction]($heading.id('initialization-and-destruction'))
+
+- `.init` runs during object creation, before the PHP constructor.
+- Initialization defaults to `.default` when every field has a default, and to `.none` otherwise.
+- A constructor returning `T` replaces the instance data. phpz releases any previous initialized value with `.deinit`.
+- `.deinit` runs only for initialized data and must release the resources it owns.
+
+The Zig `.deinit` callback runs when phpz replaces initialized data or frees object storage. PHP's `__destruct` is a separate method.
+
+If `.init` fails, or cloning fails because the source is uninitialized or `.clone` returns an error, phpz marks the failed object so PHP skips `__destruct`. If initialization fails, `new` also skips `__construct` and leaves the exception pending. On release, phpz clears the instance data before calling `.deinit`. Reentering a method requiring `self` then reports `object has no initialized backing`.
+
+A class with Zig instance data cannot extend a parent that allocates its own objects, such as `Exception`, `ArrayObject` or another backed class. Zend preserves the parent's `create_object` and its methods expect the parent's memory layout. Debug builds reject registration with `error.UnsupportedParent`. Use `T = void` and store subclass state in PHP properties.
+
+# [Cloning]($heading.id('cloning'))
+
+By default, cloning a backed object raises a PHP `Error`. Supply `.clone` to support it. For scalar-only fields a value copy suffices.
+
+```php
+class Point {
+    public function x(): int {}
+}
+```
+
+```zig
+const Point = struct {
+    x_value: i64 = 1,
+
+    fn clone(self: *const Point) Point {
+        return self.*;
+    }
+
+    pub fn x(self: *const Point, ctx: phpz.Ctx) void {
+        ctx.ret(.int, self.x_value);
+    }
+};
+const PointClass = phpz.Class("Point", Point, .{ .clone = Point.clone });
+```
+
+After registering `PointClass` in `module.classes`, `(clone new Point())->x()` returns `1`. phpz copies PHP properties and invokes the applicable PHP `__clone` method. Your `.clone` copies Zig instance data. Retain additional references to owned PHP values and duplicate native resources or establish shared ownership before copying their pointers.
+
+Alternatively, implement `.handlers.clone_obj` and manage layout and ownership yourself. It conflicts with `.clone`.
+
+# [Report PHP references]($heading.id('report-php-references'))
+
+Declare and register the class in the stub file and module. The relevant fields and callbacks are:
+
+```zig
+const Holder = struct {
+    held: phpz.c.zval = phpz.Zval.raw.undef,
+
+    fn deinit(self: *Holder) void {
+        phpz.Zval.raw.release(&self.held);
+    }
+
+    fn gc(self: *Holder, buffer: *phpz.GcBuffer) void {
+        buffer.add(.from(&self.held));
+    }
+};
+const HolderClass = phpz.Class("Holder", Holder, .{
+    .deinit = Holder.deinit,
+    .gc = Holder.gc,
+});
+```
+
+Use `Zval.raw.copy` to retain an input. The `.gc` hook reports references from Zig data that can form cycles. Standard PHP properties are included automatically. Use `buffer.addCallable` for a stored `zend.Callable`.
+
+Only report existing references in a GC callback. Do not mutate the object, execute PHP or retain the borrowed `GcBuffer`. Before invoking `.gc`, phpz collects zval roots from the existing property table and returns that table without materializing or copying properties. Missing edges can prevent the cycle collector from reaching destruction even when `.deinit` releases everything correctly.
+
+# [Serialization]($heading.id('serialization'))
+
+Serialization is disabled for backed classes unless they bind both `__serialize` and `__unserialize` locally. Supplying only one fails at compile time. Inherited hooks alone do not enable serialization for a new backed class.
+
+PHP skips the constructor during unserialization. Initialize Zig data using defaults or `.init` before `__unserialize`, and validate the input instead of treating arbitrary serialized bytes as object memory. See [JSON and PHP serialization]($link.page('reference/runtime/json')) for calling PHP's native serialization API.

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="$site.localeCode()">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title><ctx :text="$page.title"></ctx> · phpz</title>
+        <script src="$site.asset('phpz/site.js').link()"></script>
+        <link rel="stylesheet" href="$site.asset('phpz/style.css').link()">
+    </head>
+    <body>
+        <a class="skip-link" href="#content" :text="$i18n.get('skip')"></a>
+        <header class="site-header">
+            <div class="header-inner">
+                <a class="brand" href="$site.index().link()">
+                    <img class="brand-mark" src="$site.asset('phpz/wordmark.svg').link()" alt="phpz" width="77" height="26">
+                </a>
+                <nav class="top-nav" aria-label="$i18n.get('top_nav')">
+                    <a class="guide-link" href="$site.index().link()" :text="$i18n.get('docs')"></a>
+                    <a class="api-link" href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
+                </nav>
+                <div class="header-tools">
+                    <button class="search-open" type="button" aria-haspopup="dialog" aria-controls="docs-search" aria-label="$i18n.get('search')" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="m15 15 6 6"></path></svg>
+                        <span class="search-label"><ctx :text="$i18n.get('search')"></ctx>…</span><kbd aria-hidden="true">Ctrl K</kbd>
+                    </button>
+                    <a class="github-link" href="https://github.com/happystraw/phpz" aria-label="GitHub" title="GitHub">
+                        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"/></svg>
+                    </a>
+                    <details class="language-switch">
+                        <summary aria-label="$i18n.get('choose_language')" title="$i18n.get('choose_language')">
+                            <svg class="language-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8l6 6m-7 0l6-6l2-3M2 5h12M7 2h1m14 20l-5-10l-5 10m2-4h6"></path></svg>
+                        </summary>
+                        <ul class="language-menu">
+                            <ctx :loop="$page.locales()">
+                                <li><a href="$loop.it.link()" lang="$loop.it.site().localeCode()" hreflang="$loop.it.site().localeCode()" aria-current="$loop.it.isCurrent().then('true')" :text="$loop.it.site().localeName()"></a></li>
+                            </ctx>
+                        </ul>
+                    </details>
+                    <button class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="$i18n.get('dark_theme')" data-dark-label="$i18n.get('dark_theme')" data-light-label="$i18n.get('light_theme')" hidden>
+                        <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
+                        <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9a9 9 0 1 1-9-9"></path></svg>
+                    </button>
+                    <details class="mobile-nav">
+                        <summary aria-label="$i18n.get('top_nav')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </summary>
+                        <nav aria-label="$i18n.get('top_nav')">
+                            <a class="guide-link" href="$site.index().link()" :text="$i18n.get('docs')"></a>
+                            <a class="api-link" href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
+                        </nav>
+                    </details>
+                </div>
+            </div>
+        </header>
+        <dialog id="docs-search" aria-label="$i18n.get('search')" data-error="$i18n.get('search_error')" data-empty="$i18n.get('search_empty')" data-loading="$i18n.get('search_loading')">
+            <div class="search-field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="m15 15 6 6"></path></svg>
+                <input id="search-query" type="search" aria-label="$i18n.get('search')" placeholder="$i18n.get('search')" autocomplete="off" autocapitalize="off" enterkeyhint="search" autofocus>
+                <form method="dialog">
+                    <button class="search-close" type="submit" aria-label="$i18n.get('close')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+                    </button>
+                </form>
+            </div>
+            <div id="search-results" aria-live="polite"></div>
+        </dialog>
+        <div class="shell">
+            <aside class="sidebar" aria-label="$i18n.get('chapters')">
+                <details>
+                    <summary>
+                        <span :text="$i18n.get('chapters')"></span>
+                        <span class="chapter-current" :text="$page.title"></span>
+                    </summary>
+                    <nav id="chapters"><super></nav>
+                </details>
+            </aside>
+            <main id="content" tabindex="-1" data-pagefind-body>
+                <super>
+            </main>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,54 @@
+---
+.title = "Executing PHP code and scripts",
+.date = .date("2026-10-07T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/scripts",
+.custom = { "section": "Runtime APIs" },
+---
+
+These APIs execute code **inside an active PHP request**. Extension handlers can call them directly. A standalone host must manage the engine and request lifecycle as described in [Custom SAPI (experimental)]($link.page('advanced/sapi')).
+
+# [Evaluating PHP code]($heading.id('eval'))
+
+| API | Behavior |
+| --- | --- |
+| `phpz.eval(code, retval, name)` | Executes code without `<?php`. Returns `CodeExecutionFailed`, `PhpException` or `UnwindExit` on failure. Bailouts propagate |
+| `phpz.tryEval(code, retval, name)` | Same execution rules, also catches an escaping bailout as `ZendBailout` |
+
+Pass `retval = null` to execute statements. With a destination zval, PHP wraps the code as `return <code>;`, so pass an expression. `name` is a NUL-terminated diagnostic name.
+
+This complete handler implements `function answer(): int`:
+
+```zig
+pub fn answer(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    try phpz.tryEval("6 * 7", ctx.retval, "my_php_extension answer");
+}
+```
+
+Ordinary PHP exceptions remain pending and return `PhpException`. An internal exit from `exit`, `die` or deferred OOM can return `UnwindExit` and also stays pending. A handler can propagate these with `try`. Standalone hosts must handle or report ordinary exceptions before ending the request. Reporting may call user code and needs its own bailout boundary.
+
+# [Execute script]($heading.id('execute-script'))
+
+`phpz.executeScript(file)` invokes the PHP script executor. `phpz.tryExecuteScript(file)` adds a bailout boundary. The executor reports script exceptions. Failures caught internally map to `ScriptExecutionFailed`. Escaping bailouts caught by the wrapper map to `ZendBailout`.
+
+This function assumes a host with an active request. Its caller owns request shutdown and the final exit status check:
+
+```zig
+fn runFile(path: [:0]const u8) !void {
+    const file = try phpz.zend.bailout.run(phpz.zend.FileHandle.init, .{path});
+    defer file.deinit();
+    file.setPrimaryScript(true);
+    try phpz.tryExecuteScript(file);
+}
+```
+
+`FileHandle.init()` copies the filename with the PHP allocator and defers opening the file. Initialization itself can bail out. Call `deinit()` on an owned file handle and release temporary expression results before request shutdown.
+
+# [Exit and shutdown]($heading.id('exit-and-shutdown'))
+
+A `try` variant catches bailouts only within that operation. It cannot run skipped Zig `defer` blocks or protect later cleanup and exception reporting. After `ZendBailout` or `UnwindExit`, finish native cleanup and shut down the request.
+
+`phpz.exception.takeUnwindExit()` consumes only a pending internal exit and returns `?exception.ExitStatus`. The signal may come from `exit`, `die` or deferred OOM. Consuming it does not restore the request. `.ok` means zero. Other status values are preserved and ordinary exceptions remain pending. Shut down the request and inspect the final status. The script executor can report failure even for `exit(0)`. `ScriptExecutionFailed` alone cannot identify a fatal error, and status zero alone cannot rule one out. Shutdown functions may also change the status.
+
+Manage processes and requests separately from these execution APIs.

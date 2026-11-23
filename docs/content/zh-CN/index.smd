@@ -1,0 +1,34 @@
+---
+.title = "phpz 简介",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "index",
+.custom = { "section": "入门" },
+---
+
+phpz 是用 Zig 开发 PHP 原生扩展的框架。你在 PHP 声明文件（`.stub.php`）中定义 PHP 可见的接口，在 Zig 中实现函数和方法。phpz 在编译期生成 Zend 引擎所需的调用入口，把实现编译成 PHP 可以加载的原生模块。
+
+# [用 Zig 实现一个 PHP 函数]($heading.id('function-example'))
+
+以统计字节数的 `byteCount` 为例。在扩展的 `.stub.php` 中声明 PHP 签名。
+
+```php
+function byteCount(string $value): int {}
+```
+
+在扩展的 Zig 函数实现容器中实现同名函数。
+
+```zig
+pub fn byteCount(value: []const u8) usize {
+    return value.len;
+}
+```
+
+加载扩展后，在 PHP 中调用 `byteCount("Zig")` 会得到 `3`。phpz 把 PHP 字符串作为字节切片传给 Zig，再把切片长度作为 PHP 整数返回。
+
+# [适合谁使用]($heading.id('audience'))
+
+- **C 扩展开发者**：可以继续使用熟悉的 Zend API 和模块、请求生命周期钩子。常规参数由 phpz 按 Zig 签名解析，需要访问原始 PHP 值时可以直接操作 `zval`。
+- **Zig 开发者**：可以把已有 Zig 库的函数导出给 PHP，也可以把有状态的类型封装成 PHP 类。要复用 C 库，可以在扩展中链接它，再用 Zig 为它编写 PHP 接口。
+
+从[环境要求与安装]($link.page('getting-started/installation'))开始，准备好 Zig 工具链和 PHP 开发环境。

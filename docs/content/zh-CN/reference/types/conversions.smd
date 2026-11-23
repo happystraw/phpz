@@ -1,0 +1,56 @@
+---
+.title = "类型转换",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/conversions",
+.custom = { "section": "类型与值" },
+---
+
+phpz 提供三种相关操作：
+
+- `as(kind)`：只检查当前 zval 类型并读取，不执行 PHP 转换。
+- `cast(kind)`：按 PHP 显式转换规则返回结果，不改变源 zval。
+- `convert(kind)`：按 PHP 显式转换规则原地替换当前 zval。
+
+`cast` / `convert` 都支持 `.int`、`.float`、`.bool`、`.str`、`.array` 和 `.object`。字符串转换中，`cast(.str)` 返回拥有的 Zend 字符串；`convert(.str)` 返回借用的 Zend 字符串，`convert(.string)` 返回借用的字节切片。`cast` 不支持 `.string`。
+
+| 操作 | 是否改变源 zval | 结果所有权 |
+| --- | --- | --- |
+| `as(kind)` | 否，只检查类型 | 标量复制；切片和包装为借用 |
+| `cast(kind)` | 否 | `.str` / `.array` / `.object` 结果由调用者拥有 |
+| `convert(kind)` | 是 | 从转换后的 zval 借用 |
+
+# [保留源值]($heading.id('preserve-source'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .mixed = .{} }}, {});
+const text = try args[0].cast(.str);
+defer text.release();
+ctx.ret(.string, text.slice());
+```
+
+`cast(.str)` 返回 `*zend.String`，可通过 `slice()` 借用其字节。转换得到的字符串、数组和对象需要释放或转移；标量结果没有这个要求。`cast` 保留源 zval，但不代表深复制，数组和对象可能共享底层数据。
+
+# [原地转换]($heading.id('convert-in-place'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .mixed = .{} }}, {});
+phpz.Zval.raw.copy(ctx.retval.ptr(), args[0].ptr());
+_ = try ctx.retval.convert(.int);
+```
+
+先把输入复制到 `ctx.retval` 指向的 zval，再原地转换这个副本。`convert` 会解开引用包装，其他引用所有者保留原值。转换后的切片或对象指针随该 zval 的内容再次变化或释放而失效。
+
+`convert` 失败时源 zval 可能已经改变；`cast` 失败时源 zval 不变。两者都可能触发对象处理器和 PHP 异常。不要对 `undef`、`indirect` 等内部状态直接套用 PHP 值转换。
+
+# [目标类型]($heading.id('target-types'))
+
+| 目标 | `cast` 结果 | `convert` 结果 |
+| --- | --- | --- |
+| `.int` | `i64` | `i64` |
+| `.float` | `f64` | `f64` |
+| `.bool` | `bool` | `bool` |
+| `.str` | `*zend.String`，调用者拥有 | `*zend.String`，借用 |
+| `.string` | 不支持 | `[]const u8`，借用 |
+| `.array` | `*zend.Array`，调用者拥有 | `*zend.Array`，借用 |
+| `.object` | `*zend.Object`，调用者拥有 | `*zend.Object`，借用 |

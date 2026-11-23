@@ -1,0 +1,47 @@
+---
+.title = "How phpz works",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/how-it-works",
+.custom = { "section": "Getting started" },
+---
+
+phpz compiles Zig code into a shared extension that PHP can load. Consider `greet("World")`. A PHP stub declares its signature, phpz binds the declaration to a Zig implementation at compile time, and PHP calls the resulting handler at runtime.
+
+![](/phpz/how-it-works.svg "gen_stub.php generates arginfo from the PHP stub. Zig compiles and links the translated C bindings and Zig implementation into a shared extension. PHP loads the extension, registers its declarations during MINIT and calls the Zig implementation through a phpz wrapper.")
+
+# [Generating API metadata from the stub]($heading.id('build-api-metadata'))
+
+Declare `function greet(string $name): string {}` in the `.stub.php` file. When you run `zig build gen-stub`, `gen_stub.php` reads the declaration and generates `_arginfo.h`.
+
+| Generated item | Purpose |
+| --- | --- |
+| `arginfo_greet` | Describes parameter names, types and the return type for PHP argument handling and reflection |
+| `ext_functions` | Maps the PHP name `greet` to the handler `zif_greet` and its `arginfo_greet` metadata |
+| Registration functions | Register any classes or module symbols declared in the stub |
+
+**After changing the PHP API, run `zig build gen-stub` before `zig build`.** A regular build reads the existing header and checks by default that it matches the stub. Changes confined to a Zig function body need only a regular build. See [Update workflow]($link.page('reference/registration/stub').ref('update-workflow')).
+
+# [Binding declarations to the Zig implementation]($heading.id('compile-zig-implementation'))
+
+The extension's C header includes `phpz.h` and the generated `_arginfo.h`. The build script calls `Phpz.init()` to translate these C declarations into Zig bindings using `translate-c`. phpz then matches the implementations to their declarations at compile time.
+
+| Zig declaration | Build result |
+| --- | --- |
+| `phpz.functions(functions, .{})` | Checks the Zend function table and exports PHP-callable wrappers, including `zif_greet` for `functions.greet` |
+| `phpz.Class("Counter", Counter, .{})` | Binds the class and its methods and exports `zim_*` method wrappers |
+| `phpz.module(...)` | Creates the module entry and exports `get_module()` for the shared extension |
+
+For typed handlers, phpz checks parameter counts, variadic flags and by-reference flags at compile time. It parses the supplied values at runtime. See [Handler signatures]($link.page('reference/registration/functions').ref('handler-signatures')) for the binding rules. The build script calls `addExtension()` to compile and link the shared extension.
+
+# [Loading the module and calling a handler]($heading.id('runtime-loading-and-calls'))
+
+When loading the library, PHP calls `get_module()` to retrieve the module entry and install its function table. During module initialization (MINIT), phpz registers the declared symbols, INI entries, resource types, classes and observers, then runs the configured `module_startup_fn`. See [Registration order]($link.page('reference/registration/module').ref('registration-order')) for dependency ordering and temporary modules.
+
+When PHP executes `greet("World")`, it looks up `zif_greet` in the function table.
+
+1. The wrapper parses the argument according to the Zig signature and passes `"World"` to `functions.greet(name)` as a `[]const u8`.
+2. The Zig function returns a Zend string containing `Hello, World!`.
+3. The wrapper stores that string in the PHP return value. The caller receives a PHP string.
+
+Instance methods follow the same path. For a class with per-object Zig data, the wrapper also retrieves that instance and passes it as `self`.

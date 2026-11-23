@@ -1,0 +1,44 @@
+---
+.title = "Native PHP closures",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/closures",
+.custom = { "section": "Runtime APIs" },
+---
+
+Closure handlers follow the rules in [Argument parsing and return values]($link.page('reference/registration/arguments')).
+
+# [Creating a closure from a Zig function]($heading.id('create-from-zig-function'))
+
+```zig
+fn sum(a: i64, b: i64) i64 {
+    return a +| b;
+}
+
+pub fn makeSumClosure(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    phpz.closure.createFromFn(sum, ctx.retval);
+}
+```
+
+Declare `function makeSumClosure(): \Closure` in the stub. PHP can store the result and call it as `$sum(1, 2)`.
+
+`createFromFn` accepts typed signatures with an optional leading `Ctx` or `GuardCtx`. Its PHP closure declares by-value variadic arguments and no explicit return type. The handler checks arguments at invocation. Reflection sees the generic PHP declaration. The destination zval must be `undef` or `null`.
+
+A handler can return `*phpz.zend.Reference` and PHP receives the referenced value. The generic `createFromFn` arginfo declares by-value variadic arguments, so reflection reports no by-reference return. For a real by-reference function, declare `function &name()` in the stub and return `*zend.Reference`. See [PHP references]($link.page('reference/types/references')) for creation and ownership. PHP 8.6 converts generic arginfo to runtime format at module startup.
+
+A trailing `phpz.Variadic` collects positional and extra named arguments. Use `check()` to restrict their source and `Entry.expect()` to validate elements. Generic closures skip the Debug declaration-count assertion but validate actual arguments. Closures from registered functions or methods retain their original arginfo and run the assertion.
+
+# [Creating a closure from function metadata]($heading.id('use-function-metadata'))
+
+`zend.Function.createClosure(destination, options)` creates a closure from a registered function or method, preserving its signature and static variables. For instance methods pass `.object`. Initialize the destination to `undef` or `null` and keep the function metadata valid for the closure's lifetime.
+
+For stateful closures, store state in a Zig-backed PHP object implementing `__invoke` and bind that method as the closure. See the `makeCounter` example.
+
+# [Lifecycle]($heading.id('lifecycle'))
+
+`createFromFn` cannot capture Zig locals. If the state object holds PHP values, copy and release them and report them to the GC. The `makeReference` example shows how to retain and return a reference.
+
+`createFromHandler` accepts a native handler that must outlive the closure. Closure creation can bail out. See [Bailouts and cleanup]($link.page('advanced/bailout')).
+
+See [Lifetime boundaries]($link.page('reference/types/ownership').ref('lifetime-boundaries')) for cleanup responsibilities across calls, requests, objects and module globals.

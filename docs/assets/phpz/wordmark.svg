@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 101 34">
+  <style>
+    .letters { fill: #242429 }
+    @media (prefers-color-scheme: dark) {
+      .letters { fill: #fffff5 }
+    }
+  </style>
+  <g class="letters" fill-rule="evenodd" transform="matrix(1 0 -.21 1 7 0)">
+    <path d="M3 9h12c5.7 0 8.8 2.9 8.8 7.7 0 4.9-3.4 7.8-8.8 7.8H9.3V32H3V9Zm6.3 5.2v5.1h4.9c2.1 0 3.2-.9 3.2-2.6 0-1.6-1.1-2.5-3.2-2.5H9.3Z"/>
+    <path d="M26.4 2h6.3v7h5.8c5.5 0 8.3 2.7 8.3 8v7.5h-6.3v-7.1c0-2.2-.9-3.2-3-3.2h-4.8v10.3h-6.3V2Z"/>
+    <path d="M50 9h12c5.7 0 8.8 2.9 8.8 7.7 0 4.9-3.4 7.8-8.8 7.8h-5.7V32H50V9Zm6.3 5.2v5.1h4.9c2.1 0 3.2-.9 3.2-2.6 0-1.6-1.1-2.5-3.2-2.5h-4.9Z"/>
+    <path fill="#f7a41d" d="M74.8 9h19.6v4.5l-11 5.9h11v5.1H74.8V20l11-5.9h-11V9Z"/>
+  </g>
+</svg>

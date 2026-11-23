@@ -1,0 +1,48 @@
+---
+.title = "Building for Windows",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/windows",
+.custom = { "section": "Build and test" },
+---
+
+Match the PHP SDK, import libraries and runtime for version, architecture, NTS/ZTS and debug settings, whether building with MSVC on Windows or cross-compiling from Linux.
+
+# [Building with MSVC on Windows]($heading.id('windows-msvc'))
+
+With a matching PHP development package, run this in PowerShell:
+
+```powershell
+zig build `
+  -Dtarget=native-native-msvc `
+  -Dphp-include-dir=C:\php-sdk\include `
+  -Dphp-lib-dir=C:\php-sdk\lib
+```
+
+Add `-Dwindows-zts=true` for ZTS and `-Dwindows-debug=true` for debug packages. The header root contains `main`, `Zend`, `TSRM` and `ext`. The library directory contains the matching `php8*.lib`.
+
+Load the resulting `modules/php_my_php_extension.dll` in a matching Windows PHP process:
+
+```powershell
+php -n -dextension=./modules/php_my_php_extension.dll -r 'hello();'
+```
+
+PHP for Windows uses the MSVC ABI. MinGW builds use a different ABI.
+
+# [Cross-compiling for Windows from Linux]($heading.id('cross-compile-windows-from-linux'))
+
+From the extension project directory, run the script supplied with phpz.
+
+```sh
+/path/to/phpz/scripts/build-windows.sh --php-version 8.6.0 --nts
+```
+
+The script defaults to PHP `8.6.0`. It accepts `major.minor.patch` releases from 8.2 through 8.6 and optional `alpha`, `beta` or `RC` suffixes. Prerelease SDKs come from PHP's Windows QA downloads. The script prepares the Windows SDK and PHP development package under `build/windows/`. Install `zig`, `curl`, `tar` and `unzip`. Preparing the SDK with xwin includes accepting Microsoft's license.
+
+A successful cross-build verifies compilation. Load the DLL and run PHPTs on the matching Windows PHP runtime to verify execution.
+
+# [Testing and configuration]($heading.id('testing-and-configuration'))
+
+Replace `zig build` with `zig build run-tests` in the PowerShell example, keeping its other arguments. See [PHPT tests]($link.page('development/testing')) for the test format and running individual cases.
+
+Use the actual DLL path when loading through INI. See [Loading the extension with php.ini]($link.page('development/build').ref('configure-loading')) for configuration and troubleshooting.

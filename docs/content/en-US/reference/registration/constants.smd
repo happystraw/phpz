@@ -1,0 +1,31 @@
+---
+.title = "Constants",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/constants",
+.custom = { "section": "Declarations and registration" },
+---
+
+# [Declare constants]($heading.id('declare-constants'))
+
+Declare module and class constants in the stub:
+
+```php
+<?php
+namespace MyPHPExt;
+
+/** @var string */
+const VERSION = "1.0.0";
+
+class Counter {
+    /** @var int */
+    public const DEFAULT_STEP = 1;
+
+    /** @var string */
+    public const LABEL = "counter";
+}
+```
+
+The generator emits symbol registration code. At MINIT, phpz calls `register_<name>_symbols` if present. Class registration installs class constants, so each constant needs only one declaration.
+
+After changing the stub, run `zig build gen-stub` and rebuild. The generated code determines constant types and values. Inspect the result through PHP constant access or reflection.

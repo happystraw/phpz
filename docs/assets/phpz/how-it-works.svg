@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 468" role="img" aria-labelledby="title description">
+  <title id="title">How phpz builds and runs a PHP extension</title>
+  <desc id="description">gen_stub.php generates an arginfo header from a PHP stub. translate-c reads the extension headers to produce Zig bindings. zig build compiles the bindings and Zig implementation into a shared extension. PHP loads the extension through get_module and registers symbols during MINIT. PHP calls reach the Zig implementation through phpz wrappers that parse arguments and set return values.</desc>
+  <style>
+    svg { font: 17px system-ui, sans-serif; fill: #242429; }
+    .panel { fill: #fafafa; stroke: #d9d9dc; }
+    .card { fill: #fff; stroke: #d9d9dc; }
+    .artifact { fill: #fff3dd; stroke: #e8c68b; }
+    .label { font-weight: 650; }
+    .stage { fill: #875600; font-size: 16px; font-weight: 700; }
+    .detail { fill: #57575f; font-size: 14px; }
+    .code { font-family: ui-monospace, monospace; }
+    .flow { fill: none; stroke: #57575f; stroke-width: 1.5; }
+    .arrowhead { fill: #57575f; }
+    @media (prefers-color-scheme: dark) {
+      svg { fill: #fffff5; }
+      .panel { fill: #202127; stroke: #414147; }
+      .card { fill: #1b1b1f; stroke: #414147; }
+      .artifact { fill: #34291a; stroke: #74572b; }
+      .stage { fill: #f7ba58; }
+      .detail, .arrowhead { fill: #bcbcc3; }
+      .flow { stroke: #bcbcc3; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path class="arrowhead" d="M0 0 8 4 0 8Z"/>
+    </marker>
+  </defs>
+
+  <rect class="panel" x="1" y="1" width="638" height="289" rx="14"/>
+  <text class="stage" x="24" y="32">Build time</text>
+
+  <g text-anchor="middle">
+    <rect class="card" x="24" y="47" width="210" height="56" rx="8"/>
+    <text class="label code" x="129" y="71">.stub.php</text>
+    <text class="detail" x="129" y="91">PHP API declarations</text>
+
+    <rect class="card" x="406" y="47" width="210" height="56" rx="8"/>
+    <text class="label code" x="511" y="71">_arginfo.h</text>
+    <text class="detail" x="511" y="91">Generated API metadata</text>
+    <text class="detail code" x="320" y="68">gen_stub.php</text>
+    <path class="flow" d="M234 79H402" marker-end="url(#arrow)"/>
+
+    <rect class="card" x="24" y="143" width="210" height="56" rx="8"/>
+    <text class="label" x="129" y="167">Zig implementation</text>
+    <text class="detail" x="129" y="187">Functions and classes</text>
+
+    <rect class="card" x="406" y="143" width="210" height="56" rx="8"/>
+    <text class="label" x="511" y="167">Zig bindings</text>
+    <text class="detail code" x="511" y="187">phpz.h + arginfo</text>
+    <path class="flow" d="M511 103v36" marker-end="url(#arrow)"/>
+    <text class="detail code" x="449" y="126">translate-c</text>
+
+    <path class="flow" d="M129 199v18h382v-18M320 217v17" marker-end="url(#arrow)"/>
+    <rect class="artifact" x="191" y="238" width="258" height="43" rx="8"/>
+    <text class="label" x="320" y="256">Shared extension</text>
+    <text class="detail code" x="320" y="273">zig build</text>
+  </g>
+
+  <rect class="panel" x="1" y="307" width="638" height="160" rx="14"/>
+  <text class="stage" x="24" y="334">Runtime</text>
+  <path class="flow" d="M320 281v38" marker-end="url(#arrow)"/>
+
+  <g text-anchor="middle">
+    <rect class="card" x="168" y="323" width="304" height="50" rx="8"/>
+    <text class="label" x="320" y="344">PHP loads the extension</text>
+    <text class="detail code" x="320" y="363">get_module() → MINIT</text>
+
+    <rect class="card" x="24" y="395" width="162" height="54" rx="8"/>
+    <text class="label" x="105" y="418">PHP call</text>
+    <text class="detail code" x="105" y="438">greet("World")</text>
+    <path class="flow" d="M186 422h29" marker-end="url(#arrow)"/>
+
+    <rect class="card" x="219" y="395" width="202" height="54" rx="8"/>
+    <text class="label" x="320" y="418">phpz wrapper</text>
+    <text class="detail" x="320" y="438">Parse args · set return</text>
+    <path class="flow" d="M421 422h29" marker-end="url(#arrow)"/>
+
+    <rect class="card" x="454" y="395" width="162" height="54" rx="8"/>
+    <text class="label" x="535" y="418">Zig function</text>
+    <text class="detail code" x="535" y="438">greet(name)</text>
+  </g>
+</svg>

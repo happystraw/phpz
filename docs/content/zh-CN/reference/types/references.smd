@@ -1,0 +1,73 @@
+---
+.title = "PHP 引用",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/references",
+.custom = { "section": "类型与值" },
+---
+
+PHP 引用不是一种普通值，而是多个 zval 共享同一份值的别名。phpz 用 `zend.Reference` 包装引用结构。
+
+# [引用参数]($heading.id('reference-arguments'))
+
+先在 stub 文件中声明引用参数：
+
+```php
+function increment(int &$value, int $by = 1): void {}
+```
+
+然后用 `expectArgs` 的 `.reference` 规格读取：
+
+```zig
+pub fn increment(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .reference = .{ .kind = .int, .as = .value } },
+        .{ .int = .{ .optional = true } },
+    }, {});
+    const value = args[0];
+    value.set(.int, value.asUnchecked(.int) +| (args[1] orelse 1));
+}
+```
+
+`.reference.as` 决定返回哪一种借用视图：
+
+| `as` | Zig 类型 | 含义 |
+| --- | --- | --- |
+| `.reference` | `*zend.Reference` | 引用包装本身 |
+| `.zval` | `*Zval` | 外层引用 zval |
+| `.value` | `*Zval` | 被引用值的 zval |
+
+`zend.Reference.val()` 返回指向被引用值的借用指针。要保留别名关系，用 `.as = .zval` 取得外层引用，再以 `Zval.raw.copy` 复制到自己管理的 zval；用完后 `release()`。`addref()` 同样保留引用包装，但不会延长原 zval 存储空间的寿命。`copyDeref` 和 `set(.mixed, ...)` 复制解引用后的值，不保留外层别名关系。
+
+类型化处理器中，stub 文件的按引用参数可直接声明为 `*zend.Reference`，编译期会检查引用标志是否与 arginfo 一致；`*Zval` 也可接收引用参数并保留外层引用。
+
+# [创建与写入]($heading.id('create-and-assign'))
+
+```zig
+const ref = phpz.zend.Reference.init(.int, 42);
+defer ref.release();
+
+const value = ref.val(); // 借用的 *Zval
+_ = value;
+try ref.set(.string, "phpz"); // 释放旧内容后写入
+```
+
+`Reference.init(kind, value)` 创建计数为 1 的引用，调用者负责 `release()`。不要把引用容器嵌套进引用：`kind` 不能是 `.undef`、`.reference`、`.indirect` 或 `.ptr`；需要复制一个被引用的 PHP 值时使用 `.mixed`，接口会解引用后复制。`.string` 复制字节；`.array`、`.object`、`.resource`、`.str` 等指针值转移一份引用，借用输入时要先 `addref`。
+
+`Reference.set(kind, value)` 释放被引用值的旧内容，保留其他别名，并遵循 PHP 属性类型约束。传入的指针引用即使在失败时也会被消费；失败时返回待处理的 `PhpException` 或 `UnwindExit`。对可能是 `self` 的引用写入前，先复制需要的状态，避免释放旧值后继续使用借用指针。
+
+可以复用已有的 zval 存储，把其中的值包装为 PHP 引用：
+
+```zig
+var value = phpz.Zval.raw.init(.int, 42);
+const wrapped = phpz.Zval.from(&value);
+wrapped.makeRef();
+const ref = wrapped.asUnchecked(.reference);
+defer ref.release();
+```
+
+`makeRef()` 保留现有值并把它移入新的引用容器；如果值已经是引用则不再嵌套。`makeRef()` 的 Zig 返回类型是 `void`。要从类型化处理器按引用返回，可返回 `Reference.init(...)`，或在 `makeRef()` 后取出 `wrapped.asUnchecked(.reference)`。后一种写法需要一份可转移的引用；转移给 PHP 后不要再执行示例中的 `release()`。
+
+# [释放]($heading.id('release'))
+
+`Reference.release()` 释放一份拥有的引用，计数归零时销毁其内容和引用容器；销毁可能运行 PHP 析构器、调用用户代码或 bailout。`delref()` 只减计数，不负责清理。`refcount()` 读取当前计数，`addref()` 增加一份引用。不要释放借用的引用，也不要在所有权已经转移后再次释放。

@@ -1,0 +1,56 @@
+---
+.title = "底层 Zend / PHP C API",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/zend",
+.custom = { "section": "进阶主题" },
+---
+
+`phpz.c` 暴露项目头文件翻译出的 C 绑定；`phpz.zend` 提供常用结构包装。高层接口没有覆盖的能力可以从这里进入。
+
+# [包装与原始指针]($heading.id('wrappers-and-raw-pointers'))
+
+```zig
+const raw: *phpz.c.zval = ctx.retval.ptr();
+const wrapped = phpz.Zval.from(raw);
+wrapped.set(.int, 42);
+```
+
+包装转换不分配新值、不增加引用计数。要跨作用域保存值，仍需按具体值的所有权规则处理，不能只保存栈上 zval 的地址。
+
+# [引擎全局与元数据]($heading.id('engine-globals-and-metadata'))
+
+| 接口 | 行为 |
+| --- | --- |
+| `zend.ClassEntry.internal("Exception")` | 编译期解析内置类符号并直接读取全局类条目；不查类表、不触发自动加载 |
+| `zend.ClassEntry.find("name")` | 查询 `CG(class_table)`，名称须已小写且无前导反斜杠；可在 MINIT 或请求中使用 |
+| `zend.ClassEntry.lookup("Name", autoload)` | 规范化名称并可选自动加载；需要已初始化的请求和 executor，不能在 MINIT 调用 |
+| `globals.compiler().classes()` | 借用当前线程的编译器类表，包含 MINIT 期间注册的类 |
+| `globals.executor().constants()` | 借用当前线程的全局常量表 |
+| `globals.sapiModule()` | 借用当前进程的 SAPI 模块定义，区别于 `globals.sapi()` 的线程局部 SAPI 全局变量 |
+
+`zend.FunctionEntry` 提供 `requiredParamCount()`、`fixedParamCount()`、`isVariadic()`、`returnsReference()`、`paramName(index)` 和 `isParamByReference(index)`，用于在底层检查生成的声明元数据。`zend.property_name` 提供属性名的 `mangle` / `unmangle`，`zend.ObjectIterator`、`zend.Resource.Typed` 和 `zend.Callable.Cache` 分别见[对象]($link.page('reference/types/objects').ref('object-iteration'))、[PHP 资源]($link.page('reference/types').ref('php-resources'))和[调用 PHP 函数、方法与回调]($link.page('reference/runtime/calls').ref('retain-callable'))。
+
+这些访问器和表都是借用值，生命周期受当前请求或线程限制。类表在 MINIT 与请求阶段可能不同；需要跨请求保存的类条目应使用 `ClassEntry.internal` 的编译期符号，或在使用时重新查询。
+
+# [从源码确定调用方式]($heading.id('check-source-contracts'))
+
+1. 确定当前 PHP 版本和构建配置。
+2. 阅读对应 `Zend/` 或 `main/` 头文件的签名。
+3. 查实现和调用方，确认借用、转移、异常与 bailout 行为。
+4. 检查 phpz 是否已有包装，避免重复实现。
+5. 用真实 PHP 加载扩展运行最小调用验证。
+
+C 宏、可变参数和调用约定不能只凭函数名推断。需要 C 边界的宏或控制流，参考 `build/phpz_wrapper.c` 与 `.h` 的实现方式。
+
+# [典型风险]($heading.id('common-risks'))
+
+| 情况 | 需要确认的事项 |
+| --- | --- |
+| 返回 `zend_object*` | 新拥有引用还是借用对象 |
+| 操作 zval | 旧值是否先析构，是否保留引用包装 |
+| 调用用户代码 | PHP 异常和 bailout 是否可能发生 |
+| 保存引擎指针 | 是否受请求、线程或表变更影响 |
+| 跨平台链接 | PHP ABI、ZTS 和 debug 配置是否匹配 |
+
+源码链接用于定位，行为结论应绑定到实际使用的 PHP 与 phpz 版本。

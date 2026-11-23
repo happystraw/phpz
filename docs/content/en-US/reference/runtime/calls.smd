@@ -1,0 +1,115 @@
+---
+.title = "Calling PHP functions, methods and callbacks",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/calls",
+.custom = { "section": "Runtime APIs" },
+---
+
+# [Parsing PHP callables]($heading.id('parse-callable-argument'))
+
+A typed handler can accept `*phpz.zend.Callable` directly:
+
+```zig
+pub fn invoke(ctx: phpz.Ctx, callback: *phpz.zend.Callable) !void {
+    try callback.call(ctx.retval.ptr(), .{}, null);
+}
+```
+
+The equivalent with manual parsing is:
+
+```zig
+pub fn invoke(ctx: phpz.Ctx) !void {
+    var callback: phpz.zend.Callable = .nil;
+    _ = try ctx.call.expectArgs(
+        &.{.{ .callable = .{ .resolve = true } }},
+        .{.{ .out = &callback }},
+    );
+    try callback.call(ctx.retval.ptr(), .{}, null);
+}
+```
+
+The PHP declaration is `function invoke(callable $callback): mixed`. The result borrows the argument for this call and needs no release. To retain it across calls in the same request, use `retainCache()` below. Copying a `zend.Callable` and calling `addref()` is suitable only for a handler known to have no trampoline. Call `release()` when done and never retain a pointer to the temporary structure.
+
+# [Arguments and return values]($heading.id('arguments-and-return-values'))
+
+Pass positional arguments to `call` as a tuple of `c.zval` values, such as `.{arg1, arg2}`. The last argument accepts an optional `*zend.Array` of named arguments.
+
+```zig
+const number = phpz.Zval.raw.init(.int, 42);
+try callback.call(ctx.retval.ptr(), .{number}, null);
+```
+
+Keep borrowed arguments alive for the call. Supply a return zval to own the result. The API does not release its previous contents. Pass null to discard the result, which may run a destructor.
+
+String keys in the named-argument table specify names. Integer keys append positional arguments and must precede string keys in iteration order. Zend handles duplicates, unknown arguments and reference rules.
+
+# [Exclusive calls]($heading.id('exclusive-callable-invocation'))
+
+To call the same `zend.Callable` repeatedly with guaranteed exclusive access, use `callAssumeExclusive`. It reuses the instance's `zend_fcall_info`. Arguments, return ownership and errors follow `call`.
+
+Exclusive access must last until the method returns, including any destructors run when discarding the result. Use `call` or `tryCall` if a callback, destructor or another fiber could reenter the same instance.
+
+If a native bailout skips cleanup in `callAssumeExclusive`, discard the instance or resolve the PHP callable again before reuse. `tryCallAssumeExclusive` catches bailouts, including during destruction of a discarded result, and clears temporary call fields before returning `error.ZendBailout`. Propagate the error after native cleanup.
+
+# [Known functions and methods]($heading.id('known-functions-and-methods'))
+
+Use `zend.Function.find` or `fetch` to look up a function and `findMethod` to look up a class method. Invoke it with `call`, `callStatic` or `callMethod` as appropriate. Objects also provide `call` and `callIfExists`.
+
+`find`, `fetch` and `findMethod` look up keys directly in the function table. Pass lowercase names, including the namespace prefix. `callIfExists` takes positional arguments as `[]c.zval`. `call` takes a tuple.
+
+`call` returns `PhpException` for a PHP Throwable and `UnwindExit` for an internal exit caused by `exit`, `die` or deferred OOM. Both preserve the pending Zend state. A native bailout can jump over Zig stack frames. Use `tryCall` or `GuardCtx` when native cleanup is required. `tryCall` also converts an escaping bailout to `ZendBailout`. For that error or `UnwindExit`, clean up native resources and propagate the error to end the request.
+
+`object.callIfExists` and `object.tryCallIfExists` return `error.MethodCallFailed` for a missing method. With a `retval`, the caller owns the result and a missing method sets it to `undef`. Pass null to discard the result, which can run its destructor.
+
+# [Keeping a callback across calls]($heading.id('retain-callable'))
+
+A `*phpz.zend.Callable` parameter borrows the current call frame. A PHP object can own a `zend.Callable.Cache` to invoke the callback later in the same request. Declare two instance methods in the stub:
+
+```php
+class CallbackSlot {
+    public function remember(callable $callback): void {}
+    public function invokeLater(): mixed {}
+}
+```
+
+Bind the methods in Zig and add `CallbackSlotClass` to the module's `.classes`:
+
+```zig
+const CallbackSlot = struct {
+    callback: phpz.zend.Callable.Cache = .nil,
+
+    pub fn remember(self: *CallbackSlot, callback: *phpz.zend.Callable) !void {
+        var replacement = try callback.retainCache();
+        @import("std").mem.swap(phpz.zend.Callable.Cache, &self.callback, &replacement);
+        replacement.deinit();
+    }
+
+    pub fn invokeLater(self: *CallbackSlot, ctx: phpz.Ctx) !void {
+        try ctx.call.expectNoArgs();
+        if (!self.callback.isInitialized()) return error.MissingCallback;
+        try self.callback.call(ctx.retval.ptr(), .{}, null);
+    }
+
+    fn deinit(self: *CallbackSlot) void {
+        self.callback.deinit();
+    }
+
+    fn gc(self: *CallbackSlot, buffer: *phpz.GcBuffer) void {
+        self.callback.addToGc(buffer);
+    }
+};
+
+const CallbackSlotClass = phpz.Class("CallbackSlot", CallbackSlot, .{
+    .deinit = CallbackSlot.deinit,
+    .gc = CallbackSlot.gc,
+});
+```
+
+`remember()` acquires a new cache before replacing the field and releasing the old callback. If resolution fails, the previous callback remains available.
+
+`retainCache()` retains the resolved handler and bound object. `Cache.init(value, err)` resolves a zval instead. `Cache.nil` represents an uninitialized cache. `call` and `tryCall` follow the argument and return rules of `zend.Callable.call` and `tryCall`. `deinit()` releases the cache and is safe on `nil` or on repeated calls. Transfer ownership of an initialized cache without copying it.
+
+PHP 8.3+ uses native FCC ownership and retains magic-method trampolines. PHP 8.2 retains the source callable and resolves magic methods again in the current scope, where the source must remain callable. Keep caches within the request. If a PHP object owns the cache, call `cache.addToGc(buffer)` in its `.gc` hook so the collector sees object and closure edges in cycles.
+
+`zend.Callable.name(value, object)` returns an owned diagnostic string. Call `release()` when done. The object argument may be null. This operation does not validate callability.

@@ -1,0 +1,62 @@
+---
+.title = "Errors and exceptions",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/errors",
+.custom = { "section": "Runtime APIs" },
+---
+
+PHP exceptions live in the engine's pending state. Zig error unions propagate native errors. `phpz.exception` handles PHP Throwables and internal exit signals. `phpz.errors` handles `E_*` diagnostics and the last recorded error.
+
+# [Argument errors]($heading.id('argument-errors'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+if (args[0] < 0) {
+    return phpz.exception.argumentValueError(1, "must be non-negative", .{});
+}
+ctx.ret(.int, args[0]);
+```
+
+This handler body implements `function nonNegative(int $value): int`. Argument indices start at 1. Helpers such as `exception.argumentTypeError` and `argumentValueError` set a PHP exception and return a Zig error. Use `return` or `try` to propagate it immediately.
+
+# [Errors and exceptions]($heading.id('errors-and-exceptions'))
+
+```zig
+return phpz.exception.throwError(null, "Operation is unavailable", .{});
+```
+
+The statements above return from a handler. `exception.throwException(ce, message, code)` uses the supplied exception class entry. `throwExceptionEx` takes a format string. This snippet assumes an `exception_class` and an integer `value`:
+
+```zig
+return phpz.exception.throwExceptionEx(
+    exception_class,
+    0,
+    "invalid value: %d",
+    .{value},
+);
+```
+
+Formatting follows PHP C API conventions such as `%s` and `%d`. Zig `std.fmt` placeholders such as `{s}` do not apply.
+
+These helpers return `exception.Error`. Ordinary PHP Throwables, including `TypeError` and `ValueError`, map to `error.PhpException`. Internal exit signals map to `error.UnwindExit`. To identify a PHP exception class, inspect the pending object with `exception.get()`.
+
+The wrapper preserves existing PHP exceptions. With no pending exception, an unhandled ordinary Zig error becomes a PHP `Error`. `exception.hasPending()` checks for pending state, `get()` borrows the object, `pending()` returns an optional error and `try exception.check()` propagates it. Reading the state leaves it pending.
+
+`exception.throwExceptionObject` and `throwExceptionObjectEx` set an exception and return its borrowed object without adding a reference or returning a Zig error. Use `try exception.check()` to propagate it. `exception.clear()` clears pending state. `exception.report(level)` reports and consumes a pending exception and does nothing if none is pending. Reporting may run PHP code such as `__toString()` and may bail out. Use it only where you take responsibility for handling an ordinary exception.
+
+## [Internal exit signals]($heading.id('unwind-exit'))
+
+`UnwindExit` can follow `exit`, `die` or a deferred memory error. After native cleanup, propagate it to end execution. For standalone hosts, see [Exit and shutdown]($link.page('reference/runtime/scripts').ref('exit-and-shutdown')) for `exception.takeUnwindExit()` and request shutdown.
+
+# [Warnings and fatal errors]($heading.id('warnings-and-fatal-errors'))
+
+`errors.warning`, `notice` and `deprecated` emit PHP diagnostics at the corresponding levels. A user error handler may change control flow.
+
+`ZendBailout`, `UnwindExit` and `OutOfMemory` require termination handling. See [Bailouts and cleanup]($link.page('advanced/bailout')) for how they differ from catchable PHP exceptions and how to clean up native resources.
+
+# [Last error]($heading.id('last-error'))
+
+`phpz.errors.last()` returns `?errors.LastError` for the same record as PHP's `error_get_last()`, or null if no record exists. Its fields are `level: errors.Level`, borrowed `message: [:0]const u8`, optional `file: ?[:0]const u8` and `line: u32`. `level.matches(mask)` tests level bits. `isCore()` and `isFatal()` test the corresponding PHP masks.
+
+Reading this record allocates nothing, leaves it in place and does not inspect pending Throwables. Copy borrowed strings before PHP replaces or clears the record or the request ends. This API reads recorded diagnostics. For pending exceptions use `exception.pending()`. Fatal errors and bailouts require their own handling.

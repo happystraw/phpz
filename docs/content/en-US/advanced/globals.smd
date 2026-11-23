@@ -1,0 +1,56 @@
+---
+.title = "Module globals",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/globals",
+.custom = { "section": "Advanced topics" },
+---
+
+# [Declare state]($heading.id('declare-state'))
+
+```zig
+const State = struct {
+    calls: u64 = 0,
+};
+const Globals = phpz.ModuleGlobals(State);
+
+fn requestStartup() !void {
+    Globals.get().calls = 0;
+}
+```
+
+Set `.globals = Globals` and `.request_startup_fn = requestStartup` in the module configuration. Use `Globals.get()` to access the current instance each time instead of caching its address globally.
+
+# [Initializing and destroying module globals]($heading.id('globals-lifecycle'))
+
+`State` must be a nonzero-sized struct that can be initialized with `.{}`. It may declare `pub fn init(self: *State) void` and `pub fn deinit(self: *State) void`. phpz applies field defaults, calls `init`, then calls `deinit` when destroying the instance. Neither hook can return a Zig error.
+
+| Hook | Lifetime |
+| --- | --- |
+| `State.init` / `State.deinit` | Construct and destroy a globals instance. NTS uses direct storage. Under ZTS, TSRM manages per-thread instances. |
+| `module_startup_fn` / `module_shutdown_fn` | MINIT / MSHUTDOWN handle module registration and module-wide resources. |
+| `request_startup_fn` / `request_shutdown_fn` | RINIT / RSHUTDOWN handle per-request state and resources. |
+
+Use `deinit` for persistent native resources owned by this instance. Release request-allocated PHP values before the request ends. Read globals only after PHP has initialized the corresponding instance.
+
+# [Threads and requests]($heading.id('threads-and-requests'))
+
+NTS uses module storage directly. ZTS retrieves the current thread's instance through TSRM. Fields persist across requests. Explicitly reset per-request counters in RINIT and release request resources on the appropriate shutdown path.
+
+A ZTS cache belongs to the current thread. See [TSRM cache options for ZTS]($link.page('advanced/build-options').ref('tsrm-cache')) for cache strategies and target restrictions.
+
+PHP values, objects, superglobals and call frames belong to their engine thread and request. Do not hand borrowed values to arbitrary Zig worker threads for use with PHP, even under ZTS.
+
+# [INI bindings]($heading.id('ini-bindings'))
+
+Use `Globals.iniField("field")` as the `.bind` of a typed INI setting. Reads and updates then target the current globals instance. Reset individual fields at request startup so you preserve configured values such as the example's `mode`.
+
+# [Validation scope]($heading.id('validation-scope'))
+
+Build with matching PHP headers, runtime and thread safety configuration. Validate threading on a ZTS runtime by loading and running the extension.
+
+In the full example, `tests/tsrm_native_threads.phpt` uses two native Zig threads under ZTS CLI. It checks TSRM caches, engine-global addresses and module-state isolation, and repeats `tsrm.initThread()` / `freeThread()` to verify resource recreation. Each thread starts and shuts down requests, executes scripts concurrently and checks reset and shutdown behavior. NTS skips this test.
+
+This CLI test manages each thread's TSRM and request lifecycle. It does not test HTTP I/O or pass PHP values between threads. Test the target SAPI separately and keep the caller's Zend objects, request allocator and borrowed pointers on their owning thread.
+
+See [Lifetime boundaries]($link.page('reference/types/ownership').ref('lifetime-boundaries')) for ownership across calls, requests, objects and module globals.

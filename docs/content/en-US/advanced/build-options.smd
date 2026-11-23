@@ -1,0 +1,39 @@
+---
+.title = "Build options",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/build-options",
+.custom = { "section": "Advanced topics" },
+---
+
+Pass `Phpz.Options` to `Phpz.init` in the extension's `build.zig`. These settings apply at build time. Run `zig build --help` to see which options the project exposes as `-D…` flags.
+
+# [Build targets and checks]($heading.id('target'))
+
+| Option | Effect |
+| --- | --- |
+| `.translator` | Sets the target and optimization mode used to translate PHP headers. |
+| `.php_include_dir`, `.php_lib_dir`, `.libc_file` | Specify the target headers, library search directory and libc paths file. |
+| `.shared` | Defaults to `true` for a shared extension. Set it to `false` to build a static library for linking into PHP. |
+| `.windows_zts`, `.windows_debug` | Both default to `false`. Match the thread safety and debug configuration of the target Windows PHP build. |
+| `.check_arginfo` | Checks the generated arginfo header against the stub file by default. Regenerate it with `zig build gen-stub` if the check fails. |
+| `.debug_leak_trace_frames` | Maximum stack frames in leak reports from debug PHP with `php_allocator`. Defaults to 3. |
+
+# [LTO]($heading.id('lto'))
+
+With the default `.lto = null`, phpz enables full link-time optimization for non-Debug shared extensions except on Mach-O targets. LTO defaults to off for Debug builds and built-in extensions.
+
+The skeleton maps `-Dlto` to `.lto`. This build retains `ReleaseSafe` runtime checks with LTO disabled.
+
+```sh
+zig build -Doptimize=ReleaseSafe -Dlto=false -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+# [TSRM cache options for ZTS]($heading.id('tsrm-cache'))
+
+Thread-safe PHP builds use TSRM to manage per-thread resources. These two options control how the extension locates the current thread's resources, independently of LTO. Neither affects NTS.
+
+- `.static_tsrmls_cache` defaults to `true`. A shared extension uses its own thread-local cache. A built-in extension uses PHP's cache.
+- `.tsrmls_cache_tcb_fast_path` defaults to `false`. Enable it to try reading the cache through the thread control block on Linux x86_64 and AArch64. When unavailable, lookup follows `.static_tsrmls_cache`.
+
+Set both fields to `false` in `Phpz.init` to use runtime TSRM lookup only. Access the cache only while the thread holds valid TSRM resources, before `freeThread()` or `shutdown()`.

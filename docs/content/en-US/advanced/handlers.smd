@@ -1,0 +1,40 @@
+---
+.title = "Custom object handlers",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/handlers",
+.custom = { "section": "Advanced topics" },
+---
+
+Ordinary PHP methods and properties cover most extensions. To change how Zend operates on an object, set `phpz.Class`'s `.handlers` to a set of `phpz.ObjectHandlers` overrides.
+
+# [Choosing a handler entry point]($heading.id('choose-entry-point'))
+
+| Operation | Preferred option |
+| --- | --- |
+| Initialize, destroy or clone Zig instance data | `.init`, `.deinit`, `.clone` |
+| Report references to the garbage collector | `.gc` |
+| Arithmetic and bitwise operations | `.operate` |
+| Comparison | `.compare` |
+| Other native object operations | Corresponding Zend callback in `.handlers` |
+
+The instance-data options require a Zig struct with fields. Check callback signatures against your target PHP headers to avoid ABI mismatches.
+
+# [Conflict rules]($heading.id('conflict-rules'))
+
+Specifying both entries in any row produces a compile error.
+
+| High-level option | Conflicting native handler |
+| --- | --- |
+| `.clone` | `.handlers.clone_obj` |
+| `.gc` | `.handlers.get_gc` |
+| `.operate` | `.handlers.do_operation` |
+| `.compare` | `.handlers.compare` |
+
+See [Object lifetime and garbage collection]($link.page('advanced/objects')) for cloning and GC, and [Operators and comparisons]($link.page('advanced/operators')) for operations and comparisons.
+
+# [Property handler boundaries]($heading.id('property-handler-boundaries'))
+
+`Object.property`, `setProperty` and `properties` can enter custom handlers or userland PHP. Keep scratch storage alive for temporary properties. Do not release a borrowed property table or edit it directly to bypass visibility, type checks or lazy initialization.
+
+Check how `src/class.zig` installs each callback and compare its signature with the target's `Zend/zend_object_handlers.h`. Exercise reads, writes, exceptions, destructor reentry and final object destruction.

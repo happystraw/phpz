@@ -1,0 +1,44 @@
+---
+.title = "创建 PHP 闭包",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/closures",
+.custom = { "section": "运行时接口" },
+---
+
+闭包处理器复用[参数解析与返回值]($link.page('reference/registration/arguments'))规则。
+
+# [从 Zig 函数创建]($heading.id('create-from-zig-function'))
+
+```zig
+fn sum(a: i64, b: i64) i64 {
+    return a +| b;
+}
+
+pub fn makeSumClosure(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
+    phpz.closure.createFromFn(sum, ctx.retval);
+}
+```
+
+stub 文件为 `function makeSumClosure(): \Closure`。PHP 可以保存返回值并按 `$sum(1, 2)` 调用。
+
+`createFromFn` 支持类型化签名和前置 `Ctx` / `GuardCtx`。创建的 PHP 闭包签名为按值可变参数，无显式返回类型；参数检查由处理器完成，Reflection 不会显示 Zig 参数规格。目标 zval 须为 `undef` 或 `null`。
+
+处理器可以返回 `*phpz.zend.Reference`；闭包调用时 PHP 得到被引用的值。由于 `createFromFn` 的通用 arginfo 只声明按值可变参数，Reflection 不会把这个闭包标记为按引用返回。需要真正的按引用返回函数时，在 stub 文件中声明 `function &name()` 并返回 `*zend.Reference`；引用创建和所有权规则见 [PHP 引用]($link.page('reference/types/references'))。通用 arginfo 在 PHP 8.6 中会在模块启动时转换为运行期格式。
+
+末尾的 `phpz.Variadic` 可收集位置和额外命名参数，再用 `check()` 限制来源、`Entry.expect()` 校验元素。这类通用 arginfo 闭包跳过 Debug 的声明数量一致性断言，仍执行实际参数校验；从已注册函数或方法创建、保留原 arginfo 的闭包不跳过该断言。
+
+# [使用已有函数元数据]($heading.id('use-function-metadata'))
+
+`zend.Function.createClosure(destination, options)` 将已注册函数或方法变为 Closure，保留签名和静态变量。实例方法须传 `.object`；目标 zval 须为 `undef` 或 `null`，函数元数据须在闭包存活期间有效。
+
+需要保存状态时，可以把状态放进实现 `__invoke` 且持有 Zig 实例数据的 PHP 对象，再将该方法绑定为闭包。示例 `makeCounter` 展示了这种做法。
+
+# [生命周期]($heading.id('lifecycle'))
+
+`createFromFn` 不捕获 Zig 局部变量。状态对象持有 PHP 值时须复制、释放并向 GC 报告；`makeReference` 示例展示引用保留与引用返回。
+
+`createFromHandler` 接收原生处理器，处理器须在闭包存活期间有效。创建闭包可能 bailout，须遵守[清理边界]($link.page('advanced/bailout'))。
+
+调用、请求、对象和模块全局变量的释放责任参见[生命周期边界]($link.page('reference/types/ownership').ref('lifetime-boundaries'))。

@@ -1,0 +1,56 @@
+---
+.title = "Type conversions",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/conversions",
+.custom = { "section": "Types and values" },
+---
+
+Choose among three operations:
+
+- `as(kind)` checks the current zval type and reads it without conversion.
+- `cast(kind)` returns the result of a PHP explicit cast and preserves the source zval.
+- `convert(kind)` applies a PHP explicit cast in place.
+
+Both `cast` and `convert` support `.int`, `.float`, `.bool`, `.str`, `.array` and `.object`. `cast(.str)` returns an owned Zend string. `convert(.str)` borrows the resulting Zend string and `convert(.string)` borrows its bytes. `cast` does not support `.string`.
+
+| Operation | Effect on source | Result ownership |
+| --- | --- | --- |
+| `as(kind)` | Checks the type only | Copies scalars and borrows slices or wrappers |
+| `cast(kind)` | Preserves the value | Caller owns `.str`, `.array` and `.object` results |
+| `convert(kind)` | Replaces the value | Borrows from the converted zval for pointer and slice results |
+
+# [Casting without modifying the source]($heading.id('preserve-source'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .mixed = .{} }}, {});
+const text = try args[0].cast(.str);
+defer text.release();
+ctx.ret(.string, text.slice());
+```
+
+`cast(.str)` returns a `*zend.String`. Borrow its bytes with `slice()`. Release or transfer converted strings, arrays and objects. Scalars need no release. `cast` preserves the source zval, but arrays and objects may still share underlying data.
+
+# [Convert in place]($heading.id('convert-in-place'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .mixed = .{} }}, {});
+phpz.Zval.raw.copy(ctx.retval.ptr(), args[0].ptr());
+_ = try ctx.retval.convert(.int);
+```
+
+Copy the input into the zval at `ctx.retval` before converting the copy in place. `convert` unwraps the reference and leaves other reference owners with their original value. A borrowed slice or object pointer is invalidated when the converted zval changes or is released.
+
+After a failed `convert`, the source may already have changed. A failed `cast` preserves it. Both operations can invoke object handlers and raise PHP exceptions. Only convert actual PHP values. Internal states such as `undef` and `indirect` are unsuitable.
+
+# [Target types]($heading.id('target-types'))
+
+| Target | `cast` result | `convert` result |
+| --- | --- | --- |
+| `.int` | `i64` | `i64` |
+| `.float` | `f64` | `f64` |
+| `.bool` | `bool` | `bool` |
+| `.str` | Owned `*zend.String` | Borrowed `*zend.String` |
+| `.string` | Unsupported | Borrowed `[]const u8` |
+| `.array` | Owned `*zend.Array` | Borrowed `*zend.Array` |
+| `.object` | Owned `*zend.Object` | Borrowed `*zend.Object` |

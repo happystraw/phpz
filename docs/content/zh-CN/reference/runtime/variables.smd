@@ -1,0 +1,36 @@
+---
+.title = "变量转储与导出",
+.date = .date("2026-11-21T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/variables",
+.custom = { "section": "运行时接口" },
+---
+
+`phpz.variable` 提供两个调试接口：`inspect()` 对应 `var_export($value, true)`，把值转换成 PHP 代码文本；`dump()` 对应 `var_dump()`，把调试信息写入当前 PHP 输出。
+
+# [导出文本]($heading.id('inspect'))
+
+```zig
+/// PHP: function exportValue(mixed $value): string
+pub fn exportValue(value: *phpz.Zval) !*phpz.zend.String {
+    return phpz.variable.inspect(value);
+}
+```
+
+借用输入，返回新的 Zend 字符串，调用者负责 `release()`；作为返回值交给 PHP 时所有权转移。输出与 `var_export($value, true)` 相同：标量使用 PHP 字面量，数组使用数组语法，普通类对象通常导出为 `类名::__set_state(...)`，`stdClass` 对象导出为 `(object) array(...)`。若要用导出结果重建普通类对象，该类须实现 `__set_state()`。循环引用按 PHP 规则产生警告并写成 `NULL`；无法导出时返回 `error.ExportFailed`，用户错误处理器抛出的异常以 `error.PhpException` 返回。
+
+# [转储到输出]($heading.id('dump'))
+
+```zig
+/// PHP: function dumpValue(mixed $value): void
+pub fn dumpValue(value: *phpz.Zval) !void {
+    try phpz.variable.dump(value);
+}
+```
+
+`dump()` 把 `var_dump()` 的完整输出写入当前 SAPI 输出，包括类型、长度和缩进，并调用对象的 `__debugInfo()`。它要求当前处于活动请求中，bailout 直接传播。输出经过 PHP 的输出缓冲，`ob_start()` 捕获到的内容与原生 `var_dump()` 一致。
+
+# [使用建议]($heading.id('usage'))
+
+- 把值返回给调用者时使用处理器的返回值或 `ctx.ret(...)`。`dump()` 和 `phpz.printf()` 会写入 PHP 输出，在 Web 请求中可能成为响应正文。测试这类输出时可使用 PHP 输出缓冲。
+- `inspect()` 生成的是 PHP 代码，回写脚本或交给 `eval` 之前必须自行确认内容来源。

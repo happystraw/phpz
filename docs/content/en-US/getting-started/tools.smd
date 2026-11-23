@@ -1,0 +1,49 @@
+---
+.title = "Skeleton and code generation",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/tools",
+.custom = { "section": "Build and test" },
+---
+
+phpz bundles php-src's `gen_stub.php` and `run-tests.php` from PHP `8.6.0`. See `tools/php/README.md` for their versions and update procedure.
+
+# [Skeleton generator]($heading.id('skeleton-generator'))
+
+```sh
+php tools/phpz_skel.php --help
+php tools/phpz_skel.php --ext my_php_extension --phpz dev
+```
+
+Run the second command from the phpz repository root to create `my_php_extension` in the current directory using phpz's `dev` branch.
+
+| Option | Purpose |
+| --- | --- |
+| `--ext` | Required extension name. |
+| `--dir` | Parent directory of the project to generate. |
+| `--phpz` | Package specification for `zig fetch --save=phpz`. A bare name selects a phpz Git branch or tag. |
+| `--zig` | Path to the Zig executable. |
+| `--with-php-config` | Path to the `php-config` used to locate development headers. |
+| `--with-php-build-system` | Generate the integration files described in [Integration with the PHP build system]($link.page('development/php-build-system')). |
+| `--onlyunix` / `--onlywindows` | Generate support only for the selected platform. |
+| `--force` | Overwrite generated template files in the target directory. |
+
+# [Generate arginfo]($heading.id('generate-arginfo'))
+
+```sh
+zig build gen-stub
+```
+
+`zig build gen-stub` copies the bundled generator to `build/gen_stub.php` and processes the extension's stub. The first run may download PHP-Parser and needs a writable `build/` directory and download tools.
+
+You can also use the generator in a matching php-src checkout.
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+By default, the build compares the stub's content hash with the one in the arginfo header. Regenerate a stale header. To disable the hash check, pass `.check_arginfo = false` to `Phpz.init` in `build.zig` and rebuild. Disabling it neither updates the header nor verifies Zig signatures against the stub.
+
+# [Build and test]($heading.id('build-and-test'))
+
+After generating the project or updating arginfo, follow [Building and loading extensions]($link.page('development/build')) and run [PHPT tests]($link.page('development/testing')).

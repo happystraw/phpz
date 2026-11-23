@@ -1,0 +1,38 @@
+---
+.title = "PHP memory allocation",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/memory",
+.custom = { "section": "Advanced topics" },
+---
+
+`phpz.heap.php_allocator` implements Zig's `std.mem.Allocator` using PHP's request memory manager.
+
+# [Request-scoped allocation]($heading.id('request-scoped-usage'))
+
+```zig
+const allocator = phpz.heap.php_allocator;
+const bytes = try allocator.dupe(u8, "hello");
+defer allocator.free(bytes);
+ctx.ret(.string, bytes);
+```
+
+`set(.string)` copies the bytes, so the temporary buffer can be freed on normal return. Release memory with the same allocator and keep it within the request.
+
+# [Allocation failure]($heading.id('allocation-failure'))
+
+`php_allocator` uses `_femalloc` / `_ferealloc` when the target headers provide them and reports `error.OutOfMemory` on failure. With older PHP APIs a C boundary catches immediate OOM bailouts from `emalloc` / `erealloc`.
+
+The allocator gives the caller's Zig `defer` and `errdefer` a chance to run. Other PHP C APIs can still bail out. At the PHP boundary phpz handles queued OOM or resumes the earlier bailout. A delayed OOM may terminate with `UnwindExit`. An `OutOfMemory` from a native allocator that PHP has not reported becomes `Fatal error: Out of memory`. Stop processing the request after a fatal memory error.
+
+`heap.emalloc` / `erealloc` follow PHP's native OOM policy. On versions with a hard memory limit, a non-fallible allocation can terminate the process before cleanup or request shutdown. Use `php_allocator` for a propagatable allocation error.
+
+# [Alignment and debugging]($heading.id('alignment-and-debugging'))
+
+For alignment above `ZEND_MM_ALIGNMENT`, the allocator reserves extra space and retains the original address for freeing. Over-aligned blocks cannot expand in place. `realloc` may allocate and copy. Free the original slice with the same allocator and type. Passing the adjusted pointer directly to `efree` is invalid.
+
+With `ZEND_DEBUG=1`, the allocator attempts to resolve Zig call sites in leak reports. A mutex protects the shared lookup cache. `Phpz.Options.debug_leak_trace_frames` defaults to 3. Trace completeness depends on debug information and build configuration.
+
+Use an allocator with a matching lifetime for native resources shared across requests. Use [Bailouts and cleanup]($link.page('advanced/bailout')) to manage native cleanup across bailouts.
+
+See [Lifetime boundaries]($link.page('reference/types/ownership').ref('lifetime-boundaries')) for the lifetimes of calls, requests, objects and module globals.

@@ -1,0 +1,192 @@
+---
+.title = "Classes, properties and methods",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/classes",
+.custom = { "section": "Declarations and registration" },
+---
+
+`phpz.Class("MyPHPExt\\Counter", Counter, .{})` binds a stub class to a Zig implementation and returns a wrapper type for `module.classes`.
+
+Methods can use typed parameters and returns or parse arguments manually through a call context. See [Argument parsing and return values]($link.page('reference/registration/arguments')).
+
+# [Zig instance data]($heading.id('zig-backing'))
+
+A Zig struct with fields adds per-instance data to each PHP object. If every field has a default, phpz initializes this data automatically. Otherwise initialize it in the constructor or `.init`. Calling a method that requires `self` on an uninitialized instance raises a PHP error.
+
+If `.init` returns an error, the instance data remains uninitialized. phpz marks construction as failed: `new` skips `__construct` and the object skips `__destruct`. The exception stays pending. Object destruction cleans up only initialized instance data.
+
+## [Method bindings]($heading.id('method-bindings'))
+
+In automatic mode, each `pub fn` corresponds to a concrete method in the stub:
+
+```php
+<?php
+namespace MyPHPExt;
+class Counter {
+    public function __construct(int $n = 0) {}
+    public function add(int $n): void {}
+    public function value(): int {}
+}
+```
+
+```zig
+const Counter = struct {
+    n: i64 = 0,
+
+    pub fn __construct(n: ?i64) Counter {
+        return .{ .n = n orelse 0 };
+    }
+
+    pub fn add(self: *Counter, n: i64) void {
+        self.n +|= n;
+    }
+
+    pub fn value(self: *const Counter) i64 {
+        return self.n;
+    }
+};
+
+const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{});
+```
+
+Class and method names must match the stub exactly, including case. Automatic binding checks all public Zig functions and all concrete stub methods. Explicit `@alias` entries share the implementation. At compile time phpz checks parameter counts, optional and variadic parameters, and reference flags against arginfo. A backed `__construct` returns `T` or `!T` and skips the PHP return-reference check. Other methods follow the function rules. Match types and defaults in the stub and implementation.
+
+Classes with Zig instance data cannot extend a class that allocates its own objects, such as `Exception`, `ArrayObject` or another class with Zig data. Zend preserves the parent's `create_object` and parent methods expect its layout. Debug builds warn and fail registration with `error.UnsupportedParent`. For these subclasses use `void` as the Zig type and keep state in PHP properties.
+
+Use `.register` when a generated registration function needs a parent or interfaces. The adapter takes a tuple of `*phpz.ClassEntry` values in stub parameter order. Pass each wrapper's `.entry`. Return `*ClassEntry` or an error union containing it. See [Registering parent classes and interfaces]($link.page('reference/registration/declarations').ref('inheritance')).
+
+Use `.methods` to map different names. The mapping must cover every concrete method. For example, rename Zig's `add` to `increment` while keeping the PHP name `add`:
+
+```zig
+const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{
+    .methods = .{
+        .__construct = Counter.__construct,
+        .add = Counter.increment,
+        .value = Counter.value,
+    },
+});
+```
+
+A backed `__construct` takes no `self`. It may take `Ctx` or `GuardCtx` before any typed parameters and returns `T` or `!T` to initialize the instance data. PHP constructors cannot declare a return type. Reflection's `getReturnType()` returns `null`.
+
+Static methods participate in automatic binding and take no `self` pointer. For example, add this method to the stub's `MyPHPExt\Counter` and its implementation to the Zig `Counter`:
+
+```php
+<?php
+namespace MyPHPExt;
+class Counter {
+    // Existing methods omitted
+    public static function fromInt(int $n): int {}
+}
+```
+
+```zig
+pub fn fromInt(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+    ctx.ret(.int, args[0]);
+}
+```
+
+Instance methods may take `*T` or `*const T` followed optionally by `Ctx` or `GuardCtx`. Keep helpers for `.init`, `.deinit`, `.clone` and `.gc` private to exclude them from automatic method binding. See [Object lifetime and garbage collection]($link.page('advanced/objects')) for resource and clone rules.
+
+# [Creating and accessing Zig instance data]($heading.id('backing-access'))
+
+After class registration, the backed `CounterClass` provides these operations:
+
+| API | Behavior and ownership |
+| --- | --- |
+| `create()` | Create an object and run `.init`, skipping the PHP constructor. Returns an owned wrapper |
+| `new(params, named_params)` | Create an object and call the PHP constructor. Returns an owned wrapper |
+| `tryNew(params, named_params)` | Like `new`, but catches a Zend bailout as `error.ZendBailout` |
+| `fromObject(object)` / `fromZval(value)` | Check the class and handlers, then borrow the wrapper without incrementing the reference count. `fromZval` follows PHP references |
+| `backing()` | Borrow a `?*Counter`, or return `null` for uninitialized data |
+| `object()` | Borrow a `*zend.Object` |
+
+These two global functions reuse `CounterClass`. Declare them in the stub first. If they are the only global functions, use `phpz.functions(Api, .{ .namespace = "MyPHPExt" })`. Otherwise include them in the `namedFunctions` mapping that covers all global functions:
+
+```php
+namespace MyPHPExt;
+function makeCounter(int $n): Counter {}
+function counterValue(Counter $counter): int {}
+```
+
+```zig
+const Api = struct {
+    pub fn makeCounter(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
+        const number = phpz.Zval.raw.init(.int, args[0]);
+        const instance = try CounterClass.new(.{number}, null);
+        ctx.ret(.object, instance.object());
+    }
+
+    pub fn counterValue(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .object = .{ .instanceof = true } },
+        }, .{.{ .class = CounterClass.entry }});
+        const instance = try CounterClass.fromObject(args[0]);
+        const data = instance.backing() orelse return error.UninitializedCounter;
+        ctx.ret(.int, data.n);
+    }
+};
+```
+
+`makeCounter` transfers one object reference to the PHP return value. If only Zig uses the new instance, call `instance.object().release()` during normal cleanup. `fromObject` borrows its result. Do not release the input object on that account or use `backing()` after the object is released.
+
+```php
+$counter = MyPHPExt\makeCounter(5);
+echo MyPHPExt\counterValue($counter), PHP_EOL; // 5
+```
+
+`fromObject` accepts subclasses with compatible handlers. It returns `InvalidObjectLayout` for a related class with an incompatible layout and leaves initialization to the caller. Constructor exceptions return `PhpException` and internal exits return `UnwindExit`. `tryNew` also catches an escaping `ZendBailout`. End the request after `UnwindExit` or `ZendBailout`, as described in [Bailouts and cleanup]($link.page('advanced/bailout')).
+
+# [Standard layout]($heading.id('standard-layout'))
+
+Use `void` or a Zig struct with no fields for Zend's standard object layout. Store instance state in PHP properties declared in the stub.
+
+## [Standard method bindings]($heading.id('standard-method-bindings'))
+
+With the standard layout, methods take no `self`. Retrieve the object with `ctx.call.this()` to access PHP properties:
+
+```zig
+const Counter = struct {
+    pub fn __construct(ctx: phpz.Ctx) !void {
+        const args = try ctx.call.expectArgs(&.{
+            .{ .int = .{ .optional = true } },
+        }, {});
+        try ctx.call.this().?.setProperty(.int, "n", args[0] orelse 0);
+    }
+
+    pub fn value(ctx: phpz.Ctx) !void {
+        const object = ctx.call.this().?;
+
+        var scratch = phpz.Zval.raw.undef;
+        defer phpz.Zval.raw.release(&scratch);
+
+        const n = try object.property("n", false, &scratch);
+        ctx.ret(.int, try n.as(.int));
+    }
+};
+
+const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{});
+```
+
+Declare PHP properties in the stub. Zig struct fields alone do not expose public PHP properties.
+
+# [Properties]($heading.id('properties'))
+
+Declare the PHP property in the stub:
+
+```php
+<?php
+namespace MyPHPExt;
+class Counter {
+    public int $n = 0;
+    public ?string $name = null;
+
+    public function __construct(int $n = 0) {}
+    public function value(): int {}
+}
+```
+
+In an instance method, retrieve the object with `ctx.call.this()` and use `property` or `setProperty`. Property access may execute user code, enforce visibility and type constraints, or raise a PHP exception.

@@ -1,0 +1,170 @@
+---
+.title = "Your first PHP extension",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/hello-world",
+.custom = { "section": "Getting started" },
+---
+
+Create, build and load a PHP extension to see how its PHP stub and Zig implementation fit together.
+
+# [Quick start]($heading.id('quick-start'))
+
+## [Generating the extension]($heading.id('generate-extension'))
+
+Download and run the PHP skeleton generator in an empty directory.
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php && \
+  php phpz_skel.php --ext my_php_extension
+
+cd my_php_extension
+```
+
+The generated project includes these files:
+
+```
+my_php_extension/
+├── build.zig                    # Build configuration
+├── build.zig.zon                # Project metadata and dependencies
+├── my_php_extension.stub.php    # PHP API declarations
+├── my_php_extension_arginfo.h   # Generated arginfo and registration code
+├── my_php_extension.h           # Includes phpz and the arginfo header
+├── src/
+│   └── root.zig                 # Zig implementation and module registration
+└── tests/
+    ├── hello.phpt               # Test for hello()
+    ├── greet.phpt               # Test for greet()
+    └── counter.phpt             # Tests for Counter
+```
+
+## [Building and calling the extension]($heading.id('build-and-call'))
+
+```sh
+zig build -Dphp-include-dir="$(php-config --include-dir)"
+
+php -n -dextension=./modules/my_php_extension.so -r 'hello();'
+php -n -dextension=./modules/my_php_extension.so -r 'echo greet("World"), PHP_EOL;'
+php -n -dextension=./modules/my_php_extension.so -r '$c = new Counter(5); $c->add(3); echo $c->value(), PHP_EOL;'
+```
+
+The three commands print the following output, in order:
+
+```
+Hello from Zig!
+Hello, World!
+8
+```
+
+`-n` skips `php.ini`. `-dextension` loads the extension for this process.
+
+On Windows, load `modules/php_my_php_extension.dll`. See [Building with MSVC on Windows]($link.page('development/windows').ref('windows-msvc')) for build options.
+
+# [PHP API]($heading.id('php-api'))
+
+`my_php_extension.stub.php` declares the functions, classes and types that PHP sees:
+
+```php
+<?php
+
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ * @undocumentable
+ */
+
+function hello(): void {}
+function greet(string $name): string {}
+
+class Counter
+{
+    public function __construct(int $n = 0) {}
+    public function add(int $n): void {}
+    public function dec(int $n): void {}
+    public function value(): int {}
+}
+```
+
+The stub defines function names, parameter names and types, default values, and return types. For example, `greet(string $name): string` accepts and returns a string. With `Counter::__construct(int $n = 0)`, callers can omit the initial count and use the default of `0`.
+
+As in a C extension built with PHP's own tooling, `gen_stub.php` reads the stub and writes arginfo, function tables and class registration code to `my_php_extension_arginfo.h`. The empty PHP function bodies never run. Edit the stub to change the API and let the generator maintain the header.
+
+# [Zig implementation]($heading.id('zig-implementation'))
+
+`src/root.zig` implements the API declared in the stub. Start with the module and its functions.
+
+## [Registering the module]($heading.id('register-module'))
+
+```zig
+const std = @import("std");
+const phpz = @import("phpz");
+
+comptime {
+    const extension = @import("extension_info");
+    phpz.functions(functions, .{});
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{
+            phpz.Class("Counter", Counter, .{}),
+        },
+    });
+}
+```
+
+- `phpz.functions(functions, .{})` exports handlers for the public functions in `functions` and binds them to entries in the generated Zend function table.
+- `phpz.Class("Counter", Counter, .{})` binds the PHP class `Counter` to the Zig struct `Counter`.
+- `phpz.module()` exports the module entry and registers the listed classes at module startup. `build.zig` supplies the extension name and version.
+
+## [Implement functions]($heading.id('implement-functions'))
+
+```zig
+const functions = struct {
+    pub fn hello() void {
+        _ = phpz.printf("Hello from Zig!\n", .{});
+    }
+
+    pub fn greet(name: []const u8) !*phpz.zend.String {
+        var buffer: [256]u8 = undefined;
+        const result = try std.fmt.bufPrint(&buffer, "Hello, {s}!", .{name});
+        return .init(result, false);
+    }
+};
+```
+
+`hello()` takes no arguments and returns no value. It writes a greeting with `phpz.printf()`. For `greet()`, the wrapper reads the PHP argument and sets the PHP return value according to the Zig signature:
+
+| PHP stub | Zig implementation |
+| --- | --- |
+| `greet` | `functions.greet` matches the declared name |
+| `string $name` | `name: []const u8` borrows the string's bytes |
+| `: string` | `*phpz.zend.String` gives PHP the newly allocated string |
+
+`!*phpz.zend.String` returns a string on success or a Zig error on failure. `String.init` copies the bytes while the local buffer is valid. The PHP return value takes ownership of one reference. Returning a slice of the local buffer would leave the wrapper reading it after the handler returns. This example reports an error if the greeting exceeds 256 bytes.
+
+## [A class example]($heading.id('implement-classes'))
+
+The skeleton also includes `Counter`. The PHP example above creates an instance, changes its state and reads the result. See [Classes, properties and methods]($link.page('reference/registration/classes')) for constructors, class bindings and per-instance Zig data.
+
+# [Testing and updating the extension]($heading.id('run-tests'))
+
+`zig build run-tests` runs the project's PHPT tests using the copy of `run-tests.php` bundled with phpz:
+
+```sh
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+After editing `my_php_extension.stub.php`, regenerate the arginfo header, then build and test:
+
+```sh
+zig build gen-stub
+zig build run-tests -Dphp-include-dir="$(php-config --include-dir)"
+```
+
+`zig build gen-stub` runs the bundled `gen_stub.php` and requires the PHP tokenizer extension. After a Zig-only change, run the build or tests directly.
+
+# [Next steps]($heading.id('next-steps'))
+
+- [How phpz works]($link.page('getting-started/how-it-works')) follows a call from the PHP declaration to the Zig implementation.
+- [Skeleton and code generation]($link.page('getting-started/tools')) covers project generation and updating arginfo.
+- [PHPT tests]($link.page('development/testing')) shows how to write and run a minimal test.

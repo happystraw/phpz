@@ -61,7 +61,8 @@ fn addCheckStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) *s
 }
 
 fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) void {
-    const doc_step = b.step("docs", "Generate documentation for phpz");
+    const api_step = b.step("docs-api", "Generate Zig API documentation");
+    const site_step = b.step("docs", "Build the Zine site with the Zig library API reference");
 
     // Generate docs for main library (src/root.zig)
     const doc_obj = b.addObject(.{
@@ -74,7 +75,16 @@ fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOpti
         .install_dir = .prefix,
         .install_subdir = "docs/lib",
     });
-    doc_step.dependOn(&install_docs.step);
+    api_step.dependOn(&install_docs.step);
+
+    const site = b.addSystemCommand(&.{ "zine", "release", "--force" });
+    site.setCwd(b.path("docs"));
+    for ([_][]const u8{ "index.html", "main.js", "main.wasm", "sources.tar" }) |file| {
+        site.addArg(b.fmt("--build-asset=api/{s}", .{file}));
+        site.addFileArg(doc_obj.getEmittedDocs().path(b, file));
+        site.addArg(b.fmt("--install-always=phpz/api/{s}", .{file}));
+    }
+    site_step.dependOn(&site.step);
 
     // Generate docs for build system (build/Phpz.zig)
     const build_doc_obj = b.addObject(.{
@@ -91,7 +101,7 @@ fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOpti
         .install_dir = .prefix,
         .install_subdir = "docs/build",
     });
-    doc_step.dependOn(&install_build_docs.step);
+    api_step.dependOn(&install_build_docs.step);
 }
 
 fn addTestStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) void {

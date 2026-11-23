@@ -1,0 +1,149 @@
+---
+.title = "Objects",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/objects",
+.custom = { "section": "Types and values" },
+---
+
+phpz provides two object wrappers:
+
+- `phpz.zend.Object` wraps `zend_object *` for property access, method calls and class checks.
+- `phpz.Zval.Object` wraps a zval that holds an object. Use `zval.object()` to obtain it and `.zendObject()` for the underlying pointer.
+
+`ctx.call.this()` returns the current object as `?*zend.Object`. `ctx.call.thisValue()` returns `?*Zval.Object`. Both return `null` in a call without `$this`. Unwrap before use. Function arguments and property read results are usually borrowed.
+
+# [Read properties]($heading.id('read-properties'))
+
+```zig
+const object = ctx.call.this() orelse return;
+
+var scratch = phpz.Zval.raw.undef;
+defer phpz.Zval.raw.release(&scratch);
+
+const name = try object.property("name", false, &scratch);
+ctx.ret(.string, try name.as(.string));
+```
+
+`property()` may borrow storage from the object or point into the supplied `scratch` zval. A read can invoke `__get`, check visibility or throw a PHP exception. To retain a result, copy or retain it before releasing the object or scratch storage.
+
+# [Write and check properties]($heading.id('write-and-check-properties'))
+
+```zig
+try object.setProperty(.string, "name", "phpz");
+try object.unsetProperty("name");
+const exists = try object.hasProperty("name", .exists);
+```
+
+| Operation | Behavior |
+| --- | --- |
+| `property(name, silent, scratch)` | Read a property through object handlers |
+| `propertyStr(name, silent, scratch)` / `setPropertyStr(kind, name, value)` | Read or write using a borrowed `*zend.String` property name |
+| `readProperty(name, mode, scratch)` / `writeProperty(name, value)` | Call the property handler in the current PHP scope and borrow the raw result. Str variants are also available |
+| `readStdProperty(...)` | Use standard property reading, bypassing custom handlers |
+| `setProperty(kind, name, value)` | Write through object handlers |
+| `hasProperty(name, check)` / `hasStdProperty(...)` | `.isset` tests `isset`, `.not_empty` tests `!empty` and `.exists` tests `property_exists` |
+| `unsetProperty(name)` / `unsetStdProperty(name)` | Unset a property |
+
+The two wrappers have different ownership rules for writes:
+
+| API | Input ownership |
+| --- | --- |
+| `zend.Object.setProperty(...)` | Borrows the input. The caller retains its reference on success or a PHP exception. The property handler retains what it needs |
+| `Zval.Object.set(.mixed, key, value)` | Borrows a dereferenced zval. The caller retains the source value |
+| `Zval.Object.set(.array/.object/.resource, key, value)` | Consumes one reference. Immutable arrays need no increment. The native helper releases the reference after the property handler returns, even with a pending PHP exception |
+| Scalar and `.string` writes on either API | Copy the value or bytes |
+
+Pass a borrowed object to `setProperty(.object, ...)` directly. Retain it first for `Zval.Object.set(.object, ...)`. If you already own a reference, you still own it after the former and have transferred it after the latter. Store immutable arrays without calling `addref` or assuming their reference counts are writable.
+
+Both APIs exclude `.reference` and require `.mixed` inputs to be dereferenced. Use `reference.val()` to access the inner value. Writes may call user code, check types and return `error.PhpException`. A native bailout may skip temporary reference cleanup. See [Bailouts and cleanup]($link.page('advanced/bailout')).
+
+`property` and `setProperty` use the object's class scope. `readProperty` and `writeProperty` preserve the current PHP scope, which affects non-public access. Low-level writes also borrow dereferenced input. `writeProperty` returns an optional borrowed pointer that may alias its input.
+
+# [Property views and dimensions]($heading.id('property-views-and-dimensions'))
+
+`properties()` borrows the property table through the object's handlers. `stdProperties()` uses standard handlers. Keep both borrowed. `propertiesFor(purpose)` acquires a read-only view for `.debug`, `.array_cast`, `.serialize`, `.var_export` or `.json`. Pair it with `Object.releaseProperties(view)`.
+
+This handler counts the properties used in an array cast:
+
+```zig
+/// PHP: function propertyCount(object $object): int
+pub fn propertyCount(object: *phpz.zend.Object) !usize {
+    const view = try object.propertiesFor(.array_cast);
+    defer phpz.zend.Object.releaseProperties(view);
+    return if (view) |properties| properties.len() else 0;
+}
+```
+
+Object subscript operations dispatch through dimension handlers and may run userland `ArrayAccess` code:
+
+| API | Behavior |
+| --- | --- |
+| `readDimension(offset, mode, scratch)` | Read an offset, borrowing from the object or scratch |
+| `writeDimension(offset, value)` | Borrow the offset and dereferenced value. A null offset appends |
+| `hasDimension(offset, check)` | `.isset` tests `isset` and `.not_empty` tests `!empty` |
+| `unsetDimension(offset)` | Unset an offset |
+
+Initialize scratch to `IS_UNDEF` before a read. Release scratch after success or a PHP exception. The returned pointer is borrowed. All of these operations can call user code and return `error.PhpException`.
+
+# [Creation and construction]($heading.id('creation-and-construction'))
+
+- `zend.Object.init(ce)` creates an instance with `object_init_ex` and skips the PHP constructor.
+- `zend.Object.new(ce, params, named_params)` creates an instance and calls its constructor.
+- `zend.Object.tryNew(...)` also catches a Zend bailout as `error.ZendBailout`.
+- `zend.Object.std()` creates a `stdClass`.
+- `Zval.Object.initWithProperties(zv, ce, properties)` initializes from a borrowed property table and skips the constructor. Integer keys become string property names.
+- `Zval.Object.stdWithProperties(zv, properties)` creates a `stdClass` like PHP's `(object)$array`.
+- `clone()` follows the object's clone handler.
+
+On success, the new object reference is owned. Release it or transfer it to PHP with `ctx.ret(.object, object)`. Allocation and construction can bail out. See [Bailouts and cleanup]($link.page('advanced/bailout')).
+
+`initWithProperties` requires a class without a `create_object` handler or declared properties. Otherwise it returns `error.UnsupportedClass` and leaves `zv` unchanged. If Zend rejects a class, such as an abstract class or interface, it returns `PhpException` or `UnwindExit`. It populates the property table directly, bypassing `write_property`, `__set` and dynamic-property deprecation checks. On success the caller owns the object in `zv` and retains the supplied table. The object shares it using copy-on-write.
+
+# [Object operations]($heading.id('object-operations'))
+
+```zig
+const class = object.class();
+const is_user = object.instanceof(user_class);
+
+try object.call("methodname", null, .{arg1, arg2}, null);
+try object.tryCall("methodname", null, .{}, null);
+```
+
+Pass lowercase method names as stored by PHP to `call` and `tryCall`. `class()` returns a borrowed pointer and `instanceof()` accepts one. Method calls may return `error.PhpException`.
+
+`callIfExists` and `tryCallIfExists` return `error.MethodCallFailed` for a missing method. Other rules follow `call` and `tryCall`. Pass null for `retval` to discard the result, which may run a PHP destructor. With a destination, the caller owns the result and the API does not release its old contents. A missing method sets the destination to `undef`.
+
+For class registration and Zig instance data, see [Classes, properties and methods]($link.page('reference/registration/classes')).
+
+# [Object iteration]($heading.id('object-iteration'))
+
+`zend.ObjectIterator` uses the object's `get_iterator` for `Iterator`, `IteratorAggregate`, `Generator` and other internal traversables. `init(object, by_ref)` obtains and rewinds an owned iterator. Call `release()` when done. A non-Traversable object raises a PHP `TypeError` and returns `PhpException`.
+
+```zig
+const iterator = try phpz.zend.ObjectIterator.init(object, false);
+defer iterator.release();
+
+while (try iterator.valid()) {
+    const value = try iterator.current() orelse break; // Borrowed, possibly still wrapped in a reference
+    var key = try iterator.key(); // Owned, release or transfer it
+    defer phpz.Zval.raw.release(&key);
+    _ = value;
+    _ = key;
+    try iterator.advance();
+}
+```
+
+`current()` borrows a `?*c.zval`. `key()` returns an owned zval or an increasing integer key if there is no key callback. `key()` and `valid()` may call user code. A failed callback can invalidate a borrowed current value. Copy it first if needed. `advance()` also invalidates it. `by_ref = true` asks Zend to validate by-reference iteration for this object. `release()` can leave an exception pending and propagates bailouts directly.
+
+# [Property names]($heading.id('property-names'))
+
+`PropertyInfo.rawName()` returns the raw `*zend.String` including any private or protected scope prefix. `name()` borrows the name without that prefix. For direct manipulation, use `zend.property_name`:
+
+| API | Behavior |
+| --- | --- |
+| `mangle(Unmangled{ .name, .scope }, persistent)` | Encode a property name following Zend conventions and return an owned string |
+| `unmangle(raw)` | Decode into `.name` and `.scope` (`.public`, `.protected` or `.private`) |
+| `unmangleName(raw)` | Return only the decoded name, or null on failure |
+
+A private scope names the declaring class, and an anonymous class name may contain embedded NULs. A malformed property name produces a Zend notice and a null result. Both decoding operations borrow the input string. `PropertyInfo.name()` requires valid property metadata.

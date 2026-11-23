@@ -1,0 +1,37 @@
+---
+.title = "Superglobals",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/superglobals",
+.custom = { "section": "Runtime APIs" },
+---
+
+# [Read request data]($heading.id('read-request-data'))
+
+`phpz.globals.php()` wraps PHP globals and `phpz.globals.executor()` wraps Zend executor globals. Access superglobals through the provided helpers so PHP can initialize them on demand. `executor().constants()` reads the global constants table, `compiler().classes()` reads the compiler class table and `globals.sapiModule()` returns the process-wide SAPI module definition. See [Engine globals and metadata]($link.page('advanced/zend').ref('engine-globals-and-metadata')) for lifetimes and valid phases.
+
+```zig
+const get = phpz.globals.executor().superglobal(.GET)
+    orelse return error.SuperglobalUnavailable;
+ctx.ret(.mixed, get.ptr());
+```
+
+This example returns a copy of `$_GET`. The accessor borrows a `Zval.Array`. Leave the original value owned by PHP.
+
+`httpGlobal` covers GET, POST, COOKIE, SERVER, ENV and FILES. `superglobal` also provides access to REQUEST. Contents depend on the SAPI, request, PHP configuration and input settings.
+
+# [Modify values]($heading.id('modify-values'))
+
+```zig
+const get = phpz.globals.executor().superglobalMut(.GET)
+    orelse return error.SuperglobalUnavailable;
+get.set(.string, "from_zig", "hello");
+```
+
+Use `superglobalMut` for writable access that respects PHP copy-on-write. Reacquire element pointers after mutating the array.
+
+PHP assembles `$_REQUEST` according to its configuration. Later changes to `$_GET` do not update that snapshot. Test POST, upload and request merging behavior under the target HTTP SAPI, such as CGI or FPM.
+
+# [Lifecycle]($heading.id('lifecycle'))
+
+All accessor results are scoped to the relevant request. Do not retain borrowed pointers across requests in module globals or share them directly across threads.

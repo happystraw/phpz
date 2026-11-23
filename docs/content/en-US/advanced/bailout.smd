@@ -1,0 +1,72 @@
+---
+.title = "Bailouts and cleanup",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/bailout",
+.custom = { "section": "Advanced topics" },
+---
+
+A Zend bailout uses `longjmp` to return to a saved engine boundary. Zig frames skipped by the jump do not run `defer` or `errdefer`. Distinguish bailouts from ordinary PHP exceptions, the internal `UnwindExit` signal, and Zig error unions.
+
+# [Catching a bailout]($heading.id('catch-boundary'))
+
+`phpz.zend.bailout.run(callback, args)` calls a known Zig function inside C's `zend_try` / `zend_catch`. Pass a tuple matching `std.meta.ArgsTuple`. The result preserves the callback's return value and combines its errors with `error.ZendBailout`.
+
+```zig
+fn double(value: u32) u32 {
+    return value * 2;
+}
+```
+
+Call it inside a function:
+
+```zig
+const result = try phpz.zend.bailout.run(double, .{@as(u32, 21)});
+ctx.ret(.int, result);
+```
+
+`runFirst` clears the previous bailout target and is intended for the outermost boundary. `runRaw`, `runFirstRaw` and `RawCallback` are internal.
+
+After a jump, the stack space used by skipped locals can be reused. Pointers into those frames are invalid and skipped cleanup cannot be replayed.
+
+# [Managing native resources with GuardCtx]($heading.id('guardctx-native-resources'))
+
+Place `phpz.GuardCtx` before any PHP arguments. The handler can use typed parameters and returns. Its wrapper owns a cleanup scope outside the bailout boundary. This example writes the return value manually.
+
+```zig
+const std = @import("std");
+
+fn freeBytes(bytes: []u8) void {
+    std.heap.c_allocator.free(bytes);
+}
+
+pub fn nativeWork(ctx: phpz.GuardCtx) !void {
+    const bytes = try std.heap.c_allocator.dupe(u8, "work");
+    _ = ctx.guard(bytes, freeBytes) catch |err| {
+        std.heap.c_allocator.free(bytes);
+        return err;
+    };
+    // The scope frees the registered native buffer even if a later call bails out.
+    ctx.ret(.string, bytes);
+}
+```
+
+Once registration succeeds, the scope owns the resource. `get()` borrows it, `release()` cleans it up immediately, and `take()` unregisters it and transfers ownership. The scope cleans up remaining resources in reverse registration order.
+
+An internal Zend object holds the scope and is created on demand. The wrapper releases it on return or error. If a Fiber suspends indefinitely, the request can still destroy the object and release its resources. Keep guard handles within their handler and Fiber, on the same thread.
+
+# [Cleanup rules]($heading.id('cleanup-rules'))
+
+- If registration fails, the caller still owns the value. Release it in the `catch` branch before propagating the error.
+- After registration, an earlier `errdefer` must not free the same resource. Isolate allocation and registration in a helper or handle the registration failure explicitly.
+- Cleanup callbacks must not call PHP, trigger a bailout or register more resources.
+- Never register a pointer to a local in a frame that `longjmp` might skip.
+- Do not copy guard handles or use them after the handler returns.
+
+`tryCall` and `tryNew` catch a bailout at their respective boundaries. After native cleanup, propagate `ZendBailout` so the wrapper can resume termination. Do not continue the request, retry an interrupted destructor or inspect a partial result.
+
+These calls can also return `UnwindExit` for `exit`, `die` or a delayed out-of-memory condition. The signal remains pending in `EG(exception)`. Propagate it after native cleanup. Standalone hosts must still shut down the request. `bailout.run` catches the jump itself. Wrappers use `exception.check()` to classify exceptions left pending by C callbacks.
+
+`php_allocator` uses PHP's fallible allocation API when available and catches immediate OOM bailouts on older versions. Both paths return `OutOfMemory` to Zig so the caller can clean up. At the PHP boundary, phpz handles a queued OOM or resumes the original bailout. A delayed OOM leaves `UnwindExit` when an execution frame exists and bails out otherwise. An allocation failure that PHP has not reported, such as a native allocator failure, raises `Fatal error: Out of memory`. None of these paths yields a recoverable PHP `Error`.
+
+On PHP versions with a hard memory limit, a non-fallible allocation that exceeds it can terminate the process immediately. Neither guard cleanup nor request shutdown is guaranteed.

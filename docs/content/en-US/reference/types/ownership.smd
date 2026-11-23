@@ -1,0 +1,62 @@
+---
+.title = "Ownership and reference counting",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/ownership",
+.custom = { "section": "Types and values" },
+---
+
+A *PHP reference* lets multiple zvals alias one `zend_reference`. *Owning a reference* means being responsible for releasing or transferring a refcounted value. *Borrowing* permits access while the original owner and storage remain valid. A Zig variable leaving scope does not release PHP values. Assigning a Zig struct does not increment PHP reference counts.
+
+# [Ownership by API]($heading.id('interface-differences'))
+
+| API | Input or result ownership |
+| --- | --- |
+| `Zval.from`, `ptr`, `as` | Pointers and slices are borrowed views. Scalar reads copy the scalar |
+| `Zval.raw.copy(dst, src)` | Copy and increment the reference count as needed, preserving the reference wrapper |
+| `Zval.set(.mixed, src)` | Copy the dereferenced value. The source zval retains ownership |
+| `Zval.set(.string, bytes)` | Copy the bytes |
+| `Zval.set(.array/.object/..., ptr)` | Take one reference without calling `addref` |
+| `Zval.Array.set(.mixed, key, src)` | Transfer one value without clearing the source zval |
+| `zend.Object.setProperty(...)` | Borrow the input. The caller retains its original reference |
+| `Zval.Object.set(.array/.object/.resource, key, ptr)` | Consume one reference. The `.mixed` form borrows instead. See [Objects]($link.page('reference/types/objects')) |
+| `zend.Reference.init(kind, value)` | Create a reference with count 1. The caller owns its `release()` |
+| `zend.Resource.Typed.init(value)` | Create an owned resource reference and hand payload cleanup to its destructor |
+| `Zval.makeRef()` / `Zval.raw.makeRef` | Move an ordinary value into a new PHP reference container with count 1. Leave existing references unchanged |
+| `zend.Array.emptyImmutable()` | Borrow the shared empty array. `release()` is a no-op. Call `dupe()` before writing |
+| `String.copy()` | Retain a reference. Release the result |
+| `cast(.str/.array/.object)` | Return an owned result |
+
+Immutable arrays, including some `[]` arguments and `zend_empty_array`, have no refcounted flag. phpz preserves that status when storing them in array elements or object properties. Never manually `addref` an immutable array or assume all arrays have writable reference counts.
+
+For a zval, `addref()` requires a refcounted value and `tryAddref()` checks first. Both preserve PHP reference wrappers. Use `release()` to clean up an owned value. `delref()` and `tryDelref()` only decrement the count, even at zero. `release()` accepts `undef` but leaves the slot uncleared. See [Ownership and release]($link.page('reference/types/zval').ref('ownership-and-release')).
+
+`zend.Reference.release()` releases one reference and destroys its contents at zero. `zend.Reference.delref()` only decrements. `zend.Resource.release()` calls `zend_list_delete`, closing and invoking the resource destructor at zero. `close()` closes the shared payload and retains the current reference. Use the release operation for final cleanup.
+
+# [Returning a borrowed array]($heading.id('return-borrowed-array'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+if (!args[0].isImmutable()) args[0].addref();
+ctx.ret(.array, args[0]);
+```
+
+The call frame still owns the argument. Give the return slot an additional reference for a refcounted array and leave immutable arrays' counts untouched. The same rule applies to directly returning a borrowed `*zend.Array`. Alternatively use `.array = .{ .as = .zval }` and copy with `ctx.ret(.mixed, args[0].ptr())`.
+
+# [Transferring a temporary value]($heading.id('transfer-temporary-value'))
+
+After successful insertion, the array owns the temporary zval's contents. The source still contains its old tag and pointer. To use common cleanup code, reset the source to `Zval.raw.undef` after the transfer. On a failed insertion, release the value still owned by the caller.
+
+# [Lifetime boundaries]($heading.id('lifetime-boundaries'))
+
+| Storage or lifetime | Ownership and cleanup |
+| --- | --- |
+| Within one call | Borrow argument zvals, string slices and array elements only while their owners and storage remain valid. Copy into your own zval to retain a value |
+| Across calls in one request | Use `copy` or `addref` and release the value when invalidating that state or before request end. `addref` cannot extend a stack zval's storage lifetime |
+| PHP return value | Transfer or copy into the return slot. PHP manages the result. A transferred reference must not be released twice |
+| Per-object Zig data | Retain PHP values, release them in `.deinit` and report potential cycle edges in `.gc`. The object may be destroyed before request end |
+| Module globals instance | Release native resources of matching lifetime in the instance's `deinit`. Clean up request resources at RSHUTDOWN. Never retain request memory or PHP values across requests |
+
+Zig `defer` runs on normal returns and Zig error unwinding. A Zend bailout uses `longjmp` and skips cleanup in crossed stack frames. See [Bailouts and cleanup]($link.page('advanced/bailout')) for protecting native resources.
+
+Lifetime alone does not make values safe to share between threads. For NTS and ZTS module globals see [Module globals]($link.page('advanced/globals')). For request allocation and failure behavior see [PHP memory allocation]($link.page('advanced/memory')).

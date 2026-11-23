@@ -1,0 +1,69 @@
+---
+.title = "Function bindings",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/functions",
+.custom = { "section": "Declarations and registration" },
+---
+
+# [Bind functions]($heading.id('bind-functions'))
+
+Declare the PHP functions in the stub and keep the skeleton's generator annotations at the top:
+
+```php
+<?php
+/**
+ * @generate-legacy-arginfo 80200
+ * @generate-class-entries
+ * @undocumentable
+ */
+namespace MyPHPExt;
+function greet(string $name): string {}
+```
+
+After generating arginfo, implement the functions in a Zig container. These snippets assume the project imports `phpz` and registers the module:
+
+```zig
+const Api = struct {
+    pub fn greet(name: []const u8) []const u8 {
+        return name;
+    }
+};
+
+comptime {
+    phpz.functions(Api, .{ .namespace = "MyPHPExt" });
+}
+```
+
+`functions` binds all public functions in the container. Set `.namespace` to the PHP namespace prefix or omit it for the global namespace. Once loaded, `MyPHPExt\greet("Zig")` returns `"Zig"`.
+
+To map functions individually, use several Zig containers, or bind different Zig and PHP names, replace the `comptime` block with `namedFunctions`:
+
+```zig
+comptime {
+    phpz.namedFunctions(.{
+        .@"MyPHPExt\\greet" = Api.greet,
+    });
+}
+```
+
+Choose one form and cover all concrete stub functions in one call. Explicit `@alias` declarations reuse their targets. Match fully qualified PHP names exactly, including case. Keep helpers private when binding automatically.
+
+For bindings spread across Zig modules, export individual handlers with `phpz.function("MyPHPExt\\greet", Api.greet)`. It checks that function's declaration and handler as a batch binding would. It cannot detect missing implementations elsewhere. Prefer a batch binding when functions can be registered together.
+
+# [Handler signatures]($heading.id('handler-signatures'))
+
+Declare the Zig types corresponding to the PHP parameters and return `T` or `!T`. The wrapper parses arguments and sets the PHP result. Optional `Ctx` or `GuardCtx` precedes PHP parameters. On a backed instance method, put `self` before the context.
+
+A handler without context or typed parameters checks for an empty call. A context-only handler checks arguments itself using `expectNoArgs()` or `expectArgs()`. With `void` or `!void` use `ctx.ret()` to set the result manually. With other return types use the Zig return value. The stub supplies the PHP signature and reflection metadata.
+
+At compile time, typed handlers check the following parts of generated arginfo that affect memory safety:
+
+- Required and fixed parameter counts and the trailing variadic flag must agree.
+- By-reference parameters require `*phpz.zend.Reference`, its optional form, or a raw `*phpz.Zval` that preserves the reference. By-value parameters cannot use the reference type.
+- For direct returns, a by-reference declaration requires `*phpz.zend.Reference` and a by-value declaration excludes it. Context handlers returning `void` or `!void` write the slot themselves and are responsible for the reference semantics.
+- PHP 8.4+ `@frameless-function` declarations fail at the binding site because phpz does not export frameless handlers.
+
+Check specific PHP types and defaults against the stub yourself. For context-only handlers, `expectArgs` checks counts in Debug builds.
+
+Functions, methods and closures follow the rules in [Argument parsing and return values]($link.page('reference/registration/arguments')). For native resource cleanup, see [Bailouts and cleanup]($link.page('advanced/bailout')).

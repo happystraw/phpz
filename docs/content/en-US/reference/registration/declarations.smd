@@ -1,0 +1,221 @@
+---
+.title = "Interfaces, inheritance, enums, traits and attributes",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/declarations",
+.custom = { "section": "Declarations and registration" },
+---
+
+Declare inheritance, interfaces, enums, attributes and traits in the stub. For a declaration with no Zig instance data and no concrete methods to bind, register `phpz.ClassDecl("MyPHPExt\\Name", .{})`. For constructors or other method implementations, use `phpz.Class`. List the wrapper in `module.classes`. See [Classes, properties and methods]($link.page('reference/registration/classes')).
+
+# [Interfaces]($heading.id('interfaces'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+interface Identifiable {
+    public function getId(): int;
+}
+```
+
+```zig
+pub const IdentifiableClass = phpz.ClassDecl("MyPHPExt\\Identifiable", .{});
+```
+
+An interface declares methods. Use `ClassDecl` when it needs no Zig handlers. Register parents and interfaces before classes that depend on them.
+
+# [Registering parent classes and interfaces]($heading.id('inheritance'))
+
+The following declarations come after the `Identifiable` interface. `Entity` is an abstract base class. `User` implements the interface and stores state in PHP properties:
+
+```php
+abstract class Entity implements Identifiable {
+    public int $id = 0;
+}
+
+class User extends Entity {
+    public function getId(): int {}
+}
+```
+
+The generated registration function needs class entries for the parent and interfaces. The `.register` adapter takes a tuple of `*phpz.ClassEntry` arguments. Pass the wrappers' `.entry` values in the order specified by `register_class_*` in `_arginfo.h`:
+
+```zig
+fn registerEntity(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{IdentifiableClass.entry});
+}
+const EntityClass = phpz.ClassDecl("MyPHPExt\\Entity", .{
+    .register = registerEntity,
+});
+
+const User = struct {
+    pub fn getId(ctx: phpz.Ctx) !void {
+        try ctx.call.expectNoArgs();
+        var scratch = phpz.Zval.raw.undef;
+        defer phpz.Zval.raw.release(&scratch);
+        const id = try ctx.call.this().?.property("id", false, &scratch);
+        ctx.ret(.int, try id.as(.int));
+    }
+};
+
+fn registerUser(register_fn: anytype) *phpz.ClassEntry {
+    return register_fn(.{EntityClass.entry});
+}
+const UserClass = phpz.Class("MyPHPExt\\User", User, .{
+    .register = registerUser,
+});
+
+comptime {
+    const extension = @import("extension_info");
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{ IdentifiableClass, EntityClass, UserClass },
+    });
+}
+```
+
+Here `.classes` registers the interface, the parent and finally the subclass. `Entity` has no concrete methods and can use `ClassDecl`. `User::getId` needs a Zig implementation. After loading the extension:
+
+```php
+$user = new MyPHPExt\User();
+$user->id = 42;
+echo $user->getId(), PHP_EOL; // 42
+var_dump($user instanceof MyPHPExt\Identifiable); // bool(true)
+```
+
+This example uses the standard object layout. For Zig-backed classes, `Class.fromObject()` checks both ancestry and object handlers before allowing access to a parent's Zig data. A backed class cannot extend a parent that allocates its own objects, including `Exception`, `ArrayObject` and other backed classes. For these subclasses, use `void` and keep state in PHP properties. Debug builds reject an unsupported parent with `error.UnsupportedParent`.
+
+# [Enums]($heading.id('enums'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+enum Status: int {
+    case Inactive = 0;
+    case Active = 1;
+}
+```
+
+```zig
+pub const StatusClass = phpz.ClassDecl("MyPHPExt\\Status", .{});
+```
+
+After registration, look up an enum case:
+
+```zig
+const case = StatusClass.entry.getEnumCase("Active");
+```
+
+`getEnumCase()` returns an optional object pointer. It returns `null` for a non-enum class, an unknown name or an ordinary class constant. For a known class and case, `getEnumCaseUnchecked()` skips validation and returns the pointer directly. Invalid input fails an assertion in Debug and may dereference a null constant in release builds. `enumCaseName()` returns the case name. For a backed enum, `enumCaseValue()` borrows the scalar zval. Unit enums have no backing value. The PHP enum runtime owns the case object. Follow the object ownership rules before returning it to PHP.
+
+# [Traits]($heading.id('traits'))
+
+```php
+<?php
+namespace MyPHPExt;
+
+trait Greets {
+    public function greet(): string {}
+}
+```
+
+Implement concrete trait methods with matching `pub fn` declarations:
+
+```zig
+const Greets = struct {
+    pub fn greet() []const u8 {
+        return "Hello";
+    }
+};
+
+const GreetsTrait = phpz.Class("MyPHPExt\\Greets", Greets, .{});
+```
+
+A trait with only abstract methods or no methods can use `ClassDecl`. The concrete `greet` above needs a Zig binding. Add `GreetsTrait` to `module.classes` so PHP classes can import it with `use MyPHPExt\Greets;`.
+
+Using a trait adds no Zig instance data to the consuming class. Use a fieldless Zig container as above. A trait method can retrieve the current object through `Ctx` to access its PHP properties.
+
+# [Attributes]($heading.id('attributes'))
+
+```php
+<?php
+namespace MyPHPExt;
+require "Zend/zend_attributes.stub.php";
+
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_PARAMETER | \Attribute::IS_REPEATABLE)]
+final class Tag {
+    public string $name;
+    public ?string $description;
+
+    public function __construct(string $name, ?string $description = null) {}
+}
+```
+
+`Tag` declares a concrete constructor and needs a `Class` binding even if the constructor body is empty:
+
+```zig
+const Tag = struct {
+    pub fn __construct(ctx: phpz.Ctx) !void {
+        const name, const description = try ctx.call.expectArgs(&.{
+            .{ .string = .{} },
+            .{ .string = .{ .optional = true, .nullable = true } },
+        }, {});
+
+        const tag = ctx.call.this().?;
+        try tag.setProperty(.string, "name", name);
+
+        if (description) |provided| {
+            switch (provided) {
+                .null => try tag.setProperty(.null, "description", {}),
+                .value => |value| try tag.setProperty(.string, "description", value),
+            }
+        } else {
+            try tag.setProperty(.null, "description", {});
+        }
+    }
+};
+
+const TagClass = phpz.Class("MyPHPExt\\Tag", Tag, .{});
+```
+
+For a marker attribute with no constructor or other concrete methods, use `ClassDecl`. For example, in the same namespace:
+
+```php
+#[\Attribute(\Attribute::TARGET_CLASS)]
+final class Marker {}
+```
+
+```zig
+const MarkerClass = phpz.ClassDecl("MyPHPExt\\Marker", .{});
+```
+
+Add `TagClass` and `MarkerClass` to `module.classes` to use the attributes from PHP:
+
+```php
+#[MyPHPExt\Tag("model")]
+#[MyPHPExt\Marker]
+class Record {}
+
+$attribute = (new ReflectionClass(Record::class))
+    ->getAttributes(MyPHPExt\Tag::class)[0];
+echo $attribute->newInstance()->name, PHP_EOL; // model
+```
+
+The stub needs `require "Zend/zend_attributes.stub.php";` so the generator can resolve built-in attribute constants. The extension header also needs the C attribute declarations before including arginfo:
+
+```c
+#include "phpz.h"
+#include "Zend/zend_attributes.h"
+#include "my_php_extension_arginfo.h"
+```
+
+If `zig build gen-stub` cannot find `Zend/zend_attributes.stub.php`, copy it from the target PHP source into the extension's `Zend/` directory. Alternatively, use the generator from a complete php-src tree so it can resolve its own dependencies:
+
+```sh
+php /path/to/php-src/build/gen_stub.php my_php_extension.stub.php
+```
+
+Applying `#[Tag(...)]` to a class or parameter records metadata. The constructor runs when reflection instantiates the attribute.

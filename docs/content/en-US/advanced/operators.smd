@@ -1,0 +1,51 @@
+---
+.title = "Operators and comparisons",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/operators",
+.custom = { "section": "Advanced topics" },
+---
+
+Classes with Zig instance data can implement `.operate` and `.compare`. The example's `BigInteger` uses Zig's big integers.
+
+# [Operator callbacks]($heading.id('operator-callbacks'))
+
+```zig
+fn operate(
+    op: phpz.Operator,
+    lhs: *phpz.Zval,
+    rhs: ?*phpz.Zval,
+    result: *phpz.Zval,
+) !void {
+    _ = op;
+    _ = lhs;
+    _ = rhs;
+    _ = result;
+    return error.Unsupported;
+}
+```
+
+This callback rejects all operators by default. Dispatch on `op`, validate operand types and write an owned result to `result`. Unary operators may have no right-hand operand.
+
+For compound assignments such as `$a += $a`, `result` can alias either operand. phpz moves a reused operand to temporary storage before calling the handler and restores it on failure. Do not assume the destination starts empty. Returning success without writing a result raises a PHP `Error`. Compute the new value before writing it.
+
+`error.Unsupported` becomes a PHP `TypeError` for an unsupported operation or operand. Handle reversed operands, assignment forms and aliases without destroying the original object on failure. `rhs` is null for `.bit_not` and `.bool_not`.
+
+# [Comparison]($heading.id('comparison'))
+
+Return `phpz.Comparison` or an error union with that payload. `error.Uncomparable` signals incompatible types and produces a `TypeError`. Compare big integers by numeric value rather than lexicographic string order.
+
+Zend handles some expressions outside `do_operation`. Logical negation (`!`), for example, has its own engine path. An opcode's presence in the enum does not guarantee an overloadable PHP expression.
+
+# [Usage examples]($heading.id('usage-examples'))
+
+The full example supports calls like this:
+
+```php
+<?php
+$a = new MyPHPExt\BigInteger("12345678901234567890");
+$b = new MyPHPExt\BigInteger(10);
+echo ($a + $b)->value(), PHP_EOL;
+```
+
+Document and test the class's division, negative bitwise operations, overflow and parsing semantics. The example chooses its own policies.

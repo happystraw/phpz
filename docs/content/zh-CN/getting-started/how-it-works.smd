@@ -1,0 +1,47 @@
+---
+.title = "工作原理",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/how-it-works",
+.custom = { "section": "入门" },
+---
+
+phpz 把 Zig 实现编译成 PHP 可以加载的共享扩展。以调用 `greet("World")` 为例，PHP stub 文件定义函数签名，phpz 在编译期把声明和 Zig 实现绑定起来，PHP 在运行时通过绑定后的处理器调用 Zig 函数。
+
+![](/phpz/how-it-works.svg "gen_stub.php 从 PHP stub 文件生成 arginfo。Zig 将转换后的 C 绑定和 Zig 实现编译、链接为共享扩展。PHP 加载扩展并在 MINIT 阶段注册，再通过 phpz 包装器调用 Zig 实现。")
+
+# [从 stub 文件生成 API 元数据]($heading.id('build-api-metadata'))
+
+在 `.stub.php` 中声明 `function greet(string $name): string {}`。执行 `zig build gen-stub` 时，`gen_stub.php` 读取该文件并生成 `_arginfo.h`。
+
+| 内容 | 作用 |
+| --- | --- |
+| `arginfo_greet` | 描述 `greet` 的参数名、参数类型和返回类型，供 PHP 参数处理和反射使用 |
+| `ext_functions` | 将 PHP 函数名 `greet` 关联到处理器 `zif_greet` 和 `arginfo_greet` |
+| 注册函数 | 如果 stub 文件声明了类或模块符号，生成器还会输出相应的类注册或符号注册代码 |
+
+**修改 PHP API 时先运行 `zig build gen-stub`，再运行 `zig build`。** 普通构建读取已有头文件，默认检查它是否与 stub 文件同步。只改 Zig 函数体时，直接构建即可。详见 [stub 文件更新流程]($link.page('reference/registration/stub').ref('update-workflow'))。
+
+# [将声明绑定到 Zig 实现]($heading.id('compile-zig-implementation'))
+
+扩展的 C 头文件引入 `phpz.h` 和生成的 `_arginfo.h`。构建脚本调用 `Phpz.init()`，通过 `translate-c` 把这些 C 声明转换为 Zig 可用的绑定。随后，phpz 在编译期将实现与声明匹配。
+
+| Zig 声明 | 编译结果 |
+| --- | --- |
+| `phpz.functions(functions, .{})` | 核对 Zend 函数表并导出 PHP 可调用的包装器，例如为 `functions.greet` 导出 `zif_greet` |
+| `phpz.Class("Counter", Counter, .{})` | 绑定类和方法，为方法导出 `zim_*` 包装器 |
+| `phpz.module(...)` | 创建模块条目，并为共享扩展导出 `get_module()` |
+
+类型化处理器在编译期核对参数数量、可变参数和引用标志，实际传入的值由运行时解析。完整的绑定规则见 [处理器签名]($link.page('reference/registration/functions').ref('handler-signatures'))。构建脚本通过 `addExtension()` 编译并链接共享扩展。
+
+# [PHP 如何加载和调用扩展]($heading.id('runtime-loading-and-calls'))
+
+加载共享库时，PHP 调用 `get_module()` 取得模块条目并安装函数表。随后进入 MINIT（模块初始化），phpz 注册扩展声明的符号、INI、资源类型、类和观察器，并在最后执行配置的 `module_startup_fn`。依赖顺序和临时加载规则见 [模块注册顺序]($link.page('reference/registration/module').ref('registration-order'))。
+
+PHP 执行 `greet("World")` 时，按函数表找到 `zif_greet`。
+
+1. 包装器按 Zig 签名解析 PHP 参数，将 `"World"` 作为 `[]const u8` 传给 `functions.greet(name)`。
+2. Zig 实现返回 `Hello, World!` 对应的 Zend 字符串。
+3. 包装器将字符串写入 PHP 的返回值，调用方收到一个 PHP 字符串。
+
+实例方法走相同的调用流程。对绑定了 Zig 数据的类，包装器还会取出 PHP 对象关联的 Zig 实例，并传给方法的 `self` 参数。

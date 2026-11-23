@@ -1,0 +1,344 @@
+---
+.title = "Argument parsing and return values",
+.date = .date("2026-09-20T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/arguments",
+.custom = { "section": "Declarations and registration" },
+---
+
+Functions, methods and closures use the same typed handler signatures. Declare arguments and the return type in Zig and use a trailing `phpz.Variadic` for variadic arguments. Use `Ctx` or `GuardCtx` to parse arguments manually if you need constraints on referenced values, specific classes or a type-checked zval view. Keep either signature consistent with the PHP stub.
+
+# [Arguments and return values]($heading.id('arguments-and-return-values'))
+
+The following handler implements `function greet(string $name): string`. For binding details, see [Function bindings]($link.page('reference/registration/functions')).
+
+```zig
+pub fn greet(name: []const u8) []const u8 {
+    return name;
+}
+```
+
+The wrapper checks arguments before calling the handler and sets the PHP return value on success. The input slice borrows the argument's bytes. The wrapper copies the returned slice. The equivalent explicit specification is:
+
+```zig
+pub fn greet(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+    }, {});
+    ctx.ret(.string, args[0]);
+}
+```
+
+`expectArgs` derives the argument count from the specification and returns a typed tuple. Scalar arguments follow Zend parameter parsing (ZPP) conversion rules, just as they do in typed signatures. See [Optional and nullable arguments]($link.ref('missing-and-null')).
+
+`ctx.call.arg(1)` borrows the first argument. With this low-level interface, check the count and type before accessing the value.
+
+Both `Ctx` and `GuardCtx` provide `ctx.ret(kind, value)`, shorthand for `ctx.retval.set(kind, value)`. It accepts the same types as [Ownership and reference counting]($link.page('reference/types/ownership')). `ctx.retval` is a `*phpz.Zval` pointing to the PHP return slot. Use `ctx.retval.ptr()` with lower-level APIs.
+
+`ret` writes the return slot and execution continues. Use `return ctx.ret(.int, 42);` to exit the Zig function immediately.
+
+# [Typed handler signatures]($heading.id('typed-signatures'))
+
+An optional `Ctx` or `GuardCtx` precedes all PHP arguments. For instance methods, `self` comes first. A context-only handler checks its own arguments. For typed arguments the wrapper parses the entire signature and rejects excess arguments unless it ends in `Variadic`.
+
+| Zig parameter | PHP declaration | Input and behavior |
+| --- | --- | --- |
+| `i8` / `i16` / `i32` / `i64` / `isize` | `int $a` | Parse a PHP int and check the Zig range. Overflow raises an argument `ValueError` |
+| `u8` / `u16` / `u32` / `u64` / `usize` | `int $a` | Parse a PHP int and check the Zig range. Negative or out-of-range values raise an argument `ValueError` |
+| `f32` / `f64` | `float $a` | Parse a PHP float. Conversion to `f32` checks finite values for overflow and can lose precision |
+| `bool` | `bool $a` | Parse a PHP bool |
+| `[]const u8` | `string $a` | Parse a PHP string and borrow its bytes |
+| `[:0]const u8` | `string $a` | Borrow a NUL-terminated slice, preserving the length and embedded NULs |
+| `*phpz.zend.String` | `string $a` | Parse a PHP string and borrow the Zend string |
+| `*phpz.zend.Array` | `array $a` | Borrow the PHP array |
+| `*phpz.zend.Object` | `object $a` | Borrow the PHP object |
+| `*phpz.zend.Resource` | `@param resource $a` (PHPDoc) | Borrow the PHP resource |
+| `*phpz.Stream` | `@param resource $a` (PHPDoc) | Check for a regular or persistent stream resource and borrow the stream |
+| `*phpz.zend.Callable` | `callable $a` | Resolve the callable. The temporary resolution is valid only during this invocation |
+| `*phpz.zend.Reference` | `mixed &$a` | Borrow the PHP reference. Use a manual `.reference.kind` to constrain the referenced value |
+| `*phpz.Zval` | `mixed $a` | Borrow the argument zval, accepting any PHP value including null |
+| `phpz.Mixed(&.{ .int, .string })` | `int\|string $a` | Parse into a tagged union |
+| `?T` | `int $a = 0` | The argument may be omitted. The outer `null` means it was absent |
+| `phpz.Nullable(T)` | `?int $a` / `int\|null $a` | Accept explicit PHP null, represented by `.null` or otherwise by `.value` |
+| `?phpz.Nullable(T)` | `?int $a = null` | Accept omission and explicit `null` |
+| `phpz.Variadic` | `mixed ...$a` | Must come last. Borrows remaining positional and extra named arguments and validates entries on demand |
+
+The three `T` rows illustrate Zig `i64` and PHP `int`. A Zig `?T` permits omission. To accept explicit PHP null, choose a type that supports it. Handle stub defaults in the Zig implementation. A variadic declaration can constrain its elements, for example `int ...$a`. Check each with `Entry.expect()`.
+
+PHP has no native `resource` parameter type. Document it in the stub with `@param resource`, as in [Borrowing a PHP stream]($link.page('reference/runtime/streams').ref('borrow-stream')).
+
+`Nullable(T)` supports scalars, strings, arrays, objects, resources, `*phpz.Stream` and `*phpz.zend.Callable`. `*Zval` already accepts null, and `Mixed` can include `.null`. Use a manual specification to constrain the value inside a reference.
+
+Scalar parsing follows these rules:
+
+- In weak mode, ZPP supports conversions such as `"12"` to int, `1` to float and a Stringable object to string. Failed conversions raise `TypeError`.
+- With `declare(strict_types=1)` in the caller, int to float remains valid. The other weak conversions above are rejected.
+- Conversion updates the argument in the current call frame, including the value you see with `as = .zval`. Arrays, objects, resources, reference constraints and `Mixed` unions do not use scalar coercion.
+- Non-nullable scalars follow the target PHP version's null handling. In PHP 8.2–8.6, weak calls emit a deprecation before conversion and strict calls reject null. Use `Nullable(T)` or `nullable = true` to preserve null.
+
+`?T` makes an argument optional. If `T` itself accepts null, as mixed or a union containing `.null` does, it still accepts PHP null. Put optional arguments after required arguments.
+
+For example, the following handler implements `function choose(?int $value = null): ?int`:
+
+```zig
+pub fn choose(value: ?phpz.Nullable(i64)) phpz.Nullable(i64) {
+    return value orelse .{ .value = 0 };
+}
+```
+
+The outer `?` permits omission. Both the parameter and return type use `phpz.Nullable(i64)` to represent PHP null as `.null`. `choose()` returns `0`, `choose(null)` returns `null` and `choose(42)` returns `42`. The stub records the default as metadata. The handler decides what happens when the argument is absent.
+
+# [Typed unions]($heading.id('typed-unions'))
+
+```zig
+const IntOrString = phpz.Mixed(&.{ .int, .string });
+
+pub fn describe(value: IntOrString) []const u8 {
+    return switch (value) {
+        .int => "integer",
+        .string => "string",
+    };
+}
+```
+
+The matching PHP declaration is `function describe(int|string $value): string`. `Mixed` requires at least two distinct types. It can include `.null` and excludes `.mixed`, `.reference` and `.callable`. Use `phpz.Mixed`. A hand-written Zig union with similar fields is a different signature type.
+
+# [Direct returns and ownership]($heading.id('typed-returns'))
+
+Supported return types include the integers and floats listed above, bools, byte slices, pointers to Zend strings, arrays, objects and resources, `*zend.Reference`, `*Zval`, `Mixed`, `Nullable(T)`, optionals and their error unions. `Variadic` is input-only. With `void` or `!void`, use `ctx.ret()` to write a result. For other types let the wrapper set the PHP result from the Zig return value.
+
+- Integers must fit in `zend_long` or conversion returns `ReturnValueOutOfRange`.
+- The wrapper copies byte slices after the handler returns. Never return a slice of a stack buffer or memory released by `defer`. For local bytes, copy them inside the handler with `String.init` or call `ctx.ret(.string, bytes)` before returning.
+- A returned `*zend.String`, `*zend.Array`, `*zend.Object`, `*zend.Resource` or `*zend.Reference` transfers one reference. Before returning a borrowed pointer, copy or retain it as described in [Ownership and reference counting]($link.page('reference/types/ownership')).
+- Returning `*Zval` copies the dereferenced value. Its source retains ownership and must still be valid when the wrapper reads it.
+- `*Stream` and `*zend.Callable` cannot be returned directly. To transfer a stream, call `toZval(ctx.retval)`.
+- For direct returns, a PHP by-reference declaration (`function &name()`) requires `*zend.Reference` or its error union. A by-value declaration cannot return a reference directly. A context handler returning `void` or `!void` writes the return slot itself and must honor the declared reference semantics.
+
+# [Manual parsing]($heading.id('manual-parsing'))
+
+Use a context handler for `instanceof` checks, reference write-back, raw zvals or custom argument counts. `expectArgs` returns a typed tuple. The lower-level `parseArgs` uses PHP format strings and the corresponding conversion and output-pointer conventions.
+
+## [Compile-time and Debug declaration checks]($heading.id('debug-declaration-checks'))
+
+At compile time phpz compares typed handlers with arginfo for required and fixed parameter counts, variadic and parameter reference flags, and the reference flag on direct returns. A mismatch causes a compile error identifying the function or method. Keep PHP types and defaults in sync through stub regeneration and PHPT coverage. For context-only handlers, Zig Debug builds check the required and fixed counts and variadic flag against the current function's arginfo before each `expectArgs`. A mismatch terminates the process with a Zig panic reporting `expectArgs declaration mismatch`.
+
+The runtime check excludes parameter types and defaults. ReleaseSafe, ReleaseFast and ReleaseSmall skip it regardless of the PHP build mode. Closures created by phpz with generic arginfo skip it as well. Closures derived from a registered function with its original declaration are checked. To parse a subset, use `expectArgCount` and `expectArg` and check all counts, types and extra named arguments yourself. For by-reference parameters use `*zend.Reference`, its optional form, or raw `*Zval`. Direct returns follow the reference rules above.
+
+# [Argument parsing types]($heading.id('argument-parsing-types'))
+
+The first argument to `expectArgs` is an array of `ExpectArgKind.Spec`. The second supplies runtime data for specifications such as `callable` or `object instanceof`. Common options include:
+
+| Option | Applies to | Meaning |
+| --- | --- | --- |
+| `optional = true` | All except `.null` and `.variadic` | Allows omission and wraps the result in `?T` |
+| `nullable = true` | Scalars, arrays, objects, resources and callables | Accepts explicit null and returns `phpz.Nullable(T)` unless `as = .zval` is selected |
+| `as = .zval` | `.int`, `.float`, `.bool`, `.string`, `.array`, `.object`, `.resource` | Returns the borrowed `*Zval` |
+
+Optional arguments must follow required ones. `.null` cannot stand alone as a parameter specification. Use `optional + nullable` or `.mixed` to distinguish omission, explicit null and a supplied value. `as` selects the output type. Numeric range checks match those for typed handlers.
+
+These seven types support `optional`, `nullable` and `as`:
+
+| Specification | Default Zig result | Ownership |
+| --- | --- | --- |
+| `.int` | `i64` | Scalar value |
+| `.float` | `f64` | Scalar value |
+| `.bool` | `bool` | Scalar value |
+| `.string` | `[]const u8` | Borrowed byte slice |
+| `.array` | `*zend.Array` | Borrowed array |
+| `.object` | `*zend.Object` | Borrowed object |
+| `.resource` | `*zend.Resource` | Borrowed resource |
+
+For a default result type `T`, combine options as follows:
+
+| Options | Zig result | Explicit null |
+| --- | --- | --- |
+| Default | `T` | Non-nullable scalars follow ZPP as above. Other types reject null |
+| `optional` | `?T` | Same as the default. Outer `null` means omission |
+| `nullable` | `phpz.Nullable(T)` | `.null` for PHP null, `.value` otherwise |
+| `optional + nullable` | `?phpz.Nullable(T)` | Outer `null` means omission. Inner `.null` means PHP null |
+| `as = .zval` | `*Zval` | Non-nullable scalars follow ZPP as above. Other types reject null |
+| `nullable + as = .zval` | `*Zval` | Call `is(.null)` on the borrowed zval |
+| `optional + as = .zval`, optionally with `nullable` | `?*Zval` | Outer `null` means omission. Add `nullable` to preserve PHP null. Otherwise the rules above apply |
+
+`as = .zval` takes precedence when selecting the result type and skips the `Nullable(T)` wrapper. The specification still checks the underlying type.
+
+## [.int]($heading.id('expect-int'))
+
+Each line below is an integer specification you can use in `expectArgs`:
+
+```zig
+.{ .int = .{} } // i64
+.{ .int = .{ .as = .u8 } } // u8, accepts 0–255
+.{ .int = .{ .optional = true } } // ?i64
+.{ .int = .{ .nullable = true } } // phpz.Nullable(i64)
+.{ .int = .{ .optional = true, .nullable = true } } // ?phpz.Nullable(i64)
+.{ .int = .{ .nullable = true, .as = .zval } } // *Zval
+```
+
+## [.float]($heading.id('expect-float'))
+
+`.float = .{}` reads `f64` and `.float = .{ .as = .f32 }` reads `f32`. Both accept PHP ints. Weak calls also accept other ZPP-convertible scalars. The `f32` range check runs after conversion. Options combine as shown above.
+
+## [.bool]($heading.id('expect-bool'))
+
+`.bool = .{}` returns a Zig `bool`. Weak calls use ZPP scalar conversions. Strict calls accept only PHP `true` and `false`. Arrays and other non-scalars are rejected.
+
+## [.string]($heading.id('expect-string'))
+
+`.string = .{}` borrows a `[]const u8` of arbitrary bytes with no UTF-8 guarantee. `.string = .{ .as = .str }` borrows a `*zend.String`. To keep either past the source value's lifetime, see [Strings]($link.page('reference/types/strings')).
+
+`.string = .{ .as = .cstr }` borrows a `[:0]const u8`, just like the corresponding typed parameter. It supports `optional` and `nullable` without allocating or retaining the string. The slice preserves embedded NULs. A C string function passed its `.ptr` sees only bytes before the first NUL.
+
+## [.array]($heading.id('expect-array'))
+
+`.array = .{}` borrows a `*zend.Array`. `.array = .{ .as = .zval }` borrows a `*Zval` from which `array()` obtains a `Zval.Array` view. Neither separates shared arrays automatically. See [Arrays]($link.page('reference/types/arrays')) before modifying one.
+
+## [.object]($heading.id('expect-object'))
+
+Use `instanceof = true` to require a class or interface. Supply its class entry at the matching position in the runtime tuple:
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .object = .{ .instanceof = true } },
+}, .{
+    .{ .class = UserClass.entry },
+});
+
+const user: *phpz.zend.Object = args[0];
+```
+
+Use `{}` when a specification needs no runtime data. For an int followed by an object, pass `.{ {}, .{ .class = UserClass.entry } }`.
+
+## [.resource]($heading.id('expect-resource'))
+
+`.resource = .{}` borrows a `*zend.Resource` and checks only the PHP resource kind. `.resource = .{ .as = .stream }` checks for a regular or persistent PHP stream and borrows a `*phpz.Stream` (see [PHP streams]($link.page('reference/runtime/streams'))). For a custom payload, use its `Resource.Typed(...).fetch()` to verify the type and that the resource is open. See [PHP resources]($link.page('reference/types').ref('php-resources')).
+
+## [.reference]($heading.id('expect-reference'))
+
+- Options: `optional`, `kind` and `as`
+- `kind = .int`, for example, checks the referenced value's type
+- `as = .reference` returns `*zend.Reference`
+- `as = .zval` returns the outer reference as `*Zval`
+- `as = .value` returns a `*Zval` pointing to the referenced value
+- `optional = true` wraps the result in `?T`
+
+```zig
+.{ .reference = .{} } // *zend.Reference
+.{ .reference = .{ .optional = true } } // ?*zend.Reference
+.{ .reference = .{ .kind = .int, .as = .value } } // *Zval pointing to the referenced value
+.{ .reference = .{ .as = .zval } } // *Zval pointing to the outer reference
+```
+
+## [.mixed]($heading.id('expect-mixed'))
+
+- Options: `optional` and `one_of`
+- Without `one_of`, returns a borrowed `*Zval`, or `?*Zval` when optional
+- `one_of = &.{ .int, .string }` returns a Zig union tagged `.int` or `.string`
+- `optional = true` — `?Union`
+- The union in `one_of` excludes `.mixed`, `.reference` and `.callable`
+
+```zig
+.{ .mixed = .{} } // *Zval
+.{ .mixed = .{ .optional = true } } // ?*Zval
+.{ .mixed = .{ .one_of = &.{ .int, .string } } } // union { int: i64, string: []const u8 }
+.{ .mixed = .{ .optional = true, .one_of = &.{ .int, .string } } } // ?Union
+```
+
+## [.callable]($heading.id('expect-callable'))
+
+- Options: `optional`, `nullable` and `resolve`
+- The base result type is a borrowed `*Zval`
+- `nullable` — `phpz.Nullable(*Zval)`
+- `optional` gives `?*Zval` or `?phpz.Nullable(*Zval)`
+- `resolve = true` requires runtime `.{ .out = &callable }` and resolves to a `zend.Callable`
+
+```zig
+.{ .callable = .{} } // *Zval
+.{ .callable = .{ .optional = true } } // ?*Zval
+.{ .callable = .{ .nullable = true } } // phpz.Nullable(*Zval)
+.{ .callable = .{ .optional = true, .nullable = true } } // ?phpz.Nullable(*Zval)
+.{ .callable = .{ .resolve = true } } // *Zval, requires runtime .out
+```
+
+For `resolve`, supply writable storage for a `zend.Callable`:
+
+```zig
+var target: phpz.zend.Callable = .nil;
+const args = try ctx.call.expectArgs(&.{
+    .{ .callable = .{ .resolve = true } },
+}, .{
+    .{ .out = &target },
+});
+
+// args[0] borrows the *Zval. target now holds the resolved callable.
+```
+
+# [Optional and nullable arguments]($heading.id('missing-and-null'))
+
+```zig
+const args = try ctx.call.expectArgs(&.{
+    .{ .int = .{ .optional = true, .nullable = true } },
+}, {});
+if (args[0]) |provided| {
+    switch (provided) {
+        .null => ctx.ret(.null, {}),
+        .value => |value| ctx.ret(.int, value),
+    }
+} else {
+    ctx.ret(.int, 0);
+}
+```
+
+This handler body handles an optional `?int`. Omission returns zero, explicit null returns null and an integer returns its own value.
+
+## [Handling defaults in Zig]($heading.id('handle-default-values'))
+
+Declare the default in the stub and handle omission in Zig. For example, the skeleton implements `Counter::__construct(int $n = 0)` with `n: ?i64` and `n orelse 0`.
+
+A plain `?i64` alone cannot distinguish omission from explicit PHP null.
+
+# [Named and variadic arguments]($heading.id('named-and-variadic-arguments'))
+
+Zend assigns named arguments to positions using parameter names from the stub. If a caller skips an optional parameter and names a later one, Zend may fill the earlier slot with its stub default. `optional` tests presence in the current frame, so a filled slot counts as present. Extra named variadic arguments are held in a separate table outside `args()` and `argCount()`.
+
+## [Collecting and validating variadic arguments]($heading.id('variadic-values'))
+
+This complete handler implements `function countPositive(int ...$values): int` and accepts positional and named arguments:
+
+```zig
+pub fn countPositive(values: phpz.Variadic) !usize {
+    var count: usize = 0;
+    var it = values.iterator();
+    while (it.next()) |entry| {
+        const value = try entry.expect(.{ .int = .{} }, {});
+        if (value > 0) count += 1;
+    }
+    return count;
+}
+```
+
+`countPositive(1, -2, extra: 3)` returns 2. An empty call returns 0. `Variadic` must come last. For manual parsing, collect the tail with a single trailing `.{ .variadic = .{} }`. For example, this handler implements `function countTail(string $label, mixed ...$values): int`:
+
+```zig
+pub fn countTail(ctx: phpz.Ctx) !usize {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .string = .{} },
+        .{ .variadic = .{} },
+    }, {});
+    return args[1].len();
+}
+```
+
+By default both positional and extra named arguments are accepted. Before processing entries, use `try values.check(.positional_only)`, `try values.check(.named_only)` or `try values.check(.both)` to enforce a `phpz.Variadic.Mode`. Disallowed sources raise an error. The mode applies only to the tail. Arguments matching fixed parameter names are unrestricted and an empty tail satisfies all three modes.
+
+`len()` counts the entire tail. `positional` borrows a slice and `named` borrows an optional table. `iterator()` visits positional arguments first and then extra named arguments in table order. Each `Entry.value` borrows a `*Zval` that preserves reference containers. `name()` returns an optional name. Its `identifier` is a `phpz.ArgIdentifier` with a one-based `.position` or a `.name`.
+
+`entry.expect(spec, runtime)` uses the single-argument rules for weak and strict conversion, nullable types, unions, references, class constraints and runtime callable data. Conversion updates the original zval. Named-argument errors identify `($name)`. Only entries passed to `expect` receive this validation. An element specification cannot be optional or contain another `.variadic`.
+
+`Variadic` borrows its arguments and named table for the duration of the call. Never free or structurally modify that table. Copy or retain individual values to extend their lifetime.
+
+Without a trailing `.variadic`, `expectArgs` rejects extra named arguments. At the lower level, `extraNamedArgs()` gives access to the named table, `args()` borrows the current frame's argument slice, and `expectNoExtraNamedArgs()` rejects a named tail. Check every argument yourself when using these APIs.
+
+# [Error propagation]($heading.id('error-propagation'))
+
+Use `try` to propagate parsing and call errors to the wrapper. Parsers return `PhpException` or `UnwindExit` through `phpz.exception.Error` and preserve PHP's pending state. Ordinary Zig errors become PHP `Error` objects. `UnwindExit` signals an internal exit, which may follow `exit`, `die` or deferred OOM. Propagate it and `ZendBailout` after native cleanup. See [Cleanup rules]($link.page('advanced/bailout').ref('cleanup-rules')) for `OutOfMemory`. An error must end the normal return path.

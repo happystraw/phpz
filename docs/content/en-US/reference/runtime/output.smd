@@ -1,0 +1,45 @@
+---
+.title = "Output and module information",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/runtime/output",
+.custom = { "section": "Runtime APIs" },
+---
+
+# [PHP output]($heading.id('php-output'))
+
+```zig
+pub fn hello() void {
+    _ = phpz.printf("Hello from Zig!\n", .{});
+}
+```
+
+`phpz.printf` calls `php_printf` and writes through PHP's output layer. Use `std.debug.print` for native debugging. It cannot set a PHP return value or write through the PHP output layer.
+
+Format arguments follow C printf conventions. Pass a NUL-terminated string to `%s`. For binary data, return the bytes with `ctx.ret(.string, bytes)`.
+
+# [Extension information]($heading.id('extension-information'))
+
+Set `.info_fn = info` in the module configuration:
+
+```zig
+fn info(module: *phpz.ModuleEntry) void {
+    phpz.info.table.start();
+    phpz.info.table.header(.{ "extension support", "enabled" });
+    phpz.info.table.row(.{ "version", module.version });
+    phpz.info.table.end();
+    phpz.info.ini(module);
+}
+```
+
+PHP invokes the hook for `phpinfo()` and relevant CLI information queries. Use the table helpers for PHP's output format. `phpz.info.ini(module)` takes a borrowed module entry and displays its registered INI directives, including custom displayers. Show information such as the version and enabled state. Keep credentials out of the output.
+
+# [Checking module information]($heading.id('check-output'))
+
+After building the example, run:
+
+```sh
+php -n -dextension=./modules/my_php_extension.so --ri my_php_extension
+```
+
+Run this command in the generated extension directory. For ordinary functions, return results to the caller so they can be composed and tested.

@@ -1,0 +1,42 @@
+---
+.title = "Observers",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "advanced/observers",
+.custom = { "section": "Advanced topics" },
+---
+
+Observers collect function calls, PHP errors and thrown exceptions. Configure them with the module's `.observer` option.
+
+phpz installs observers only during normal module startup. Zend reserves function observer slots at engine startup, and error and exception observers cannot reliably be removed at request end. Like Zend's test extension, phpz skips observer registration for temporary modules loaded with `dl()`. Load the extension through `php.ini` to enable observation.
+
+# [Function calls]($heading.id('function-calls'))
+
+```zig
+fn begin(call: *phpz.CallFrame) void {
+    _ = call;
+    Globals.get().calls += 1;
+}
+
+const observer: phpz.observer.Config = .{
+    .fcall = .{ .begin = begin },
+};
+```
+
+The example uses `Globals` from [Module globals]($link.page('advanced/globals')). You can also implement `end(call, retval)`. The return-value pointer can be null.
+
+Zend calls `filter(function)` when it first installs the function's observer handlers and caches the result. Put per-call or request-dependent sampling decisions in the callbacks.
+
+# [Errors and exceptions]($heading.id('errors-and-exceptions'))
+
+- `.errors.observe` receives `phpz.observer.Error.Info` with the level, filename, line and message.
+- `.exception.observe` borrows the thrown object. Each explicit `throw $e` can trigger it, even for the same object. Zend can pass a null pointer when propagating a pending exception internally. phpz skips that notification.
+- Use `.errors.filter` to select error levels.
+
+Messages, filenames and callback inputs are borrowed. Copy text or retain an object reference before saving it, and release it when done.
+
+# [Overhead and reentrancy]($heading.id('overhead-and-reentrancy'))
+
+Observers run on the engine's execution path. Keep callbacks short, bound their storage, and avoid recursively observing calls into PHP. Timing must account for nesting and abnormal completion. Begin and end events need not form symmetric pairs in every situation.
+
+The full example stores counters and sampled durations in module globals, resets them in RINIT and excludes its own metrics interface.

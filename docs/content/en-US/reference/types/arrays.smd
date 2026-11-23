@@ -1,0 +1,186 @@
+---
+.title = "Arrays",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/types/arrays",
+.custom = { "section": "Types and values" },
+---
+
+phpz provides two array wrappers:
+
+- `phpz.zend.Array` wraps a Zend HashTable for creating, looking up, iterating and modifying a `zend_array`.
+- `phpz.Zval.Array` wraps the zval that holds an array. Use it when an operation needs the owning zval or copy-on-write.
+
+Supply zval storage for `Zval.Array.empty()` and `init()`. When returning an array to PHP, use `ctx.retval.ptr()` directly.
+
+# [Returning a new array]($heading.id('create-return-array'))
+
+```zig
+/// PHP: function buildArray(): array
+pub fn buildArray(ctx: phpz.Ctx) !void {
+    const result = phpz.Zval.Array.empty(ctx.retval.ptr());
+    result.set(.string, "name", "phpz");
+    result.set(.int, "version", 1);
+    try result.append(.bool, true);
+    // return ["name" => "phpz", "version" => 1, 0 => true]
+}
+```
+
+The PHP return value owns this array. Leave it there on success. `set` takes a string key, `setAt` an integer key and `append` the next integer index. `set` follows PHP subscript rules: integer strings such as `"123"` and `"-1"` become integer keys, while `"01"` and the empty string remain strings. Key slices need no terminating NUL. `set` has no error return. On `setAt` or `append` failure, the caller still owns the input value.
+
+# [Immutable empty array]($heading.id('immutable-empty-array'))
+
+`zend.Array.emptyImmutable()` borrows Zend's shared empty array without allocating. Its refcounted flag is clear and `release()` does nothing. Use `dupe()` before writing to avoid modifying shared storage. PHP arguments containing `[]` may also use this immutable storage. Storing such an array in an array element or object property needs no manual `addref`.
+
+`len()` returns the raw HashTable element count. `count()` uses Zend's nonrecursive array count, accounting for empty INDIRECT slots and symbol tables. For ordinary PHP arrays these counts usually agree.
+
+# [List builder]($heading.id('list-builder'))
+
+For a packed array with consecutive integer keys starting at zero, use `zend.Array.ListBuilder`:
+
+```zig
+/// PHP: function buildList(): array
+pub fn buildList() *phpz.zend.Array {
+    var builder = phpz.zend.Array.ListBuilder.init(3);
+    builder.appendAssumeCapacity(.int, 42);
+    builder.appendAssumeCapacity(.string, "phpz");
+    builder.appendAssumeCapacity(.null, {});
+    return builder.finish();
+}
+```
+
+This function returns `[42, "phpz", null]`. The wrapper takes one reference to the array.
+
+- `append(kind, value)` grows the array when necessary. `appendAssumeCapacity` requires sufficient spare capacity.
+- Both follow `Zval.raw.set` ownership rules. `.string` copies bytes, wrapped pointers transfer a reference and `.mixed` copies the dereferenced value while preserving the source zval's ownership.
+- `appendValue(raw)` transfers raw zval contents without incrementing a reference or clearing the source. For a borrowed value, make an owned copy first.
+- Elements cannot be `IS_UNDEF`, including dereferenced `.mixed` values and `appendValue` inputs. Use `.null` for a null element.
+- The builder owns the array until `finish()`. Only then read it or hand it to PHP. The result is owned and the builder is consumed. If construction bails out, unfinished elements may remain until request shutdown.
+
+Use `isList()` to check for consecutive integer keys. `toList()` makes an owned shallow copy in iteration order and unwraps PHP references with only one owner. `extend(capacity)` reserves space without adding elements and requires an exclusively owned writable array.
+
+# [Modifying a copy of an input array]($heading.id('modify-input-copy'))
+
+```zig
+/// PHP: function addCount(array $values): array
+pub fn addCount(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{
+        .{ .array = .{ .as = .zval } },
+    }, {});
+    ctx.ret(.mixed, args[0].ptr());
+
+    const result = try ctx.retval.array();
+    result.separate();
+    result.set(.int, "count", 1);
+    try result.setAt(.int, 0, 2);
+    try result.append(.int, 3);
+}
+```
+
+Copy the input to the return slot, call `separate()` on the shared or immutable array, then modify the copy. Write operations require explicit separation. Reacquire element pointers afterwards. Separation is shallow, so PHP references within elements can still be shared.
+
+# [Lookup and delete]($heading.id('lookup-and-delete'))
+
+Use `zend.Array` for lookups and deletion. From a `Zval.Array`, retrieve it with `zendArray()`:
+
+| Operation | String key | Integer key |
+| --- | --- | --- |
+| Find an element, or return `null` if absent | `find(key)` | `findIndex(index)` |
+| Test key presence | `has(key)` | `hasIndex(index)` |
+| Delete an element, or return `error.NotFound` if absent | `delete(key)` | `deleteIndex(index)` |
+
+This handler distinguishes a missing key from an element containing PHP null:
+
+```zig
+/// PHP: function nameState(array $values): string
+pub fn nameState(ctx: phpz.Ctx) !void {
+    const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+    const raw = args[0].find("name") orelse return ctx.ret(.string, "missing");
+    const value = phpz.Zval.from(raw);
+    ctx.ret(.string, if (value.is(.null)) "null" else "present");
+}
+```
+
+`nameState([])` returns `"missing"`. `nameState(['name' => null])` returns `"null"`, and `has("name")` still returns `true` for that array. `find` borrows a raw `*c.zval`. Check its type before reading it.
+
+These methods use exact HashTable keys. For the PHP array `["123" => "value"]`, PHP converts the key to an integer. Use `findIndex(123)` or `symtableFind("123")`. `find("123")` looks only for a string key.
+
+| PHP string subscript operation | API |
+| --- | --- |
+| Read `$array[$key]`, returning `null` if absent | `symtableFind(key)` takes a `[]const u8`. `symtableFindStr(key)` borrows a `*zend.String` |
+| Write `$array[$key] = $value` | `symtableUpdate(key, value)` |
+| Delete with `unset($array[$key])`, returning `error.NotFound` if absent | `symtableDelete(key)` |
+
+These APIs convert integer strings such as `"123"` and `"-1"` to integer keys. `"01"`, `"+1"`, the empty string and numbers outside the `zend_long` range remain string keys. Writes and deletions require an exclusively owned writable array.
+
+For a borrowed `*zend.String` containing `"123"`, `symtableFindStr(key)` looks up integer `123` and `findStr(key)` looks up string `"123"`. A successful lookup borrows the stored value. `hasStr` and `deleteStr` also use literal string keys.
+
+`findDeref`, `findStrDeref` and `findIndexDeref` borrow the dereferenced value. `lookupStr` and `lookupIndex` insert PHP null for a missing key and are write operations. Release the previous element value before overwriting the returned slot.
+
+Before deleting from an input array, copy and separate it. This handler body returns a copy with `"name"` removed, leaving the contents unchanged if the key was absent:
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{ .as = .zval } }}, {});
+ctx.ret(.mixed, args[0].ptr());
+const result = try ctx.retval.array();
+result.separate();
+result.zendArray().delete("name") catch {};
+```
+
+Deletion releases the element owned by the array and invalidates any borrowed pointer to it.
+
+# [Iteration]($heading.id('iteration'))
+
+A `*zend.Array` parameter is borrowed. The following iteration APIs skip empty slots marked `IS_UNDEF`:
+
+| API | Use |
+| --- | --- |
+| `iterator()` / `keyIterator()` / `valueIterator()` | Use an unregistered HashPosition. Skips deleted slots but cannot track positions moved by compaction or rehashing |
+| `mutableIterator()` | Register an iterator with Zend. Supports insertion, deletion, growth and rehashing between reads |
+| `fastIterator()` / `fastValueIterator()` | Cache the storage and iteration limit when created. The structure must remain stable |
+| `each(callback, args)` / `eachValue(callback, args)` | Inline a compile-time callback taking `Array.Entry` or `*c.zval` first and additional arguments from a tuple |
+
+```zig
+const args = try ctx.call.expectArgs(&.{.{ .array = .{} }}, {});
+var iterator = args[0].fastIterator();
+while (iterator.next()) |entry| {
+    switch (entry.key) {
+        .int => |index| _ = index,
+        .str => |key| _ = key.slice(),
+    }
+    // entry.value is borrowed. Copy or retain it to extend its lifetime.
+}
+```
+
+Ordinary iterators read packed or mixed storage directly. Their positions cannot follow structural changes as PHP `foreach` cursors do. Deletion, reordering or rehashing may skip elements. Keep the structure stable during iteration. Fast iterators and callback iteration cache pointers or bounds that insertion, deletion or growth can invalidate.
+
+`Array.Key.str` is a `*zend.String` borrowed from the bucket. Call `.slice()` for its bytes. Discard the pointer when the table structure changes.
+
+Use `mutableIterator()` for structural changes during iteration:
+
+```zig
+var iterator = args[0].mutableIterator();
+defer iterator.deinit();
+while (iterator.next()) |entry| {
+    _ = entry;
+    // You can delete the current entry or append to the table.
+}
+```
+
+A registered iterator borrows the same HashTable for its lifetime. Keep the array alive and avoid replacing the table by copy-on-write. Mutations require exclusive writable storage. `next()` records the next position before returning an entry, so iteration may visit newly appended items. `current()` does not advance. Call `reset()` after `clear()` or an explicit sort. Never copy the iterator. Call `deinit()` once for each registration, including on early exit.
+
+# [Sorting]($heading.id('sorting'))
+
+`zend.Array.sort(compare_fn, renumber)` sorts in place. The comparator takes two `*c.Bucket` pointers and returns `.less`, `.equal` or `.greater`. Setting `renumber = true` assigns consecutive integer keys. Sort an exclusively owned writable array. Call `separate()` or `dupe()` first for shared or immutable arrays.
+
+Comparison can execute PHP code or leave an exception pending. The API checks exceptions after sorting and leaves any changes already made in place. `.equal` does not stop the sort. PHP 8.5+ keeps the array alive until sorting returns, even if a callback releases its last owner. On earlier versions a callback must keep that last owner alive.
+
+# [Array writes and ownership]($heading.id('iteration-and-ownership'))
+
+Array `set(.mixed, key, &value)` transfers zval contents, preserves the reference wrapper and leaves the source slot uncleared. After success, do not release the transferred reference. Copy or retain borrowed values first. After failed `append` or `setAt`, the caller remains responsible for cleanup.
+
+`zend.Array.update`, `updateStr`, `updateIndex` and `symtableUpdate` transfer input zval contents and borrow the stored slot as a non-null `*c.zval`. OOM can bail out. `add`, `addStr` and `addIndex` return `null` for an existing key. Low-level `append` can also return `null`. On failure the caller still owns the input. These operations do not clear the source zval or perform copy-on-write.
+
+Use `updatePtr`, `addPtr`, `findPtr` and their Str and Index variants for internal `IS_PTR` tables. They leave ownership of the pointed-to resource with the caller. `updatePtr` returns the supplied `*T`. Tables created with `Array.init` or `empty` do not release that resource. Never expose an `IS_PTR` table to PHP.
+
+Array lookups borrow element values. Their pointers must not outlive the array or mutations that invalidate them.

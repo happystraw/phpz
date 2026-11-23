@@ -1,0 +1,81 @@
+---
+.title = "Module registration",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "reference/registration/module",
+.custom = { "section": "Declarations and registration" },
+---
+
+Declare the extension entry point at compile time with `phpz.module`:
+
+```zig
+const extension = @import("extension_info");
+
+comptime {
+    phpz.functions(functions, .{});
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .classes = &.{CounterClass},
+    });
+}
+```
+
+The project defines `functions` and `CounterClass`. Names must match the stub and build configuration. The skeleton reads the extension name and version from `extension_info`.
+
+# [Registration order]($heading.id('registration-order'))
+
+PHP discovers functions through the module's function table. The phpz MINIT wrapper processes these entries in order:
+
+1. The generated module symbol registration function, if present, registers module constants and other symbols.
+2. The `.ini` settings.
+3. The resource types in `.resources`, in array order.
+4. The classes in `.classes`, in array order.
+5. The `.observer` configuration, except for modules loaded temporarily with `dl()`.
+6. `.module_startup_fn`.
+
+Register each class only once through `.classes`. Resources are registered before classes so constructors and methods can create them. List parents and interfaces before dependent classes.
+
+`.resources` accepts types returned by `phpz.zend.Resource.Typed(T, .{ .name = ..., .destroy = ... })`. Module startup assigns each resource type a process-local ID valid until module shutdown. Request-local resources are released with the request. See [PHP resources]($link.page('reference/types').ref('php-resources')).
+
+```zig
+const Value = struct { number: i64 };
+
+fn destroy(value: *Value) void {
+    phpz.heap.php_allocator.destroy(value);
+}
+
+const ValueResource = phpz.zend.Resource.Typed(Value, .{
+    .name = "my_php_extension.value",
+    .destroy = destroy,
+});
+
+comptime {
+    phpz.module(.{
+        .name = extension.name,
+        .version = extension.version,
+        .resources = &.{ValueResource},
+        // Other settings, including .classes, omitted
+    });
+}
+```
+
+# [Lifecycle hooks]($heading.id('lifecycle-hooks'))
+
+| Option | Phase | Purpose |
+| --- | --- | --- |
+| `module_startup_fn` | MINIT | Initialize module state |
+| `module_shutdown_fn` | MSHUTDOWN | Release module resources |
+| `request_startup_fn` | RINIT | Reset state for this request |
+| `request_shutdown_fn` | RSHUTDOWN | Clean up at request end |
+| `info_fn` | MINFO | Display extension information |
+
+The first four hooks have the signature `fn () anyerror!void`. `info_fn` takes a `*phpz.ModuleEntry`. Keep request-allocated PHP values within their request. For per-thread module state, see [Module globals]($link.page('advanced/globals')).
+
+See [Lifetime boundaries]($link.page('reference/types/ownership').ref('lifetime-boundaries')) for cleanup responsibilities across calls, requests, objects and module globals.
+
+# [Module entries for standalone hosts]($heading.id('module-entry'))
+
+`phpz.module(options)` exports the module symbols for a shared or static extension according to its build configuration. `phpz.initModuleEntry(options)` instead returns a `ModuleEntry` for a host that supplies it during engine startup. It uses the same configuration and class registration rules and exports no dynamic loading entry point.
+
+Keep the entry's storage alive through module shutdown. See [Additional modules and execution results]($link.page('advanced/sapi').ref('module-and-execution')) for passing it to the engine.
