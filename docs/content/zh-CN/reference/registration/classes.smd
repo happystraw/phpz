@@ -12,7 +12,7 @@
 
 # [Zig 实例数据]($heading.id('zig-backing'))
 
-含字段的 Zig 结构体 为每个 PHP 对象增加一份 Zig 实例数据。它可以处于未初始化状态。所有字段都有默认值时，框架默认初始化实例数据；否则需要由构造器或 `.init` 完成初始化。在实例数据未初始化时调用需要 `self` 的方法会产生 PHP 错误。
+含字段的 Zig 结构体为每个 PHP 对象增加一份 Zig 实例数据。它可以处于未初始化状态。所有字段都有默认值时，框架默认初始化实例数据；否则需要由构造器或 `.init` 完成初始化。在实例数据未初始化时调用需要 `self` 的方法会产生 PHP 错误。
 
 `.init` 返回错误时，对象会保留未初始化的实例数据，框架按 PHP 构造失败的方式标记对象：`new` 不再执行 PHP `__construct`，并跳过该对象的 `__destruct`。错误本身保留为待处理异常；释放对象时只清理已初始化的实例数据。
 
@@ -25,6 +25,7 @@
 namespace MyPHPExt;
 class Counter {
     public function __construct(int $n = 0) {}
+    public static function isPositiveStep(int $n): bool {}
     public function add(int $n): void {}
     public function value(): int {}
 }
@@ -36,6 +37,10 @@ const Counter = struct {
 
     pub fn __construct(n: ?i64) Counter {
         return .{ .n = n orelse 0 };
+    }
+
+    pub fn isPositiveStep(n: i64) bool {
+        return n > 0;
     }
 
     pub fn add(self: *Counter, n: i64) void {
@@ -50,7 +55,25 @@ const Counter = struct {
 const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{});
 ```
 
-类名和方法名须与 stub 文件精确匹配，包括大小写。自动绑定检查全部公开 Zig 函数与 stub 文件中声明的具体方法；显式 `@alias` 无需重复实现。绑定的方法同样在编译期按 arginfo 检查参数数量、可选／可变参数和引用标志；带实例数据的 `__construct` 返回 `T` / `!T`，不参与 PHP 引用返回值检查，其余方法按普通函数规则检查。类型和默认值仍需与 stub 文件手动一致。
+```php
+use MyPHPExt\Counter;
+
+var_dump(Counter::isPositiveStep(3)); // bool(true)
+$counter = new Counter(5);
+$counter->add(3);
+echo $counter->value();               // 8
+```
+
+| PHP 调用 | Zig 参数 | 结果 |
+| --- | --- | --- |
+| `new Counter(5)` | `n: ?i64` | 构造器返回 `Counter` 来初始化对象的 Zig 实例数据，PHP 取得新对象。 |
+| `Counter::isPositiveStep(3)` | `n: i64` | 静态方法只接收传入的整数，返回 PHP 布尔值。 |
+| `$counter->add(3)` | `self: *Counter, n: i64` | phpz 从 `$counter` 取得可写指针，方法修改该对象的计数，返回类型为 `void`。 |
+| `$counter->value()` | `self: *const Counter` | PHP 实参为空，Zig 通过只读指针读取计数并返回 PHP 整数。 |
+
+带 Zig 字段的类，其普通实例方法的**第一个参数必须是 `*T` 或 `*const T`**。这类构造器不接收实例指针，返回 `T` 或 `!T`，PHP 侧的构造器不声明返回类型，反射调用 `getReturnType()` 得到 `null`。静态方法也不接收实例指针。需要 `Ctx` 或 `GuardCtx` 时，将上下文放在 PHP 参数之前；有实例指针时，实例指针排在上下文前面。如果状态保存在 PHP 属性中，见[标准布局方法绑定]($link.ref('standard-method-bindings'))。
+
+类名和方法名须与 stub 文件精确匹配，包括大小写。自动绑定检查全部公开 Zig 函数与 stub 文件中声明的具体方法；显式 `@alias` 无需重复实现。绑定的方法同样在编译期按 arginfo 检查参数数量、可选／可变参数和引用标志；带实例数据的构造器不参与 PHP 引用返回值检查，其余方法按普通函数规则检查。类型和默认值仍需与 stub 文件手动一致。
 
 带实例数据的类不能继承会自行分配对象的类，例如 `Exception`、`ArrayObject` 或另一个带实例数据的类：Zend 在子类中保留父类的 `create_object`，父类方法也按自己的对象布局解释内存。Debug 构建在注册时以 `error.UnsupportedParent` 失败并给出警告；这类子类应使用 `void` 作为 Zig 类型，把状态保存在 PHP 属性中。
 
@@ -62,33 +85,14 @@ const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{});
 const CounterClass = phpz.Class("MyPHPExt\\Counter", Counter, .{
     .methods = .{
         .__construct = Counter.__construct,
+        .isPositiveStep = Counter.isPositiveStep,
         .add = Counter.increment,
         .value = Counter.value,
     },
 });
 ```
 
-带实例数据的 `__construct` 不接收 `self`，可在类型化参数之前接收 `Ctx` 或 `GuardCtx`，并返回 `T` 或 `!T`。该返回值用于初始化 Zig 实例数据，不作为 PHP 返回值；PHP 构造器不能声明返回类型，反射的 `getReturnType()` 返回 `null`。
-
-静态方法同样参与自动绑定，但不接收实例指针 `self`。例如在 stub 文件的 `MyPHPExt\Counter` 类中增加以下方法，并在 Zig 的 `Counter` 内增加对应实现：
-
-```php
-<?php
-namespace MyPHPExt;
-class Counter {
-    // 原有方法省略
-    public static function fromInt(int $n): int {}
-}
-```
-
-```zig
-pub fn fromInt(ctx: phpz.Ctx) !void {
-    const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
-    ctx.ret(.int, args[0]);
-}
-```
-
-实例方法可接收 `*T` / `*const T`，可再带 `Ctx` 或 `GuardCtx`。`.init`、`.deinit`、`.clone` 和 `.gc` 的辅助函数保持私有，避免进入自动方法绑定。资源和克隆规则见[对象生命周期]($link.page('advanced/objects'))。
+`.init`、`.deinit`、`.clone` 和 `.gc` 的辅助函数保持私有，避免进入自动方法绑定。资源和克隆规则见[对象生命周期]($link.page('advanced/objects'))。
 
 # [创建与访问 Zig 实例数据]($heading.id('backing-access'))
 
@@ -103,7 +107,7 @@ pub fn fromInt(ctx: phpz.Ctx) !void {
 | `backing()` | 返回借用的 `?*Counter`，未初始化时为 `null` |
 | `object()` | 返回借用的 `*zend.Object` |
 
-下面两个全局函数复用前面的 `CounterClass`。先在 stub 文件中声明；如果工程只导出这两个全局函数，可通过 `phpz.functions(Api, .{ .namespace = "MyPHPExt" })` 绑定。与其他函数共存时，将它们合并到覆盖全部函数的 `namedFunctions` 映射中：
+下面两个全局函数复用前面的 `CounterClass`。先在 stub 文件中声明；如果工程只导出这两个全局函数，可通过 `phpz.functions(functions, .{ .namespace = "MyPHPExt" })` 绑定。与其他函数共存时，将它们合并到覆盖全部函数的 `namedFunctions` 映射中：
 
 ```php
 namespace MyPHPExt;
@@ -112,7 +116,7 @@ function counterValue(Counter $counter): int {}
 ```
 
 ```zig
-const Api = struct {
+const functions = struct {
     pub fn makeCounter(ctx: phpz.Ctx) !void {
         const args = try ctx.call.expectArgs(&.{.{ .int = .{} }}, {});
         const number = phpz.Zval.raw.init(.int, args[0]);
@@ -150,14 +154,12 @@ echo MyPHPExt\counterValue($counter), PHP_EOL; // 5
 
 ```zig
 const Counter = struct {
-    pub fn __construct(ctx: phpz.Ctx) !void {
-        const args = try ctx.call.expectArgs(&.{
-            .{ .int = .{ .optional = true } },
-        }, {});
-        try ctx.call.this().?.setProperty(.int, "n", args[0] orelse 0);
+    pub fn __construct(ctx: phpz.Ctx, n: ?i64) !void {
+        try ctx.call.this().?.setProperty(.int, "n", n orelse 0);
     }
 
     pub fn value(ctx: phpz.Ctx) !void {
+        try ctx.call.expectNoArgs();
         const object = ctx.call.this().?;
 
         var scratch = phpz.Zval.raw.undef;

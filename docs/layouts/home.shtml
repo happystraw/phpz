@@ -2,71 +2,75 @@
 <div id="page-layout">
     <main class="home" id="content" tabindex="-1" data-pagefind-body>
         <div class="home-hero">
-            <p class="home-version"><a href="https://github.com/happystraw/phpz/releases">v0.1.0</a> · PHP 8.2–8.6 · Zig 0.17.0</p>
-            <h1><ctx :html="$page.custom.get('headline')"></ctx> <span class="home-subhead" :html="$page.custom.get('subhead')"></span></h1>
-            <p class="home-lead" :text="$page.custom.get('lead')"></p>
-            <a class="home-primary" href="$site.page('getting-started/installation').link()"><ctx :text="$page.custom.get('get_started')"></ctx> <span aria-hidden="true">→</span></a>
+            <div class="home-intro">
+                <p class="home-version"><a href="https://github.com/happystraw/phpz/releases/tag/0.1.0">v0.1.0 · <span>PHP 8.2–8.6</span> · <span>Zig 0.17.0</span></a></p>
+                <h1><ctx :html="$page.custom.get('headline')"></ctx> <span class="home-subhead" :html="$page.custom.get('subhead')"></span></h1>
+                <p class="home-lead" :text="$page.custom.get('lead')"></p>
+                <a class="home-primary" href="$site.page('getting-started/installation').link()" :text="$page.custom.get('get_started')"></a>
+            </div>
+            <div class="home-example" role="group" aria-label="$page.custom.get('example')">
+                <div>
+                    <div class="example-file"><ctx :text="$page.custom.get('php')"></ctx> · my_php_extension.stub.php</div>
+                    <pre><code><span class="keyword">function</span> <span class="function">byteCount</span>(<span class="type">string</span> $value): <span class="type">int</span> {}</code></pre>
+                </div>
+                <div>
+                    <div class="example-file"><ctx :text="$page.custom.get('zig')"></ctx> · src/root.zig</div>
+                    <pre><code><span class="keyword">pub fn</span> <span class="function">byteCount</span>(value: []<span class="keyword">const</span> <span class="type">u8</span>) <span class="type">usize</span> {
+    <span class="keyword">return</span> value.len;
+}</code></pre>
+                </div>
+                <div>
+                    <div class="example-file"><ctx :text="$page.custom.get('php_call')"></ctx> · example.php</div>
+                    <pre><code><span class="keyword">echo</span> <span class="function">byteCount</span>(<span class="string">"Zig"</span>); <span class="comment">// 3</span></code></pre>
+                </div>
+            </div>
         </div>
         <dl class="home-facts">
             <div><dt>PHP</dt><dd>8.2–8.6</dd></div>
             <div><dt>Zig</dt><dd>0.17.0</dd></div>
             <div><dt :text="$page.custom.get('runtime')"></dt><dd>NTS / ZTS</dd></div>
-            <div><dt>Linux · macOS · Windows</dt><dd>3</dd></div>
+            <div><dt :text="$page.custom.get('platforms')"></dt><dd>Linux · macOS · Windows</dd></div>
         </dl>
-        <fieldset class="home-example">
-            <legend class="visually-hidden" :text="$page.custom.get('example')"></legend>
-            <div class="example-tabs">
-                <label><input type="radio" name="example" value="php" checked><span :text="$page.custom.get('php')"></span></label>
-                <label><input type="radio" name="example" value="zig"><span :text="$page.custom.get('zig')"></span></label>
+        <section class="home-project">
+            <h2 :text="$page.custom.get('create')"></h2>
+            <div class="project-command">
+                <button class="project-copy" type="button" hidden aria-label="$page.custom.get('copy')" data-copied="$page.custom.get('copied')" data-manual="$page.custom.get('copy_manually')">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"></path></svg>
+                    <svg class="ui-icon copy-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 5 5L20 6"></path></svg>
+                </button>
+                <span class="copy-status" role="status"></span>
+                <pre><code><span aria-hidden="true"></span>curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | \
+  php -- --ext my_php_extension
+<span aria-hidden="true"></span>cd my_php_extension
+<span aria-hidden="true"></span>zig build run-tests</code></pre>
             </div>
-            <div class="example-source">
-                <div class="php-sample">
-                    <div class="example-file">my_php_extension.stub.php</div>
-                    <pre><code><span class="keyword">function</span> <span class="function">powered_by</span>(): <span class="type">string</span> {}</code></pre>
-                </div>
-                <div class="zig-sample">
-                    <div class="example-file">src/root.zig</div>
-                    <pre><code><span class="keyword">pub fn</span> <span class="function">powered_by</span>() []<span class="keyword">const</span> <span class="type">u8</span> {
-    <span class="keyword">return</span> <span class="string">"phpz"</span>;
-}</code></pre>
-                </div>
-            </div>
-            <div class="example-detail">
-                <div class="example-file php-sample" :text="$page.custom.get('php_call')"></div>
-                <div class="example-file zig-sample" :text="$page.custom.get('zig')"></div>
-                <pre class="php-sample"><code><span class="keyword">echo</span> <span class="string">'Powered by '</span>, <span class="function">powered_by</span>(); <span class="comment">// Powered by phpz</span></code></pre>
-                <p class="zig-sample" :text="$page.custom.get('zig_note')"></p>
-                <div class="example-file" :text="$page.custom.get('create')"></div>
-                <pre class="project-command"><code><span aria-hidden="true">$ </span>curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
-<span aria-hidden="true">$ </span>cd my_php_extension
-<span aria-hidden="true">$ </span>zig build</code></pre>
-                <p class="project-note"><ctx :text="$page.custom.get('php82_download')"></ctx> <a href="https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php">phpz_skel.php</a><ctx :text="$page.custom.get('php82_run')"></ctx> <code>php phpz_skel.php --ext my_php_extension</code></p>
-            </div>
-        </fieldset>
+            <p class="project-note"><ctx :text="$page.custom.get('php82_download')"></ctx> <a href="https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php">phpz_skel.php</a><ctx :text="$page.custom.get('php82_run')"></ctx> <code>php phpz_skel.php --ext my_php_extension</code></p>
+        </section>
         <div class="home-guides">
-            <section>
-                <h2><a href="$site.page('getting-started/hello-world').link()" :text="$site.page('getting-started/hello-world').title"></a></h2>
+            <a href="$site.page('getting-started/hello-world').link()">
+                <h2 :text="$site.page('getting-started/hello-world').title"></h2>
                 <p :text="$page.custom.get('starter')"></p>
-            </section>
-            <section>
-                <h2><a href="$site.page('getting-started/how-it-works').link()" :text="$site.page('getting-started/how-it-works').title"></a></h2>
+            </a>
+            <a href="$site.page('getting-started/how-it-works').link()">
+                <h2 :text="$site.page('getting-started/how-it-works').title"></h2>
                 <p :text="$page.custom.get('how')"></p>
-            </section>
-            <section>
-                <h2><a href="$site.page('reference/registration/functions').link()" :text="$site.page('reference/registration/functions').title"></a></h2>
+            </a>
+            <a href="$site.page('reference/registration/functions').link()">
+                <h2 :text="$site.page('reference/registration/functions').title"></h2>
                 <p :text="$page.custom.get('functions')"></p>
-            </section>
-            <section>
-                <h2><a href="$site.page('development/testing').link()" :text="$site.page('development/testing').title"></a></h2>
+            </a>
+            <a href="$site.page('development/testing').link()">
+                <h2 :text="$site.page('development/testing').title"></h2>
                 <p :text="$page.custom.get('testing')"></p>
-            </section>
+            </a>
         </div>
     </main>
     <footer class="site-footer">
-        <span>phpz · <a href="https://github.com/happystraw/phpz/blob/dev/LICENSE">MIT</a></span>
+        <span><a href="https://github.com/happystraw/phpz/releases/tag/0.1.0">phpz 0.1.0</a> · <a href="https://github.com/happystraw/phpz/blob/dev/LICENSE">MIT</a></span>
         <nav aria-label="$i18n.get('footer_nav')">
             <a href="$site.page('getting-started/introduction').link()" :text="$i18n.get('docs')"></a>
             <a href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
+            <a href="$site.page('benchmarks').link()" :text="$site.page('benchmarks').title"></a>
             <a href="https://github.com/happystraw/phpz">GitHub</a>
         </nav>
     </footer>

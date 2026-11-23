@@ -5,6 +5,11 @@
     .i18n_dir_path = "i18n",
     .layouts_dir_path = "layouts",
     .assets_dir_path = "assets",
+    .static_assets = [
+        "phpz/fonts/Geist-Variable.woff2",
+        "phpz/fonts/GeistMono-Variable.woff2",
+        "phpz/fonts/LICENSE.txt",
+    ],
     .locales = [
         .{
             .code = "en-US",

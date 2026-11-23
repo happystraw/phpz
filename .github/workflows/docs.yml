@@ -9,6 +9,7 @@ on:
       - "docs/**"
       - "build.zig"
       - "build.zig.zon"
+      - "scripts/build-docs.sh"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -41,12 +42,8 @@ jobs:
         with:
           packages: php-dev
           version: 1.0
-      - name: Generate docs
-        run: |
-          PHP_INCLUDE_DIR=$(php-config --include-dir)
-          zig build docs -Dphp-include-dir="$PHP_INCLUDE_DIR"
-      - name: Index documentation for search
-        run: npx --yes pagefind@1.6.0 --site docs/public/phpz
+      - name: Build and index documentation
+        run: ./scripts/build-docs.sh
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

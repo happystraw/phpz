@@ -97,13 +97,13 @@ pub fn namedFunctions(comptime bindings: anytype) void {
 /// binding and rejects public Zig functions that are absent from the stub.
 ///
 /// ```zig
-/// const Api = struct {
+/// const functions = struct {
 ///     pub fn hello() void {}
-///     pub fn greet(ctx: phpz.Ctx) !void { _ = ctx; }
+///     pub fn byteCount(value: []const u8) usize { return value.len; }
 /// };
 ///
 /// comptime {
-///     phpz.functions(Api, .{ .namespace = "Vendor" });
+///     phpz.functions(functions, .{ .namespace = "Vendor" });
 /// }
 /// ```
 pub fn functions(comptime T: type, comptime options: struct { namespace: []const u8 = "" }) void {

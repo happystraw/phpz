@@ -1,0 +1,26 @@
+---
+.title = "Benchmarks",
+.date = .date("2026-11-24T00:00:00"),
+.layout = "benchmarks.shtml",
+.translation_key = "benchmarks",
+.custom = {
+    "intro": "Three PHP extensions implement the same API using Zend C, phpz (Zig) and PHPX (C++). Each workload measures the time PHP spends calling the extension and handling its result.",
+    "reproduce": "Reproduce this run",
+    "source": "Benchmark source and setup",
+    "environment": "Measurement details",
+    "conditions": [
+        {"label": "Machine", "value": "Intel Core i5-10600, logical CPU 4"},
+        {"label": "System", "value": "Linux x86-64"},
+        {"label": "Runtime", "value": "PHP 8.5.13 NTS, OPcache and JIT disabled"},
+        {"label": "Compilers", "value": "GCC 16.2.1, Zig 0.17.0"},
+        {"label": "PHPX", "value": "Swoole PHPX v2.9.8"},
+        {"label": "Runs", "value": "36 rounds per workload, 50 ms calibration target. Each sample ran in a fresh PHP process after warmup."},
+    ],
+    "results": "All workloads",
+    "workload": "Workload",
+    "ratio": "PHPZ / C (95% CI)",
+    "legend": "The lightning bolt marks the lowest median in each row.",
+    "lowest": "Lowest median time",
+    "reading": "Times are medians in nanoseconds per operation. PHPZ / C is the median of the paired time ratios across rounds. A value below 1 means phpz took less time. The 95% confidence interval uses 5,000 bootstrap resamples of whole rounds.",
+},
+---

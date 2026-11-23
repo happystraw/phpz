@@ -4,11 +4,25 @@
         <aside class="sidebar" aria-label="$i18n.get('chapters')">
             <details>
                 <summary>
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"></path></svg>
                     <span :text="$i18n.get('chapters')"></span>
-                    <span class="chapter-current" :text="$page.title"></span>
+                    <span class="chapter-current">
+                        <svg class="ui-icon ui-icon-small" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                        <ctx :text="$page.title"></ctx>
+                    </span>
                 </summary>
                 <nav id="chapters"><super></nav>
             </details>
+            <dialog id="chapter-drawer" aria-labelledby="drawer-title">
+                <div class="drawer-heading">
+                    <strong id="drawer-title" :text="$i18n.get('chapters')"></strong>
+                    <form method="dialog">
+                        <button type="submit" aria-label="$i18n.get('close')" autofocus>
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+                        </button>
+                    </form>
+                </div>
+            </dialog>
         </aside>
         <main id="content" tabindex="-1" data-pagefind-body>
             <super>

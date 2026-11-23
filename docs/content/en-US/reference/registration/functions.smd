@@ -18,40 +18,51 @@ Declare the PHP functions in the stub and keep the skeleton's generator annotati
  * @undocumentable
  */
 namespace MyPHPExt;
-function greet(string $name): string {}
+function byteCount(string $value): int {}
 ```
 
 After generating arginfo, implement the functions in a Zig container. These snippets assume the project imports `phpz` and registers the module:
 
 ```zig
-const Api = struct {
-    pub fn greet(name: []const u8) []const u8 {
-        return name;
+const functions = struct {
+    pub fn byteCount(value: []const u8) usize {
+        return value.len;
     }
 };
 
 comptime {
-    phpz.functions(Api, .{ .namespace = "MyPHPExt" });
+    phpz.functions(functions, .{ .namespace = "MyPHPExt" });
 }
 ```
 
-`functions` binds all public functions in the container. Set `.namespace` to the PHP namespace prefix or omit it for the global namespace. Once loaded, `MyPHPExt\greet("Zig")` returns `"Zig"`.
+`functions` binds all public functions in the container. Set `.namespace` to the PHP namespace prefix or omit it for the global namespace. Once loaded, `MyPHPExt\byteCount("Zig")` returns `3`.
 
 To map functions individually, use several Zig containers, or bind different Zig and PHP names, replace the `comptime` block with `namedFunctions`:
 
 ```zig
 comptime {
     phpz.namedFunctions(.{
-        .@"MyPHPExt\\greet" = Api.greet,
+        .@"MyPHPExt\\byteCount" = functions.byteCount,
     });
 }
 ```
 
 Choose one form and cover all concrete stub functions in one call. Explicit `@alias` declarations reuse their targets. Match fully qualified PHP names exactly, including case. Keep helpers private when binding automatically.
 
-For bindings spread across Zig modules, export individual handlers with `phpz.function("MyPHPExt\\greet", Api.greet)`. It checks that function's declaration and handler as a batch binding would. It cannot detect missing implementations elsewhere. Prefer a batch binding when functions can be registered together.
+For bindings spread across Zig modules, export individual handlers with `phpz.function("MyPHPExt\\byteCount", functions.byteCount)`. It checks that function's declaration and handler as a batch binding would. It cannot detect missing implementations elsewhere. Prefer a batch binding when functions can be registered together.
 
 # [Handler signatures]($heading.id('handler-signatures'))
+
+For `byteCount(value: []const u8) usize`, phpz reads the PHP string as a borrowed byte slice. Returning `value.len` writes its length to the PHP result as an integer. You can use the PHP parameter name from the stub in a named call:
+
+```php
+use function MyPHPExt\byteCount;
+
+var_dump(byteCount(value: "Zig")); // int(3)
+var_dump(byteCount("é"));          // int(2) (UTF-8)
+```
+
+If you change the Zig parameter to `?[]const u8` and handle omission in the function body while the stub still declares a required string, the build fails because the required counts differ. Passing an array to the correctly built function instead raises a PHP `TypeError` at the call site.
 
 Declare the Zig types corresponding to the PHP parameters and return `T` or `!T`. The wrapper parses arguments and sets the PHP result. Optional `Ctx` or `GuardCtx` precedes PHP parameters. On a backed instance method, put `self` before the context.
 
@@ -60,7 +71,7 @@ A handler without context or typed parameters checks for an empty call. A contex
 At compile time, typed handlers check the following parts of generated arginfo that affect memory safety:
 
 - Required and fixed parameter counts and the trailing variadic flag must agree.
-- By-reference parameters require `*phpz.zend.Reference`, its optional form, or a raw `*phpz.Zval` that preserves the reference. By-value parameters cannot use the reference type.
+- A fixed by-reference parameter takes `*phpz.zend.Reference`, its optional form, or a raw `*phpz.Zval` that preserves the reference. A fixed by-value parameter cannot take the reference type. A by-reference variadic tail (`mixed &...$args`) takes [`phpz.Variadic`]($link.page('reference/registration/arguments').ref('variadic-references')).
 - For direct returns, a by-reference declaration requires `*phpz.zend.Reference` and a by-value declaration excludes it. Context handlers returning `void` or `!void` write the slot themselves and are responsible for the reference semantics.
 - PHP 8.4+ `@frameless-function` declarations fail at the binding site because phpz does not export frameless handlers.
 

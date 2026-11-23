@@ -18,40 +18,51 @@
  * @undocumentable
  */
 namespace MyPHPExt;
-function greet(string $name): string {}
+function byteCount(string $value): int {}
 ```
 
 生成 arginfo 后，在 Zig 中定义实现容器。以下片段假定已经导入 `phpz`，并由工程完成模块注册：
 
 ```zig
-const Api = struct {
-    pub fn greet(name: []const u8) []const u8 {
-        return name;
+const functions = struct {
+    pub fn byteCount(value: []const u8) usize {
+        return value.len;
     }
 };
 
 comptime {
-    phpz.functions(Api, .{ .namespace = "MyPHPExt" });
+    phpz.functions(functions, .{ .namespace = "MyPHPExt" });
 }
 ```
 
-`functions` 绑定容器中的全部公开函数，`.namespace` 指定 PHP 命名空间前缀。只有全局命名空间的函数才省略该选项。上例加载后可调用 `MyPHPExt\greet("Zig")`，返回 `"Zig"`。
+`functions` 绑定容器中的全部公开函数，`.namespace` 指定 PHP 命名空间前缀。只有全局命名空间的函数才省略该选项。上例加载后可调用 `MyPHPExt\byteCount("Zig")`，返回 `3`。
 
 需要逐个映射、跨多个 Zig 容器或 PHP 名称与 Zig 名称不一致时，使用 `namedFunctions` 替换上面的 `comptime` 块：
 
 ```zig
 comptime {
     phpz.namedFunctions(.{
-        .@"MyPHPExt\\greet" = Api.greet,
+        .@"MyPHPExt\\byteCount" = functions.byteCount,
     });
 }
 ```
 
 两种方式选其一，在一次调用中覆盖 stub 文件的全部具体函数；显式 `@alias` 无需重复绑定。名称须与完整 PHP 名称精确匹配，包括大小写。自动绑定时，辅助函数保持私有。
 
-绑定分散在多个 Zig 模块时，可用 `phpz.function("MyPHPExt\\greet", Api.greet)` 逐项导出。它只检查该函数是否已在 stub 文件声明，并像批量绑定一样检查该处理器的声明；不检查其他函数是否遗漏。集中绑定优先使用前两种方式。
+绑定分散在多个 Zig 模块时，可用 `phpz.function("MyPHPExt\\byteCount", functions.byteCount)` 逐项导出。它只检查该函数是否已在 stub 文件声明，并像批量绑定一样检查该处理器的声明；不检查其他函数是否遗漏。集中绑定优先使用前两种方式。
 
 # [处理器签名]($heading.id('handler-signatures'))
+
+在 `byteCount(value: []const u8) usize` 中，phpz 将 PHP 字符串的字节借给 Zig 切片，再将 `value.len` 写为 PHP 整数。使用命名参数时，PHP 调用方采用 stub 中的参数名：
+
+```php
+use function MyPHPExt\byteCount;
+
+var_dump(byteCount(value: "Zig")); // int(3)
+var_dump(byteCount("é"));          // int(2) (UTF-8)
+```
+
+如果把 Zig 参数改成可选的 `?[]const u8` 并在函数体中处理省略的值，而 stub 仍声明必传字符串，构建会因必选参数数量不一致而失败。签名正确时，如果 PHP 调用方传入数组，则在调用处收到 `TypeError`。
 
 处理器可以直接声明 PHP 参数对应的 Zig 类型，返回 `T` 或 `!T`；包装器负责参数解析和返回值写入。`Ctx` / `GuardCtx` 可省略，需要时必须放在 PHP 参数之前；带实例数据的实例方法先放 `self`，再放上下文。
 
@@ -60,7 +71,7 @@ comptime {
 类型化处理器在编译期按生成的 arginfo 检查会影响内存安全的声明：
 
 - 必选参数数、固定参数数和末尾可变参数标志必须一致。
-- arginfo 中按引用传递的参数必须声明为 `*phpz.zend.Reference`（可为 `?*...` 可选参数），或使用能保留引用的原始 `*phpz.Zval`；非引用参数不能使用引用类型。
+- 固定参数按引用传递时，Zig 使用 `*phpz.zend.Reference`、其可选形式，或能保留引用的原始 `*phpz.Zval`。按值传递的固定参数不能声明为引用类型。按引用传递的可变参数（`mixed &...$args`）使用 [`phpz.Variadic`]($link.page('reference/registration/arguments').ref('variadic-references'))。
 - 处理器直接返回值时，arginfo 中按引用返回的函数必须返回 `*phpz.zend.Reference`，按值返回时不能返回该类型。带上下文且返回 `void` 或 `!void` 的处理器自行写入返回槽，编译器不会替它核对实际写入值的引用标志。
 - PHP 8.4+ 的 `@frameless-function` 声明会在绑定处被拒绝，因为 phpz 不导出 frameless 处理器。
 

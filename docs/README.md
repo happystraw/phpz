@@ -39,14 +39,6 @@ python3 -m http.server 8000 --directory docs/public
 
 Open the [local release build](http://localhost:8000/phpz/). The [GitHub Pages workflow](../.github/workflows/docs.yml) runs the same build and indexing commands when documentation or build inputs change on `dev`, then deploys the contents of `docs/public/phpz/`.
 
-To generate just the library and build-system API references, run:
-
-```sh
-zig build docs-api -Dphp-include-dir="$(php-config --include-dir)"
-```
-
-The output directories are `zig-out/docs/lib/` and `zig-out/docs/build/`, respectively.
-
 ## Publish the skeleton generator
 
 To write the release notes in advance, save a GitHub Release draft for the planned tag, such as `0.1.0`. Push the new `MAJOR.MINOR.PATCH` tag on the commit you want to release. The [release workflow](../.github/workflows/release.yml) runs the Linux, macOS, Windows, built-in extension, SAPI and skeleton tests against that commit. If a test fails, publication is skipped. For a transient failure, rerun the failed jobs in Actions.

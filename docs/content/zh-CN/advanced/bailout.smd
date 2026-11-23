@@ -41,6 +41,7 @@ fn freeBytes(bytes: []u8) void {
 }
 
 pub fn nativeWork(ctx: phpz.GuardCtx) !void {
+    try ctx.call.expectNoArgs();
     const bytes = try std.heap.c_allocator.dupe(u8, "work");
     _ = ctx.guard(bytes, freeBytes) catch |err| {
         std.heap.c_allocator.free(bytes);

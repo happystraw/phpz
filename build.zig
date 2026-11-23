@@ -61,7 +61,6 @@ fn addCheckStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) *s
 }
 
 fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) void {
-    const api_step = b.step("docs-api", "Generate Zig API documentation");
     const site_step = b.step("docs", "Build the Zine site with the Zig library API reference");
 
     // Generate docs for main library (src/root.zig)
@@ -70,12 +69,6 @@ fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOpti
         .root_module = mod,
     });
     doc_obj.setLibCFile(options.getLibCFilePath());
-    const install_docs = b.addInstallDirectory(.{
-        .source_dir = doc_obj.getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs/lib",
-    });
-    api_step.dependOn(&install_docs.step);
 
     const site = b.addSystemCommand(&.{ "zine", "release", "--force" });
     site.setCwd(b.path("docs"));
@@ -85,23 +78,6 @@ fn addGenerateDocsStep(b: *std.Build, mod: *std.Build.Module, options: BuildOpti
         site.addArg(b.fmt("--install-always=phpz/api/{s}", .{file}));
     }
     site_step.dependOn(&site.step);
-
-    // Generate docs for build system (build/Phpz.zig)
-    const build_doc_obj = b.addObject(.{
-        .name = "phpz-build",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("build/Phpz.zig"),
-            .target = mod.resolved_target,
-            .optimize = mod.optimize,
-        }),
-    });
-    build_doc_obj.setLibCFile(options.getLibCFilePath());
-    const install_build_docs = b.addInstallDirectory(.{
-        .source_dir = build_doc_obj.getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs/build",
-    });
-    api_step.dependOn(&install_build_docs.step);
 }
 
 fn addTestStep(b: *std.Build, mod: *std.Build.Module, options: BuildOptions) void {

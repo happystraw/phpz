@@ -1,0 +1,26 @@
+---
+.title = "基准测试",
+.date = .date("2026-11-24T00:00:00"),
+.layout = "benchmarks.shtml",
+.translation_key = "benchmarks",
+.custom = {
+    "intro": "三个 PHP 扩展分别用 Zend C、phpz（Zig）和 PHPX（C++）实现相同的 API。每项测试统计 PHP 循环中调用扩展并处理返回值的耗时。",
+    "reproduce": "复现测试",
+    "source": "测试源码与环境配置",
+    "environment": "测量信息",
+    "conditions": [
+        {"label": "机器", "value": "Intel Core i5-10600，逻辑 CPU 4"},
+        {"label": "系统", "value": "Linux x86-64"},
+        {"label": "运行环境", "value": "PHP 8.5.13 NTS，关闭 OPcache 和 JIT"},
+        {"label": "编译器", "value": "GCC 16.2.1、Zig 0.17.0"},
+        {"label": "PHPX", "value": "Swoole PHPX v2.9.8"},
+        {"label": "运行方式", "value": "每项测试运行 36 轮，校准目标为 50 ms。每个样本使用独立 PHP 进程，预热后开始计时。"},
+    ],
+    "results": "全部测试结果",
+    "workload": "测试场景",
+    "ratio": "PHPZ / C（95% 置信区间）",
+    "legend": "闪电标记表示该行的最低耗时中位数。",
+    "lowest": "最低耗时中位数",
+    "reading": "时间列为每次操作的耗时中位数，单位是纳秒。PHPZ / C 先计算每轮的配对耗时比，再取中位数，小于 1 表示 phpz 耗时更少。95% 置信区间按整轮进行 5,000 次自助重采样估算。",
+},
+---

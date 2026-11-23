@@ -1,0 +1,40 @@
+<extend template="base.shtml">
+<div id="page-layout">
+    <main class="benchmarks" id="content" tabindex="-1" data-pagefind-body>
+        <h1 :text="$page.title"></h1>
+        <p class="bench-intro" :text="$page.custom.get('intro')"></p>
+        <ctx rows="$site.asset('phpz/benchmark-results.json').ziggy()">
+            <h2 id="results" :text="$page.custom.get('results')"></h2>
+            <p><span class="bench-lowest" aria-hidden="true"></span> <ctx :text="$page.custom.get('legend')"></ctx> <ctx :text="$page.custom.get('reading')"></ctx></p>
+            <div class="bench-scroll" tabindex="0" role="region" aria-labelledby="results">
+                <table aria-labelledby="results">
+                    <thead><tr><th scope="col" :text="$page.custom.get('workload')"></th><th scope="col" class="bench-c">C</th><th scope="col" class="bench-zig">PHPZ (Zig)</th><th scope="col" class="bench-cpp">PHPX (C++)</th><th scope="col" :text="$page.custom.get('ratio')"></th></tr></thead>
+                    <tbody :loop="$ctx.rows.iterate()">
+                        <tr>
+                            <th scope="row" :text="$loop.it.key"></th>
+                            <td><ctx :text="$loop.it.value.get('c')"></ctx><ctx :if="$loop.it.value.get('lowest').eql('c')"><span class="bench-lowest" role="img" aria-label="$page.custom.get('lowest')"></span></ctx></td>
+                            <td><ctx :text="$loop.it.value.get('zig')"></ctx><ctx :if="$loop.it.value.get('lowest').eql('zig')"><span class="bench-lowest" role="img" aria-label="$page.custom.get('lowest')"></span></ctx></td>
+                            <td><ctx :text="$loop.it.value.get('cpp')"></ctx><ctx :if="$loop.it.value.get('lowest').eql('cpp')"><span class="bench-lowest" role="img" aria-label="$page.custom.get('lowest')"></span></ctx></td>
+                            <td :text="$loop.it.value.get('ratio')"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </ctx>
+        <section class="bench-setup">
+            <h2 id="reproduce" :text="$page.custom.get('reproduce')"></h2>
+            <pre><code>benchmark/run.sh --check
+benchmark/run.sh</code></pre>
+            <a href="https://github.com/happystraw/phpz/tree/0.1.0/benchmark#run" :text="$page.custom.get('source')"></a>
+        </section>
+        <section class="bench-environment">
+            <h2 id="environment" :text="$page.custom.get('environment')"></h2>
+            <dl>
+                <div><dt>phpz</dt><dd><a href="https://github.com/happystraw/phpz/releases/tag/0.1.0">0.1.0</a></dd></div>
+                <ctx :loop="$page.custom.get('conditions')">
+                    <div><dt :text="$loop.it.get('label')"></dt><dd :text="$loop.it.get('value')"></dd></div>
+                </ctx>
+            </dl>
+        </section>
+    </main>
+</div>

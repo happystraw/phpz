@@ -34,7 +34,8 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 Generate an extension with the phpz 0.1.0 skeleton generator.
 
 ```bash
-curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | \
+  php -- --ext my_php_extension
 ```
 
 On PHP 8.2, download the script and run it locally.

@@ -15,7 +15,8 @@ Create, build and load a PHP extension to see how its PHP stub and Zig implement
 Run the following command to create an extension. The `phpz_skel.php` release asset is a standalone PHP script that generates an extension using phpz 0.1.0.
 
 ```sh
-curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | \
+  php -- --ext my_php_extension
 ```
 
 On PHP 8.2, download the script and run it locally.
@@ -147,9 +148,44 @@ const functions = struct {
 
 `!*phpz.zend.String` returns a string on success or a Zig error on failure. `String.init` copies the bytes while the local buffer is valid. The PHP return value takes ownership of one reference. Returning a slice of the local buffer would leave the wrapper reading it after the handler returns. This example reports an error if the greeting exceeds 256 bytes.
 
+For optional or nullable parameters, see [Omitted and null arguments]($link.page('reference/registration/arguments').ref('typed-optional-example')). For a PHP function with `...$values`, see [Collecting and validating variadic arguments]($link.page('reference/registration/arguments').ref('variadic-values')).
+
 ## [A class example]($heading.id('implement-classes'))
 
-The skeleton also includes `Counter`. The PHP example above creates an instance, changes its state and reads the result. See [Classes, properties and methods]($link.page('reference/registration/classes')) for constructors, class bindings and per-instance Zig data.
+Each PHP `Counter` has its own Zig `n` field. The skeleton binds these methods in `src/root.zig`:
+
+```zig
+const Counter = struct {
+    n: i64 = 0,
+
+    pub fn __construct(n: ?i64) Counter {
+        return .{ .n = n orelse 0 };
+    }
+
+    pub fn add(self: *Counter, n: i64) void {
+        self.n +|= n;
+    }
+
+    pub fn dec(self: *Counter, n: i64) void {
+        self.n -|= n;
+    }
+
+    pub fn value(self: *const Counter) i64 {
+        return self.n;
+    }
+};
+```
+
+```php
+$counter = new Counter(5);
+$counter->add(3);
+var_dump($counter->value());       // int(8)
+var_dump((new Counter)->value());  // int(0)
+```
+
+A call to `new Counter(5)` passes `5` to the Zig constructor. phpz stores the returned `Counter` inside the new PHP object. With `new Counter()`, the argument is absent and `n orelse 0` supplies the default. On later calls phpz supplies `self` from that object. `add` takes a mutable pointer to change the count, while `value` takes a read-only pointer and returns the count as a PHP integer.
+
+For a static method that can be called before creating an object, see [Method bindings]($link.page('reference/registration/classes').ref('method-bindings')).
 
 # [Testing and updating the extension]($heading.id('run-tests'))
 

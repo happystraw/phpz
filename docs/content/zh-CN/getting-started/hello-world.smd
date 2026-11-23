@@ -15,7 +15,8 @@
 运行以下命令创建扩展。Release 附件 `phpz_skel.php` 是独立的 PHP 骨架脚本，默认使用 phpz 0.1.0。
 
 ```sh
-curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | \
+  php -- --ext my_php_extension
 ```
 
 在 PHP 8.2 上，先下载脚本再运行。
@@ -147,9 +148,44 @@ const functions = struct {
 
 `!*phpz.zend.String` 表示成功时返回字符串，也可能返回 Zig 错误。`String.init` 在局部缓冲区失效前复制内容，新字符串的一份引用交给 PHP 返回值持有，不再手动释放。不能直接返回指向局部缓冲区的切片，因为包装器在处理器返回后才写入 PHP 返回值。这里的缓冲区为 256 字节，问候语超出容量时会报错。
 
+参数可以省略或接受 `null` 时，见[省略参数与显式 null]($link.page('reference/registration/arguments').ref('typed-optional-example'))。PHP 签名带有 `...$values` 时，见[收集与校验可变参数]($link.page('reference/registration/arguments').ref('variadic-values'))。
+
 ## [类示例]($heading.id('implement-classes'))
 
-骨架还包含 `Counter` 类，上面的调用展示了创建对象、修改状态和读取结果。类绑定、构造器与 Zig 实例数据的完整说明见[类、属性与方法]($link.page('reference/registration/classes'))。
+每个 PHP `Counter` 对象都有独立的 Zig 字段 `n`。骨架在 `src/root.zig` 中实现了以下方法。
+
+```zig
+const Counter = struct {
+    n: i64 = 0,
+
+    pub fn __construct(n: ?i64) Counter {
+        return .{ .n = n orelse 0 };
+    }
+
+    pub fn add(self: *Counter, n: i64) void {
+        self.n +|= n;
+    }
+
+    pub fn dec(self: *Counter, n: i64) void {
+        self.n -|= n;
+    }
+
+    pub fn value(self: *const Counter) i64 {
+        return self.n;
+    }
+};
+```
+
+```php
+$counter = new Counter(5);
+$counter->add(3);
+var_dump($counter->value());       // int(8)
+var_dump((new Counter)->value());  // int(0)
+```
+
+调用 `new Counter(5)` 时，Zig 构造器收到 `5`，phpz 将返回的 `Counter` 存入新建的 PHP 对象。调用 `new Counter()` 时参数省略，`n orelse 0` 提供默认值。之后调用方法时，phpz 从这个对象取得 `self`。`add` 通过可写指针修改计数，`value` 通过只读指针读取计数并返回 PHP 整数。
+
+静态方法可以在创建对象前调用，见[方法绑定]($link.page('reference/registration/classes').ref('method-bindings'))。
 
 # [测试与更新]($heading.id('run-tests'))
 

@@ -18,6 +18,7 @@ Supply zval storage for `Zval.Array.empty()` and `init()`. When returning an arr
 ```zig
 /// PHP: function buildArray(): array
 pub fn buildArray(ctx: phpz.Ctx) !void {
+    try ctx.call.expectNoArgs();
     const result = phpz.Zval.Array.empty(ctx.retval.ptr());
     result.set(.string, "name", "phpz");
     result.set(.int, "version", 1);

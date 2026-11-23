@@ -39,8 +39,8 @@ const Point = struct {
         return self.*;
     }
 
-    pub fn x(self: *const Point, ctx: phpz.Ctx) void {
-        ctx.ret(.int, self.x_value);
+    pub fn x(self: *const Point) i64 {
+        return self.x_value;
     }
 };
 const PointClass = phpz.Class("Point", Point, .{ .clone = Point.clone });

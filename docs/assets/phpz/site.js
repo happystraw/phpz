@@ -2,13 +2,18 @@
     const root = document.documentElement;
     let theme;
     try { theme = localStorage.getItem('phpz-theme'); } catch (_) {}
-    if (theme !== 'light' && theme !== 'dark') {
-        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (theme !== 'light' && theme !== 'dark') theme = 'system';
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    function applyTheme() {
+        root.dataset.theme = theme === 'system' ? (systemTheme.matches ? 'dark' : 'light') : theme;
     }
-    root.dataset.theme = theme;
+    applyTheme();
+    systemTheme.addEventListener('change', applyTheme);
 
     document.addEventListener('DOMContentLoaded', () => {
         setupSearch();
+        setupCommandCopy();
+        setupChapterDrawer();
         const headerMenus = [...document.querySelectorAll('.header-tools details')];
         document.addEventListener('click', event => {
             for (const menu of headerMenus) {
@@ -23,27 +28,90 @@
             }
         });
 
-        const button = document.querySelector('.theme-toggle');
-        const update = () => {
-            root.dataset.theme = theme;
-            button.setAttribute('aria-checked', String(theme === 'dark'));
-            button.setAttribute('aria-label', theme === 'dark' ? button.dataset.lightLabel : button.dataset.darkLabel);
+        const picker = document.querySelector('.theme-picker');
+        const options = picker.querySelectorAll('[data-theme-option]');
+        const markSelection = () => {
+            for (const option of options) {
+                option.setAttribute('aria-pressed', String(option.dataset.themeOption === theme));
+            }
         };
-        button.hidden = false;
-        update();
-        button.addEventListener('click', () => {
-            theme = theme === 'dark' ? 'light' : 'dark';
-            try { localStorage.setItem('phpz-theme', theme); } catch (_) {}
-            update();
-        });
+        markSelection();
+        picker.hidden = false;
+        for (const option of options) {
+            option.addEventListener('click', () => {
+                theme = option.dataset.themeOption;
+                try { localStorage.setItem('phpz-theme', theme); } catch (_) {}
+                applyTheme();
+                markSelection();
+                picker.open = false;
+                picker.querySelector('summary').focus();
+            });
+        }
     });
+
+    function setupChapterDrawer() {
+        const drawer = document.querySelector('#chapter-drawer');
+        if (!drawer) return;
+        const chapters = document.querySelector('#chapters');
+        const details = chapters.parentElement;
+        const trigger = details.querySelector('summary');
+        const narrow = window.matchMedia('(max-width: 1023px)');
+        trigger.setAttribute('aria-haspopup', 'dialog');
+        trigger.setAttribute('aria-controls', drawer.id);
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.addEventListener('click', event => {
+            if (!narrow.matches) return;
+            event.preventDefault();
+            drawer.append(chapters);
+            drawer.showModal();
+            trigger.setAttribute('aria-expanded', 'true');
+            chapters.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' });
+        });
+        drawer.addEventListener('close', () => {
+            details.append(chapters);
+            trigger.setAttribute('aria-expanded', 'false');
+        });
+        drawer.addEventListener('click', event => {
+            if (event.target === drawer && event.clientX >= drawer.getBoundingClientRect().right) drawer.close();
+        });
+        narrow.addEventListener('change', () => { if (drawer.open) drawer.close(); });
+    }
+
+    function setupCommandCopy() {
+        const button = document.querySelector('.project-copy');
+        if (!button) return;
+        const code = document.querySelector('.project-command code');
+        const status = document.querySelector('.copy-status');
+        let timer;
+        button.hidden = false;
+        button.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(code.textContent);
+                button.classList.add('is-copied');
+                status.textContent = button.dataset.copied;
+            } catch {
+                const range = document.createRange();
+                range.selectNodeContents(code);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                button.classList.remove('is-copied');
+                status.textContent = button.dataset.manual;
+            }
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                button.classList.remove('is-copied');
+                status.textContent = '';
+            }, 1500);
+        });
+    }
 
     function setupSearch() {
         const trigger = document.querySelector('.search-open');
         const dialog = document.querySelector('#docs-search');
         const input = dialog.querySelector('input');
         const results = document.querySelector('#search-results');
-        const chapterLinks = [...document.querySelectorAll('#chapters a[href], .home-primary, .home-guides a')];
+        const chapterLinks = [...document.querySelectorAll('#chapters a[href]')];
         let pagefind;
         let timer;
         let revision = 0;
@@ -102,7 +170,7 @@
             return pagefind;
         }
 
-        input.addEventListener('input', event => {
+        function scheduleSearch(event) {
             clearTimeout(timer);
             const current = ++revision;
             if (event.isComposing) return;
@@ -137,7 +205,10 @@
                     if (current === revision && dialog.open) showStatus(dialog.dataset.error);
                 }
             }, 180);
-        });
+        }
+
+        input.addEventListener('input', scheduleSearch);
+        input.addEventListener('compositionend', scheduleSearch);
 
         function openSearch() {
             dialog.showModal();
