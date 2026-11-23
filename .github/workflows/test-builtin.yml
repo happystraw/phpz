@@ -97,7 +97,7 @@ jobs:
         run: |
           Import-Module "$env:GITHUB_WORKSPACE\build\php-windows-builder\php\BuildPhp" -Force
           Set-Location "$env:GITHUB_WORKSPACE\build"
-          Get-PhpSdk
+          Get-PhpSdk -PhpVersion $env:CI_PHP
           # Verify once before running all builtin variants.
           Get-VsVersion -PhpVersion $env:CI_PHP
       - name: Preparation complete
