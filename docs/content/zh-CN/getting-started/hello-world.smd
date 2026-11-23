@@ -12,13 +12,17 @@
 
 ## [创建扩展]($heading.id('generate-extension'))
 
-在空目录中下载并运行 PHP 骨架生成器。
+运行以下命令创建扩展。Release 附件 `phpz_skel.php` 是独立的 PHP 骨架脚本，默认使用 phpz 0.1.0。
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php && \
-  php phpz_skel.php --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+```
 
-cd my_php_extension
+在 PHP 8.2 上，先下载脚本再运行。
+
+```sh
+curl -fsSLO https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php
+php phpz_skel.php --ext my_php_extension
 ```
 
 生成的项目包含以下主要文件：
@@ -41,6 +45,7 @@ my_php_extension/
 ## [构建与调用]($heading.id('build-and-call'))
 
 ```sh
+cd my_php_extension
 zig build -Dphp-include-dir="$(php-config --include-dir)"
 
 php -n -dextension=./modules/my_php_extension.so -r 'hello();'

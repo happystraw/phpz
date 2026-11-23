@@ -6,6 +6,9 @@
         <title><ctx :text="$page.title"></ctx> · phpz</title>
         <script src="$site.asset('phpz/site.js').link()"></script>
         <link rel="stylesheet" href="$site.asset('phpz/style.css').link()">
+        <ctx :if="$site.index().isCurrent()">
+            <link rel="stylesheet" href="$site.asset('phpz/home.css').link()">
+        </ctx>
     </head>
     <body>
         <a class="skip-link" href="#content" :text="$i18n.get('skip')"></a>
@@ -15,7 +18,7 @@
                     <img class="brand-mark" src="$site.asset('phpz/wordmark.svg').link()" alt="phpz" width="77" height="26">
                 </a>
                 <nav class="top-nav" aria-label="$i18n.get('top_nav')">
-                    <a class="guide-link" href="$site.index().link()" :text="$i18n.get('docs')"></a>
+                    <a class="guide-link" href="$site.page('getting-started/introduction').link()" :text="$i18n.get('docs')"></a>
                     <a class="api-link" href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
                 </nav>
                 <div class="header-tools">
@@ -45,7 +48,7 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         </summary>
                         <nav aria-label="$i18n.get('top_nav')">
-                            <a class="guide-link" href="$site.index().link()" :text="$i18n.get('docs')"></a>
+                            <a class="guide-link" href="$site.page('getting-started/introduction').link()" :text="$i18n.get('docs')"></a>
                             <a class="api-link" href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
                         </nav>
                     </details>
@@ -64,19 +67,6 @@
             </div>
             <div id="search-results" aria-live="polite"></div>
         </dialog>
-        <div class="shell">
-            <aside class="sidebar" aria-label="$i18n.get('chapters')">
-                <details>
-                    <summary>
-                        <span :text="$i18n.get('chapters')"></span>
-                        <span class="chapter-current" :text="$page.title"></span>
-                    </summary>
-                    <nav id="chapters"><super></nav>
-                </details>
-            </aside>
-            <main id="content" tabindex="-1" data-pagefind-body>
-                <super>
-            </main>
-        </div>
+        <div id="page-layout"><super></div>
     </body>
 </html>

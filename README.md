@@ -31,19 +31,22 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 
 ## Quick Start
 
-Generate a PHP extension skeleton:
+Generate an extension with the phpz 0.1.0 skeleton generator.
 
 ```bash
-# Generate a new PHP extension skeleton
-# PHP >= 8.3:
-curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php \
-  | php -- --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+```
 
-# PHP 8.2:
-curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php
+On PHP 8.2, download the script and run it locally.
+
+```bash
+curl -fsSLO https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php
 php phpz_skel.php --ext my_php_extension
+```
 
-# Run tests (Optional)
+To run the generated project's tests:
+
+```bash
 cd my_php_extension
 zig build run-tests
 ```

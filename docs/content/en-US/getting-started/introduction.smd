@@ -1,0 +1,34 @@
+---
+.title = "Introduction",
+.date = .date("2026-09-16T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "getting-started/introduction",
+.custom = { "section": "Getting started" },
+---
+
+phpz is a framework for writing native PHP extensions in Zig. Declare the API that PHP callers see in a stub file (`.stub.php`), then implement its functions and methods in Zig. At compile time, phpz generates the entry points the Zend Engine expects and builds a native module PHP can load.
+
+# [Implementing a PHP function in Zig]($heading.id('function-example'))
+
+For example, declare a PHP function that counts bytes in the extension's `.stub.php` file.
+
+```php
+function byteCount(string $value): int {}
+```
+
+Implement a function with the same name in the extension's Zig function container.
+
+```zig
+pub fn byteCount(value: []const u8) usize {
+    return value.len;
+}
+```
+
+Once the extension is loaded, `byteCount("Zig")` returns `3` in PHP. phpz passes the string to Zig as a byte slice and returns the slice length as a PHP integer.
+
+# [Who phpz is for]($heading.id('audience'))
+
+- **C extension developers** can use familiar Zend APIs and module and request lifecycle hooks. phpz parses ordinary arguments according to the Zig signature. Handlers that need raw PHP values can work directly with `zval`.
+- **Zig developers** can expose functions from an existing Zig library or wrap a stateful type as a PHP class. To expose a C library, link it into the extension and implement its PHP interface in Zig.
+
+Start with [Requirements and installation]($link.page('getting-started/installation')) to set up Zig and PHP.

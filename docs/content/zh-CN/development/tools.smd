@@ -11,11 +11,11 @@
 # [骨架生成器]($heading.id('skeleton-generator'))
 
 ```sh
-php tools/phpz_skel.php --help
-php tools/phpz_skel.php --ext my_php_extension --phpz dev
+php phpz_skel.php --help
+php phpz_skel.php --ext my_php_extension
 ```
 
-第二条命令从 phpz 仓库根目录执行，在当前目录下创建使用 phpz `dev` 分支 的 `my_php_extension`。
+在下载的 `phpz_skel.php` 所在目录运行这两条命令。0.1.0 生成器会在当前目录创建 `my_php_extension`，并使用 phpz 0.1.0 作为依赖。
 
 | 参数 | 作用 |
 | --- | --- |

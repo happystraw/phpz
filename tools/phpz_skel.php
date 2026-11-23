@@ -11,7 +11,8 @@ namespace Phpz\Tools;
 
 const MIN_PHP_VERSION = '8.2.0';
 const MIN_ZIG_VERSION = '0.17.0';
-const DEFAULT_PHPZ_SPEC = 'git+https://github.com/happystraw/phpz';
+const PHPZ_REPOSITORY = 'git+https://github.com/happystraw/phpz';
+const DEFAULT_PHPZ_SPEC = PHPZ_REPOSITORY;
 const DEFAULT_PHP_INCLUDE_DIR = '/usr/include/php';
 const REQUIRED_PHP_EXTENSIONS = ['pcre', 'standard'];
 const REQUIRED_PHP_FUNCTIONS = ['proc_open'];
@@ -263,7 +264,7 @@ final class PackageSpec
             return $spec;
         }
 
-        return DEFAULT_PHPZ_SPEC . '#' . $spec;
+        return PHPZ_REPOSITORY . '#' . $spec;
     }
 }
 
@@ -1635,17 +1636,19 @@ final class Command
 
     private static function usage(): never
     {
+        $defaultSpec = DEFAULT_PHPZ_SPEC;
         echo <<<USAGE
 Usage:
   php tools/phpz_skel.php --ext <name> [options]
-  curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php | php -- --ext <name> [options]
+  php phpz_skel.php --ext <name> [options]
+  curl -fsSL <generator-url> | php -- --ext <name> [options]
 
 Options:
-  --ext <name>             Extension name (required), e.g. demo_ext.
+  --ext <name>             Extension name (required), e.g. my_php_extension.
   --dir <path>             Parent directory for the extension (default: cwd).
   --phpz <spec>            phpz package spec for `zig fetch --save=phpz`.
                            Bare values are treated as phpz tags, e.g. dev.
-                           Default: git+https://github.com/happystraw/phpz.
+                           Default: $defaultSpec
   --zig <path>             Zig executable (default: \$ZIG, or zig).
   --with-php-config <path> php-config executable for locating PHP development headers.
   --with-php-build-system  Generate PHP build system files (default: disabled).
@@ -1656,8 +1659,8 @@ Options:
   -h, --help               Show this help.
 
 Examples:
-  php tools/phpz_skel.php --ext demo_ext
-  php tools/phpz_skel.php --ext demo_ext --phpz dev
+  php tools/phpz_skel.php --ext my_php_extension
+  php tools/phpz_skel.php --ext my_php_extension --phpz dev
 
 Output:
   Commands are quiet by default. Failed commands print the command and output.

@@ -1,0 +1,73 @@
+<extend template="base.shtml">
+<div id="page-layout">
+    <main class="home" id="content" tabindex="-1" data-pagefind-body>
+        <div class="home-hero">
+            <p class="home-version"><a href="https://github.com/happystraw/phpz/releases">v0.1.0</a> · PHP 8.2–8.6 · Zig 0.17.0</p>
+            <h1><ctx :html="$page.custom.get('headline')"></ctx> <span class="home-subhead" :html="$page.custom.get('subhead')"></span></h1>
+            <p class="home-lead" :text="$page.custom.get('lead')"></p>
+            <a class="home-primary" href="$site.page('getting-started/installation').link()"><ctx :text="$page.custom.get('get_started')"></ctx> <span aria-hidden="true">→</span></a>
+        </div>
+        <dl class="home-facts">
+            <div><dt>PHP</dt><dd>8.2–8.6</dd></div>
+            <div><dt>Zig</dt><dd>0.17.0</dd></div>
+            <div><dt :text="$page.custom.get('runtime')"></dt><dd>NTS / ZTS</dd></div>
+            <div><dt>Linux · macOS · Windows</dt><dd>3</dd></div>
+        </dl>
+        <fieldset class="home-example">
+            <legend class="visually-hidden" :text="$page.custom.get('example')"></legend>
+            <div class="example-tabs">
+                <label><input type="radio" name="example" value="php" checked><span :text="$page.custom.get('php')"></span></label>
+                <label><input type="radio" name="example" value="zig"><span :text="$page.custom.get('zig')"></span></label>
+            </div>
+            <div class="example-source">
+                <div class="php-sample">
+                    <div class="example-file">my_php_extension.stub.php</div>
+                    <pre><code><span class="keyword">function</span> <span class="function">powered_by</span>(): <span class="type">string</span> {}</code></pre>
+                </div>
+                <div class="zig-sample">
+                    <div class="example-file">src/root.zig</div>
+                    <pre><code><span class="keyword">pub fn</span> <span class="function">powered_by</span>() []<span class="keyword">const</span> <span class="type">u8</span> {
+    <span class="keyword">return</span> <span class="string">"phpz"</span>;
+}</code></pre>
+                </div>
+            </div>
+            <div class="example-detail">
+                <div class="example-file php-sample" :text="$page.custom.get('php_call')"></div>
+                <div class="example-file zig-sample" :text="$page.custom.get('zig')"></div>
+                <pre class="php-sample"><code><span class="keyword">echo</span> <span class="string">'Powered by '</span>, <span class="function">powered_by</span>(); <span class="comment">// Powered by phpz</span></code></pre>
+                <p class="zig-sample" :text="$page.custom.get('zig_note')"></p>
+                <div class="example-file" :text="$page.custom.get('create')"></div>
+                <pre class="project-command"><code><span aria-hidden="true">$ </span>curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+<span aria-hidden="true">$ </span>cd my_php_extension
+<span aria-hidden="true">$ </span>zig build</code></pre>
+                <p class="project-note"><ctx :text="$page.custom.get('php82_download')"></ctx> <a href="https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php">phpz_skel.php</a><ctx :text="$page.custom.get('php82_run')"></ctx> <code>php phpz_skel.php --ext my_php_extension</code></p>
+            </div>
+        </fieldset>
+        <div class="home-guides">
+            <section>
+                <h2><a href="$site.page('getting-started/hello-world').link()" :text="$site.page('getting-started/hello-world').title"></a></h2>
+                <p :text="$page.custom.get('starter')"></p>
+            </section>
+            <section>
+                <h2><a href="$site.page('getting-started/how-it-works').link()" :text="$site.page('getting-started/how-it-works').title"></a></h2>
+                <p :text="$page.custom.get('how')"></p>
+            </section>
+            <section>
+                <h2><a href="$site.page('reference/registration/functions').link()" :text="$site.page('reference/registration/functions').title"></a></h2>
+                <p :text="$page.custom.get('functions')"></p>
+            </section>
+            <section>
+                <h2><a href="$site.page('development/testing').link()" :text="$site.page('development/testing').title"></a></h2>
+                <p :text="$page.custom.get('testing')"></p>
+            </section>
+        </div>
+    </main>
+    <footer class="site-footer">
+        <span>phpz · <a href="https://github.com/happystraw/phpz/blob/dev/LICENSE">MIT</a></span>
+        <nav aria-label="$i18n.get('footer_nav')">
+            <a href="$site.page('getting-started/introduction').link()" :text="$i18n.get('docs')"></a>
+            <a href="/phpz/api/" :text="$i18n.get('api_reference')"></a>
+            <a href="https://github.com/happystraw/phpz">GitHub</a>
+        </nav>
+    </footer>
+</div>

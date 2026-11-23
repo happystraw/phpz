@@ -11,11 +11,11 @@ phpz bundles php-src's `gen_stub.php` and `run-tests.php` from PHP `8.6.0`. See 
 # [Skeleton generator]($heading.id('skeleton-generator'))
 
 ```sh
-php tools/phpz_skel.php --help
-php tools/phpz_skel.php --ext my_php_extension --phpz dev
+php phpz_skel.php --help
+php phpz_skel.php --ext my_php_extension
 ```
 
-Run the second command from the phpz repository root to create `my_php_extension` in the current directory using phpz's `dev` branch.
+Run these commands in the directory containing the downloaded `phpz_skel.php`. The 0.1.0 generator creates `my_php_extension` with phpz 0.1.0 as its dependency.
 
 | Option | Purpose |
 | --- | --- |

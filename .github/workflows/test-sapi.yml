@@ -25,6 +25,7 @@ on:
       - ".github/scripts/test-sapi.sh"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-sapi.yml"
+  workflow_call:
   workflow_dispatch:
     inputs:
       php:

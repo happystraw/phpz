@@ -29,6 +29,7 @@ on:
       - ".github/scripts/ci.test.mjs"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-windows.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

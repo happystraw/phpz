@@ -1,9 +1,9 @@
-<extend template="base.shtml">
+<extend template="guide.shtml">
 <nav id="chapters">
     <details class="nav-group" open>
         <summary :text="$i18n.get('start')"></summary>
         <ul>
-            <li><a href="$site.page('').link()" aria-current="$site.page('').isCurrent().then('page')" :text="$i18n.get('home')"></a></li>
+            <li><a href="$site.page('getting-started/introduction').link()" aria-current="$site.page('getting-started/introduction').isCurrent().then('page')" :text="$i18n.get('home')"></a></li>
             <li><a href="$site.page('getting-started/installation').link()" aria-current="$site.page('getting-started/installation').isCurrent().then('page')" :text="$site.page('getting-started/installation').title"></a></li>
             <li><a href="$site.page('getting-started/hello-world').link()" aria-current="$site.page('getting-started/hello-world').isCurrent().then('page')" :text="$site.page('getting-started/hello-world').title"></a></li>
             <li><a href="$site.page('getting-started/how-it-works').link()" aria-current="$site.page('getting-started/how-it-works').isCurrent().then('page')" :text="$site.page('getting-started/how-it-works').title"></a></li>

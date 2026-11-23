@@ -43,7 +43,7 @@
         const dialog = document.querySelector('#docs-search');
         const input = dialog.querySelector('input');
         const results = document.querySelector('#search-results');
-        const chapterLinks = [...document.querySelectorAll('#chapters a[href]')];
+        const chapterLinks = [...document.querySelectorAll('#chapters a[href], .home-primary, .home-guides a')];
         let pagefind;
         let timer;
         let revision = 0;

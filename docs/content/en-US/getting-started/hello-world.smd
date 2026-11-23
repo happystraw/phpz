@@ -12,13 +12,17 @@ Create, build and load a PHP extension to see how its PHP stub and Zig implement
 
 ## [Generating the extension]($heading.id('generate-extension'))
 
-Download and run the PHP skeleton generator in an empty directory.
+Run the following command to create an extension. The `phpz_skel.php` release asset is a standalone PHP script that generates an extension using phpz 0.1.0.
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php && \
-  php phpz_skel.php --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+```
 
-cd my_php_extension
+On PHP 8.2, download the script and run it locally.
+
+```sh
+curl -fsSLO https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php
+php phpz_skel.php --ext my_php_extension
 ```
 
 The generated project includes these files:
@@ -41,6 +45,7 @@ my_php_extension/
 ## [Building and calling the extension]($heading.id('build-and-call'))
 
 ```sh
+cd my_php_extension
 zig build -Dphp-include-dir="$(php-config --include-dir)"
 
 php -n -dextension=./modules/my_php_extension.so -r 'hello();'

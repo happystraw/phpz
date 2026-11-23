@@ -46,3 +46,11 @@ zig build docs-api -Dphp-include-dir="$(php-config --include-dir)"
 ```
 
 The output directories are `zig-out/docs/lib/` and `zig-out/docs/build/`, respectively.
+
+## Publish the skeleton generator
+
+To write the release notes in advance, save a GitHub Release draft for the planned tag, such as `0.1.0`. Push the new `MAJOR.MINOR.PATCH` tag on the commit you want to release. The [release workflow](../.github/workflows/release.yml) runs the Linux, macOS, Windows, built-in extension, SAPI and skeleton tests against that commit. If a test fails, publication is skipped. For a transient failure, rerun the failed jobs in Actions.
+
+After all six suites pass, CI packages the tagged generator as `phpz_skel.php`. If a draft exists, CI uploads the asset and publishes the draft with its existing title and notes. Otherwise it creates the release with the asset and automatically generated notes. The generator defaults to the release tag and accepts an explicit `--phpz` override.
+
+The homepage and quick-start guides use the versioned release URL. Publish those docs once the asset is available.

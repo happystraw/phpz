@@ -31,15 +31,16 @@ phpz 为 PHP C API 提供 Zig 绑定，让你可以用 Zig 编写 PHP 扩展。
 
 ## 快速开始
 
-根据本机 PHP 版本选择一种方式生成扩展骨架。
+使用 phpz 0.1.0 的骨架生成器创建扩展。
 
 ```bash
-# PHP 8.3 及以上版本
-curl -fsSL https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php \
-  | php -- --ext my_php_extension
+curl -fsSL https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php | php -- --ext my_php_extension
+```
 
-# PHP 8.2
-curl -fsSLO https://raw.githubusercontent.com/happystraw/phpz/dev/tools/phpz_skel.php
+使用 PHP 8.2 时，先下载脚本，再在本地运行。
+
+```bash
+curl -fsSLO https://github.com/happystraw/phpz/releases/download/0.1.0/phpz_skel.php
 php phpz_skel.php --ext my_php_extension
 ```
 

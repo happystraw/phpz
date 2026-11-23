@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    if: github.event.created
+    uses: ./.github/workflows/test-linux.yml
+
+  macos:
+    if: github.event.created
+    uses: ./.github/workflows/test-macos.yml
+
+  windows:
+    if: github.event.created
+    uses: ./.github/workflows/test-windows.yml
+
+  builtin:
+    if: github.event.created
+    uses: ./.github/workflows/test-builtin.yml
+
+  sapi:
+    if: github.event.created
+    uses: ./.github/workflows/test-sapi.yml
+
+  phpz-skel:
+    if: github.event.created
+    uses: ./.github/workflows/test-phpz-skel.yml
+
+  publish:
+    needs: [linux, macos, windows, builtin, sapi, phpz-skel]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Package and verify the generator
+        run: |
+          php .github/scripts/package-phpz_skel.php "$RELEASE_TAG" phpz_skel.php
+          php -l phpz_skel.php
+          php -- --help < phpz_skel.php | grep -F -- "git+https://github.com/happystraw/phpz#$RELEASE_TAG"
+      - name: Publish release with the generator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG"
+          if [[ $(git rev-parse 'FETCH_HEAD^{commit}') != $(git rev-parse HEAD) ]]; then
+            echo "Tag $RELEASE_TAG no longer points to the tested commit." >&2
+            exit 1
+          fi
+
+          state=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f tag="$RELEASE_TAG" \
+            -f query='query($owner: String!, $repo: String!, $tag: String!) {
+              repository(owner: $owner, name: $repo) { release(tagName: $tag) { isDraft } }
+            }' --jq '.data.repository.release | if . == null then "missing" elif .isDraft then "draft" else "published" end')
+          case "$state" in
+            missing)
+              gh release create "$RELEASE_TAG" phpz_skel.php --verify-tag --generate-notes
+              ;;
+            draft)
+              gh release upload "$RELEASE_TAG" phpz_skel.php --clobber
+              gh release edit "$RELEASE_TAG" --verify-tag --draft=false
+              ;;
+            published)
+              gh release download "$RELEASE_TAG" --pattern phpz_skel.php --dir "$RUNNER_TEMP/published"
+              cmp phpz_skel.php "$RUNNER_TEMP/published/phpz_skel.php"
+              ;;
+            *) echo "Ambiguous release state for $RELEASE_TAG" >&2; exit 1 ;;
+          esac

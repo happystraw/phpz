@@ -21,6 +21,7 @@ on:
       - ".github/scripts/test-phpz-skel.sh"
       - ".github/scripts/setup-php-windows.ps1"
       - ".github/workflows/test-phpz-skel.yml"
+  workflow_call:
   workflow_dispatch:
 
 env:

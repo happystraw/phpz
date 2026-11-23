@@ -1,0 +1,17 @@
+<extend template="base.shtml">
+<div id="page-layout">
+    <div class="shell">
+        <aside class="sidebar" aria-label="$i18n.get('chapters')">
+            <details>
+                <summary>
+                    <span :text="$i18n.get('chapters')"></span>
+                    <span class="chapter-current" :text="$page.title"></span>
+                </summary>
+                <nav id="chapters"><super></nav>
+            </details>
+        </aside>
+        <main id="content" tabindex="-1" data-pagefind-body>
+            <super>
+        </main>
+    </div>
+</div>

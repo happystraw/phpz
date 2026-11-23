@@ -27,6 +27,7 @@ on:
       - ".github/scripts/ci.mjs"
       - ".github/scripts/ci.test.mjs"
       - ".github/workflows/test-macos.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
