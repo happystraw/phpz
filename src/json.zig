@@ -4,7 +4,7 @@ const exception = @import("exception.zig");
 const Zval = @import("zval.zig").Zval;
 const String = @import("zend/string.zig").String;
 
-pub const EncodeFlags = packed struct(c_int) {
+pub const EncodeFlags = bitpack struct(c_int) {
     hex_tag: bool = false,
     hex_amp: bool = false,
     hex_apos: bool = false,
@@ -23,7 +23,7 @@ pub const EncodeFlags = packed struct(c_int) {
     _reserved22: u10 = 0,
 };
 
-pub const DecodeFlags = packed struct(c.zend_long) {
+pub const DecodeFlags = bitpack struct(c.zend_long) {
     object_as_array: bool = false,
     bigint_as_string: bool = false,
     _reserved2: u18 = 0,

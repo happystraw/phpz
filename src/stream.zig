@@ -32,7 +32,7 @@ pub const Stream = opaque {
     pub const DirBuffer = [c.MAXPATHLEN]u8;
 
     /// No flags are enabled by default; use a preset for PHP's standard close modes.
-    pub const FreeOptions = packed struct(i32) {
+    pub const FreeOptions = bitpack struct(i32) {
         /// Call the stream's close operation.
         call_dtor: bool = false,
         /// Release the stream's storage.

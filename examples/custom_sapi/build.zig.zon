@@ -2,7 +2,7 @@
     .name = .custom_sapi,
     .version = "0.0.0",
     .fingerprint = 0x0bfc198e1b68b6f3,
-    .minimum_zig_version = "0.17.0-dev.2320+1e770dbef",
+    .minimum_zig_version = "0.18.0-dev.1005+75d48dfff",
     .dependencies = .{ .phpz = .{ .path = "../.." } },
     .paths = .{""},
 }

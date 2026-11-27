@@ -139,6 +139,7 @@ fn createPhpCTranslator(b: *Build, options: Options) Translator {
     var translator_options = options.translator;
 
     // Override translator options managed by Phpz.
+    translator_options.char_signedness = .unsigned;
     translator_options.strict_flex_arrays = .@"1";
     translator_options.libc_file = options.libc_file;
 

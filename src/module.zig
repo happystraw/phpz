@@ -315,7 +315,7 @@ pub fn ModuleGlobals(comptime T: type) type {
                     if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
                     const info = @typeInfo(T).@"struct";
                     @setEvalBranchQuota(stub.declarationQuota(info.field_names.len));
-                    if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
+                    if (info.layout == .@"bitpack") @compileError("INI globals fields must be byte-addressable");
                     for (info.field_names, info.field_attrs) |name, attrs| {
                         if (std.mem.eql(u8, name, field) and attrs.@"comptime")
                             @compileError("INI globals field must be a runtime field: " ++ field);
@@ -371,7 +371,7 @@ pub fn ModuleGlobals(comptime T: type) type {
                 if (!@hasField(T, field)) @compileError("INI globals field not found: " ++ field);
                 const info = @typeInfo(T).@"struct";
                 @setEvalBranchQuota(stub.declarationQuota(info.field_names.len));
-                if (info.layout == .@"packed") @compileError("INI globals fields must be byte-addressable");
+                if (info.layout == .@"bitpack") @compileError("INI globals fields must be byte-addressable");
                 for (info.field_names, info.field_attrs) |name, attrs| {
                     if (std.mem.eql(u8, name, field) and attrs.@"comptime")
                         @compileError("INI globals field must be a runtime field: " ++ field);
