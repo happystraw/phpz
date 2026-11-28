@@ -89,7 +89,7 @@ const Sapi = phpz.sapi.Sapi(Backend, .{
 6. 请求关闭仍可执行 PHP shutdown 函数并产生输出；完成后读取最终退出状态、清除上下文，再释放后端资源。
 7. 所有请求与工作线程结束后，依次 `host.shutdown()`、`host.deinit()`、`phpz.tsrm.shutdown()`。
 
-每个进程只能有一个活动 SAPI。SAPI 实例存活到 `deinit()`；INI 文本和附加模块条目保持到模块关闭结束。不要在持有 `host.ptr()` 时移动实例。
+每个进程只能有一个活动 SAPI。SAPI 实例须保持有效直到 `deinit()`。INI 文本和传给 `startup()` 的 `phpz.ModuleEntry` 结构体须保持有效直到模块关闭结束。不要在持有 `host.ptr()` 时移动实例。
 
 只有请求 startup 成功后才安排 request shutdown。请求启动失败可能留下部分 PHP 状态，应结束宿主并清理模块、SAPI、TSRM，清理期间保持借用资源有效；不能重试或继续服务后续请求。
 
@@ -107,6 +107,6 @@ PHP 激活请求时会重置部分字段：`setProtocol()` 应在 activate 回�
 
 # [附加模块与执行结果]($heading.id('module-and-execution'))
 
-`phpz.initModuleEntry()` 创建模块条目，不导出共享扩展的加载入口；在 PHP 模块 startup 时传入它，可注册宿主内置函数和类。常规共享扩展仍使用 `phpz.module()`。
+自定义 SAPI 示例将 `phpz.initModuleEntry(...)` 的结果保存在全局变量 `addon_module` 中。启动时调用 `try custom_sapi.startup(&addon_module)`，PHP 随即注册附加模块提供的函数和类。`addon_module` 必须保持有效，直到 `custom_sapi.shutdown()` 返回。常规共享扩展使用 `phpz.module()`。
 
 执行代码使用 `tryEval()`，脚本使用 `tryExecuteScript()`。两者的异常、bailout 和 `exit(0)` 行为不同，且 shutdown 还可能失败，详见[执行 PHP 代码与脚本]($link.page('reference/runtime/scripts'))。本例测试覆盖文件和 `-r` 执行、异常、致命错误、exit 与 shutdown，不代表 HTTP 后端已经验证。

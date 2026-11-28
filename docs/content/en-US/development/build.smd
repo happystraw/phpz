@@ -25,23 +25,7 @@ zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
 
 See [Build options]($link.page('advanced/build-options')) for LTO and ZTS resource caching.
 
-From the extension project directory, use the SDK build script to cross-compile shared extensions on Linux. Select the exact published PHP version and target. NTS is the default. Pass additional Zig options after `--`.
-
-```sh
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target aarch64-linux-gnu --zts -- -Doptimize=ReleaseFast
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target x86_64-linux-musl
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target aarch64-macos
-```
-
-Verified SDKs are cached under `$XDG_CACHE_HOME/phpz/sdk` (default `~/.cache/phpz/sdk`). Builds for the same PHP version, target, and thread-safety mode reuse the cached headers.
-
-From Windows PowerShell, use the same SDKs and targets. The default cache is `%LOCALAPPDATA%/phpz/sdk`. Add `-Zts` for a thread-safe PHP build.
-
-```powershell
-C:\path\to\phpz\scripts\build-unix.ps1 -PhpVersion 8.2.36 -Target aarch64-linux-gnu -ZigArgs @('-Doptimize=ReleaseFast')
-```
-
-Run `Get-Help C:\path\to\phpz\scripts\build-unix.ps1 -Full` to see all parameters and examples.
+To build for another platform or architecture, see [Cross-compilation]($link.page('development/cross-compilation')).
 
 # [Loading the extension with php.ini]($heading.id('configure-loading'))
 

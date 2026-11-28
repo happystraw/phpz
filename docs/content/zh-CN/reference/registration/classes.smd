@@ -10,6 +10,22 @@
 
 方法可直接声明类型化参数与返回值，也可通过调用上下文手动解析，具体规则见[参数解析与返回值]($link.page('reference/registration/arguments'))。
 
+# [类注册选项]($heading.id('class-options'))
+
+`phpz.Class(name, T, options)` 的第三个参数是编译期选项，传 `.{}` 即使用默认设置。`.methods` 和 `.register` 适用于所有类，包括简写形式 `phpz.ClassDecl(name, options)`。其余选项要求 `T` 是含字段的 Zig 结构体。
+
+| 选项 | 用法与默认行为 |
+| --- | --- |
+| `.methods` | 默认 `.automatic`，按名称绑定方法。要使用不同的 Zig 函数名，传入覆盖所有具体方法的命名映射，见[方法绑定]($link.ref('method-bindings'))。 |
+| `.register` | 默认调用 stub 生成的无参注册函数。如果该函数要求父类或接口，提供回调，按生成函数的参数顺序传入类条目。见[继承与接口注册]($link.page('reference/registration/declarations').ref('inheritance'))。 |
+| `.init` | 所有字段都有默认值时为 `.default`，否则为 `.none`。也可提供返回 `T` 或 `!T` 的无参函数，在 PHP 构造器之前初始化实例数据。 |
+| `.deinit` | 可选的 `fn (*T) void` 回调，用于释放已初始化实例数据持有的资源。 |
+| `.clone` | 带实例数据的对象默认禁止克隆。提供接收 `*const T` 并返回 `T` 或 `!T` 的函数可启用克隆。见[对象生命周期]($link.page('advanced/objects'))。 |
+| `.gc` | 向垃圾回收器报告 Zig 实例数据持有的 PHP 值。标准 PHP 属性由框架自动处理。 |
+| `.operate` | 实现算术或位运算，将结果写入回调的 `result` 参数。见[运算符]($link.page('advanced/operators'))。 |
+| `.compare` | 自定义比较，返回 `.less`、`.equal` 或 `.greater`，也可返回错误。 |
+| `.handlers` | 使用 `phpz.ObjectHandlers` 覆盖指定的 Zend 回调。同一操作只能在这里或对应的高级选项中设置一次。见[自定义对象处理器]($link.page('advanced/handlers'))。 |
+
 # [Zig 实例数据]($heading.id('zig-backing'))
 
 含字段的 Zig 结构体为每个 PHP 对象增加一份 Zig 实例数据。它可以处于未初始化状态。所有字段都有默认值时，框架默认初始化实例数据；否则需要由构造器或 `.init` 完成初始化。在实例数据未初始化时调用需要 `self` 的方法会产生 PHP 错误。

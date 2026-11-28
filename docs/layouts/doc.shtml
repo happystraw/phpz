@@ -60,6 +60,7 @@
                 <li><a href="$site.page('development/tools').link()" aria-current="$site.page('development/tools').isCurrent().then('page')" :text="$site.page('development/tools').title"></a></li>
             </ctx>
             <li><a href="$site.page('development/build').link()" aria-current="$site.page('development/build').isCurrent().then('page')" :text="$site.page('development/build').title"></a></li>
+            <li><a href="$site.page('development/cross-compilation').link()" aria-current="$site.page('development/cross-compilation').isCurrent().then('page')" :text="$site.page('development/cross-compilation').title"></a></li>
             <li><a href="$site.page('development/testing').link()" aria-current="$site.page('development/testing').isCurrent().then('page')" :text="$site.page('development/testing').title"></a></li>
             <li><a href="$site.page('development/windows').link()" aria-current="$site.page('development/windows').isCurrent().then('page')" :text="$site.page('development/windows').title"></a></li>
             <li><a href="$site.page('development/php-build-system').link()" aria-current="$site.page('development/php-build-system').isCurrent().then('page')" :text="$site.page('development/php-build-system').title"></a></li>

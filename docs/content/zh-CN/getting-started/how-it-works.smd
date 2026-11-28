@@ -30,13 +30,13 @@ phpz 把 Zig 实现编译成 PHP 可以加载的共享扩展。以调用 `greet(
 | --- | --- |
 | `phpz.functions(functions, .{})` | 核对 Zend 函数表并导出 PHP 可调用的包装器，例如为 `functions.greet` 导出 `zif_greet` |
 | `phpz.Class("Counter", Counter, .{})` | 绑定类和方法，为方法导出 `zim_*` 包装器 |
-| `phpz.module(...)` | 创建模块条目，并为共享扩展导出 `get_module()` |
+| `phpz.module(...)` | 创建描述扩展的 `zend_module_entry` 结构体，并为共享扩展导出 `get_module()` |
 
 类型化处理器在编译期核对参数数量、可变参数和引用标志，实际传入的值由运行时解析。完整的绑定规则见 [处理器签名]($link.page('reference/registration/functions').ref('handler-signatures'))。构建脚本通过 `addExtension()` 编译并链接共享扩展。
 
 # [PHP 如何加载和调用扩展]($heading.id('runtime-loading-and-calls'))
 
-加载共享库时，PHP 调用 `get_module()` 取得模块条目并安装函数表。随后进入 MINIT（模块初始化），phpz 注册扩展声明的符号、INI、资源类型、类和观察器，并在最后执行配置的 `module_startup_fn`。依赖顺序和临时加载规则见 [模块注册顺序]($link.page('reference/registration/module').ref('registration-order'))。
+加载共享库时，PHP 调用 `get_module()` 取得该结构体的指针并安装函数表。随后进入 MINIT（模块初始化），phpz 注册扩展声明的符号、INI、资源类型、类和观察器，并在最后执行配置的 `module_startup_fn`。依赖顺序和临时加载规则见 [模块注册顺序]($link.page('reference/registration/module').ref('registration-order'))。
 
 PHP 执行 `greet("World")` 时，按函数表找到 `zif_greet`。
 

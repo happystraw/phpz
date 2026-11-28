@@ -27,7 +27,7 @@ phpz 为 PHP C API 提供 Zig 绑定，让你可以用 Zig 编写 PHP 扩展。
 - **内存管理** — 基于 PHP 内存分配器提供 Zig 分配器，支持任意对齐要求。调试时可启用兼容 ZTS 的内存泄漏追踪。
 - **构建集成** — 处理 PHP C 头文件转换、扩展链接和平台配置。
 - **PHP 构建系统** — 向 `phpz_skel.php` 传入 `--with-php-build-system`，即可生成将扩展编译为 PHP 内置模块或共享模块所需的文件。[骨架项目构建指南](./examples/skeleton/README.md#php-build-system)
-- **交叉编译** — 使用 [Bash 脚本](./scripts/build-unix.sh)或 [PowerShell 脚本](./scripts/build-unix.ps1) 构建 Linux（glibc、musl）和 macOS 的 x86_64、ARM64 扩展，也可在 [Linux](./scripts/build-windows.sh) 或 [Windows PowerShell](./scripts/build-windows.ps1) 中构建 Windows x86_64 MSVC 扩展。
+- **[交叉编译](https://happystraw.github.io/phpz/zh-CN/development/cross-compilation/)** — 使用目标 PHP SDK 构建 Linux（glibc 或 musl）、macOS 和 Windows 扩展。
 
 ## 快速开始
 

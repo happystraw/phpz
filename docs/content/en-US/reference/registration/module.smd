@@ -21,7 +21,23 @@ comptime {
 }
 ```
 
-The project defines `functions` and `CounterClass`. Names must match the stub and build configuration. The skeleton reads the extension name and version from `extension_info`.
+The project chooses the Zig identifiers `functions` and `CounterClass`. The PHP function, method and class names exposed by the bindings must match their stub declarations. For example, the first argument to `phpz.Class` sets the PHP class name for `CounterClass`. See [Class registration options]($link.page('reference/registration/classes').ref('class-options')). The skeleton reads the extension name and version from `extension_info`.
+
+# [Module registration options]($heading.id('module-options'))
+
+Use `phpz.module` to export module symbols for a regular extension. When a custom SAPI needs to register an additional module at PHP startup, use `phpz.initModuleEntry` to create its entry. See [Additional modules for a custom SAPI]($link.ref('module-entry')). Both APIs accept the following compile-time configuration. Only `.name` is required.
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `.name` | Required | PHP extension name as a zero-terminated string, such as `"my_php_extension"`. |
+| `.version` | `"0.0.0"` | Extension version string returned by `phpversion("my_php_extension")` for the example above. |
+| `.classes` | `null` | Class wrappers to register in order, such as `&.{CounterClass}`. List parents and interfaces before their dependents. |
+| `.resources` | `null` | Resource types to register, such as `&.{ValueResource}`. See the example under [Registration order]($link.ref('registration-order')). |
+| `.ini` | `&.{}` | [INI entries]($link.page('reference/runtime/ini')) to register. Entries bound to module globals must use the same wrapper type as `.globals`. |
+| `.globals` | `null` | The type returned by `phpz.ModuleGlobals(T)`. Each TSRM thread gets its own instance under ZTS. See [Module globals]($link.page('advanced/globals')). |
+| `.observer` | `null` | [Zend observer configuration]($link.page('advanced/observers')). Registration is skipped when the extension is loaded temporarily with `dl()`. |
+
+The five optional [lifecycle hooks]($link.ref('lifecycle-hooks')) all default to `null`. That section lists their phases and signatures.
 
 # [Registration order]($heading.id('registration-order'))
 
@@ -74,8 +90,8 @@ The first four hooks have the signature `fn () anyerror!void`. `info_fn` takes a
 
 See [Lifetime boundaries]($link.page('reference/types/ownership').ref('lifetime-boundaries')) for cleanup responsibilities across calls, requests, objects and module globals.
 
-# [Module entries for standalone hosts]($heading.id('module-entry'))
+# [Additional modules for a custom SAPI]($heading.id('module-entry'))
 
-`phpz.module(options)` exports the module symbols for a shared or static extension according to its build configuration. `phpz.initModuleEntry(options)` instead returns a `ModuleEntry` for a host that supplies it during engine startup. It uses the same configuration and class registration rules and exports no dynamic loading entry point.
+In `examples/custom_sapi`, the host calls `phpz.initModuleEntry(.{ .name = "custom_sapi_app" })` and stores the entry in the global variable `addon_module`. PHP registers the module when the host calls `try custom_sapi.startup(&addon_module)`. PHP scripts can then call the host-provided function `custom_sapi_greeting()`.
 
-Keep the entry's storage alive through module shutdown. See [Additional modules and execution results]($link.page('advanced/sapi').ref('module-and-execution')) for passing it to the engine.
+Keep the entry's storage alive through module shutdown. See [Custom SAPI]($link.page('advanced/sapi').ref('lifecycle')) for the startup and shutdown sequence.

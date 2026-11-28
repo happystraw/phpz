@@ -25,23 +25,7 @@ zig build -Doptimize=ReleaseSafe -Dphp-include-dir="$(php-config --include-dir)"
 
 自定义链接优化或 ZTS 线程资源缓存时，参见 [phpz 构建选项]($link.page('advanced/build-options'))。
 
-在 Linux 上，从扩展工程目录调用 SDK 构建脚本。指定已发布的 PHP 完整版本和目标平台，默认使用 NTS。额外的 Zig 参数放在 `--` 后。
-
-```sh
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target aarch64-linux-gnu --zts -- -Doptimize=ReleaseFast
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target x86_64-linux-musl
-/path/to/phpz/scripts/build-unix.sh --php-version 8.2.36 --target aarch64-macos
-```
-
-校验通过的 SDK 缓存在 `$XDG_CACHE_HOME/phpz/sdk`（默认 `~/.cache/phpz/sdk`）。相同 PHP 版本、目标和线程安全模式的构建会复用缓存的头文件。
-
-在 Windows PowerShell 中使用相同的 SDK 和目标，默认缓存目录为 `%LOCALAPPDATA%/phpz/sdk`。目标 PHP 启用了线程安全时添加 `-Zts`。
-
-```powershell
-C:\path\to\phpz\scripts\build-unix.ps1 -PhpVersion 8.2.36 -Target aarch64-linux-gnu -ZigArgs @('-Doptimize=ReleaseFast')
-```
-
-使用 `Get-Help C:\path\to\phpz\scripts\build-unix.ps1 -Full` 查看全部参数和示例。
+为其他平台或架构构建扩展，见[交叉编译]($link.page('development/cross-compilation'))。
 
 # [配置扩展加载]($heading.id('configure-loading'))
 

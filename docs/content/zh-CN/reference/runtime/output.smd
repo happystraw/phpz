@@ -32,7 +32,7 @@ fn info(module: *phpz.ModuleEntry) void {
 }
 ```
 
-该钩子在 `phpinfo()` 或相关 CLI 信息查询时调用。表格辅助函数负责 PHP 信息输出形式。`phpz.info.ini(module)` 输出当前模块注册的 INI 指令，包括自定义 displayer；模块参数是借用的模块条目。展示版本、启用状态等信息即可，避免输出密码或连接令牌。
+该钩子在 `phpinfo()` 或相关 CLI 信息查询时调用。表格辅助函数负责 PHP 信息输出形式。`phpz.info.ini(module)` 输出当前模块注册的 INI 指令，包括自定义 displayer。参数 `module` 是指向当前模块的借用指针（`*phpz.ModuleEntry`）。展示版本、启用状态等信息即可，避免输出密码或连接令牌。
 
 # [检查输出]($heading.id('check-output'))
 

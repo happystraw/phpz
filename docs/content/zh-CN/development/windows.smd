@@ -6,17 +6,11 @@
 .custom = { "section": "构建与测试" },
 ---
 
-本章介绍 Windows 上的 MSVC 开发环境、DLL 构建与加载，以及从 Linux 交叉编译的流程。PHP 开发包、导入库和目标运行时的版本、架构、NTS/ZTS 与 Debug 配置需要一致。
+本章介绍 Windows 上的 MSVC 开发环境、DLL 构建与加载。PHP 开发包、导入库和目标运行时的版本、架构、NTS/ZTS 与 Debug 配置需要一致。
 
 # [Windows MSVC]($heading.id('windows-msvc'))
 
-在 Windows x64 的扩展工程目录中运行以下脚本，可自动下载 PHP 官方开发包，并由 xwin 准备 MSVC 头文件和库。运行时会通过 xwin 接受 Microsoft SDK 许可。各工程共用 `%LOCALAPPDATA%/phpz/windows/win32` 下的 SDK，设置 `XDG_CACHE_HOME` 后使用该目录作为缓存根路径，默认构建 NTS，线程安全版加 `-Zts`。
-
-```powershell
-C:\path\to\phpz\scripts\build-windows.ps1 -PhpVersion 8.6.0 -ZigArgs @('-Doptimize=ReleaseFast')
-```
-
-使用 `Get-Help C:\path\to\phpz\scripts\build-windows.ps1 -Full` 查看全部参数和示例。
+使用 xwin 自动准备 SDK，见[交叉编译]($link.page('development/cross-compilation').ref('from-windows-powershell'))。
 
 准备匹配运行时的 PHP 开发包，用 PowerShell 执行：
 
@@ -39,15 +33,7 @@ PHP for Windows 使用 MSVC ABI，不应使用 MinGW ABI 替代。
 
 # [从 Linux 交叉编译 Windows]($heading.id('cross-compile-windows-from-linux'))
 
-从扩展工程目录调用仓库提供的脚本：
-
-```sh
-/path/to/phpz/scripts/build-windows.sh --php-version 8.6.0 --nts
-```
-
-脚本默认使用 PHP `8.6.0`，支持 `8.2`–`8.6` 的 `major.minor.patch`，也可带 `alpha`、`beta` 或 `RC` 后缀；预发布版本从 PHP Windows QA 下载目录获取开发包。各工程共用 `${XDG_CACHE_HOME:-$HOME/.cache}/phpz/windows/linux` 下的 Windows SDK 和 PHP 开发包。依赖 `zig`、`curl`、`tar`、`unzip` 和 `flock`；通过 xwin 准备 Windows SDK 的过程包含接受 Microsoft 许可。
-
-成功交叉编译只能证明构建通过。DLL 仍需在对应 Windows PHP 上实际加载并运行 PHPT。
+在 Linux 上构建 DLL 的命令和 SDK 配置见[交叉编译]($link.page('development/cross-compilation').ref('from-linux'))。
 
 # [测试与配置]($heading.id('testing-and-configuration'))
 

@@ -10,6 +10,22 @@
 
 Methods can use typed parameters and returns or parse arguments manually through a call context. See [Argument parsing and return values]($link.page('reference/registration/arguments')).
 
+# [Class registration options]($heading.id('class-options'))
+
+The third argument to `phpz.Class(name, T, options)` is a compile-time options struct. Pass `.{}` for the defaults. All classes accept `.methods` and `.register`, including the shorthand `phpz.ClassDecl(name, options)`. The remaining options require a Zig struct with fields as `T`.
+
+| Option | Usage and defaults |
+| --- | --- |
+| `.methods` | Defaults to `.automatic`, which binds methods by name. To use different Zig function names, supply a named mapping covering all concrete methods. See [Method bindings]($link.ref('method-bindings')). |
+| `.register` | Calls the stub-generated registration function directly when it takes no arguments. If it requires a parent or interface, supply a callback that passes class entries in the generated function's argument order. See [Inheritance and interfaces]($link.page('reference/registration/declarations').ref('inheritance')). |
+| `.init` | Defaults to `.default` when every field has a default value, or `.none` otherwise. A zero-argument function returning `T` or `!T` can initialize the data before the PHP constructor runs. |
+| `.deinit` | Optional `fn (*T) void` callback that releases resources held by initialized instance data. |
+| `.clone` | Cloning a backed object is disabled by default. To enable it, supply a function taking `*const T` and returning `T` or `!T`. See [Object lifecycle]($link.page('advanced/objects')). |
+| `.gc` | Reports PHP values held by Zig instance data to the garbage collector. The framework includes standard PHP properties automatically. |
+| `.operate` | Implements arithmetic or bitwise operations and writes the result to the callback's `result` argument. See [Operators]($link.page('advanced/operators')). |
+| `.compare` | Implements comparison and returns `.less`, `.equal` or `.greater`, or an error. |
+| `.handlers` | Overrides selected Zend callbacks with `phpz.ObjectHandlers`. Each operation can be set here or through its corresponding high-level option only once. See [Custom object handlers]($link.page('advanced/handlers')). |
+
 # [Zig instance data]($heading.id('zig-backing'))
 
 A Zig struct with fields adds per-instance data to each PHP object. If every field has a default, phpz initializes this data automatically. Otherwise initialize it in the constructor or `.init`. Calling a method that requires `self` on an uninitialized instance raises a PHP error.

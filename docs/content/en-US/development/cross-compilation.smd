@@ -1,0 +1,53 @@
+---
+.title = "Cross-compilation",
+.date = .date("2026-11-28T00:00:00"),
+.layout = "doc.shtml",
+.translation_key = "development/cross-compilation",
+.custom = { "section": "Build and test" },
+---
+
+Run the commands from the extension project directory. Choose the exact PHP version and thread-safety mode used by the target runtime. NTS is the default.
+
+# [Linux and macOS targets]($heading.id('unix-targets'))
+
+Linux and macOS hosts use Bash. Windows hosts use PowerShell. Choose an SDK from the [published PHP SDK releases](https://github.com/happystraw/php-extension-sdk/releases). Combine `x86_64` or `aarch64` with `linux-gnu` (glibc), `linux-musl` or `macos`. In Bash, add `--zts` for ZTS and pass extra Zig options after `--`.
+
+```sh
+/path/to/phpz/scripts/build-unix.sh --php-version 8.6.0 --target aarch64-linux-gnu --zts -- -Doptimize=ReleaseFast
+/path/to/phpz/scripts/build-unix.sh --php-version 8.6.0 --target x86_64-linux-musl
+/path/to/phpz/scripts/build-unix.sh --php-version 8.6.0 --target aarch64-macos
+```
+
+Verified SDKs are cached under `$XDG_CACHE_HOME/phpz/sdk` (default `~/.cache/phpz/sdk`). Builds for the same PHP version, target, and thread-safety mode reuse the cached headers.
+
+From Windows PowerShell, use the same SDKs and targets. The default cache is `%LOCALAPPDATA%/phpz/sdk`. Add `-Zts` for a thread-safe PHP build.
+
+```powershell
+C:\path\to\phpz\scripts\build-unix.ps1 -PhpVersion 8.6.0 -Target aarch64-linux-gnu -ZigArgs @('-Doptimize=ReleaseFast')
+```
+
+Run `Get-Help C:\path\to\phpz\scripts\build-unix.ps1 -Full` to see all parameters and examples.
+
+# [Windows x64 MSVC target]($heading.id('windows-target'))
+
+Both scripts target release builds of PHP. For a debug PHP runtime, use the matching debug development pack and follow [Building with MSVC on Windows]($link.page('development/windows').ref('windows-msvc')) with `-Dwindows-debug=true`.
+
+## [From Linux]($heading.id('from-linux'))
+
+```sh
+/path/to/phpz/scripts/build-windows.sh --php-version 8.6.0 --nts
+```
+
+The script defaults to PHP `8.6.0`. It accepts `major.minor.patch` releases from 8.2 through 8.6 and optional `alpha`, `beta` or `RC` suffixes. Prerelease SDKs come from PHP's Windows QA downloads. Projects reuse the Windows SDK and PHP development pack under `${XDG_CACHE_HOME:-$HOME/.cache}/phpz/windows/linux`. Install `zig`, `curl`, `tar`, `unzip` and `flock`. Preparing the SDK with xwin includes accepting Microsoft's license.
+
+## [From Windows PowerShell]($heading.id('from-windows-powershell'))
+
+From the extension directory on Windows x64, this script downloads the official PHP development pack and uses xwin to prepare the MSVC headers and libraries. Running it accepts Microsoft's SDK license through xwin. Projects reuse the SDKs under `%LOCALAPPDATA%/phpz/windows/win32` (or `$env:XDG_CACHE_HOME/phpz/windows/win32` when set). NTS is the default. Add `-Zts` for thread-safe PHP.
+
+```powershell
+C:\path\to\phpz\scripts\build-windows.ps1 -PhpVersion 8.6.0 -ZigArgs @('-Doptimize=ReleaseFast')
+```
+
+Run `Get-Help C:\path\to\phpz\scripts\build-windows.ps1 -Full` to see all parameters and examples.
+
+Load the DLL on the target runtime as described in [Building for Windows]($link.page('development/windows')). Run the [PHPT tests]($link.page('development/testing')) there to verify its behavior.
