@@ -13,8 +13,6 @@ on:
       - ".github/actions/test-variant/**"
       - ".github/scripts/ci.mjs"
       - ".github/scripts/ci.test.mjs"
-      - "scripts/build-windows.sh"
-      - "scripts/test-windows.sh"
       - ".github/workflows/test-linux.yml"
   pull_request:
     branches: ["dev"]
@@ -28,8 +26,6 @@ on:
       - ".github/actions/test-variant/**"
       - ".github/scripts/ci.mjs"
       - ".github/scripts/ci.test.mjs"
-      - "scripts/build-windows.sh"
-      - "scripts/test-windows.sh"
       - ".github/workflows/test-linux.yml"
   workflow_call:
   workflow_dispatch:
@@ -46,9 +42,6 @@ jobs:
       fail-fast: false
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5", "8.6"]
-    env:
-      XWIN_VERSION: "0.10.0"
-      VS_VERSION: ${{ matrix.php == '8.6' && 'vs18' || (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -57,11 +50,6 @@ jobs:
         uses: mlugg/setup-zig@v2
       - name: Test CI orchestration
         run: node --test .github/scripts/ci.test.mjs
-      - name: Cache xwin downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/xwin/${{ env.XWIN_VERSION }}/${{ env.VS_VERSION }}/x86_64
-          key: xwin-${{ env.XWIN_VERSION }}-${{ env.VS_VERSION }}-windows-x86_64
       - name: Test NTS PHP release
         if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
         uses: ./.github/actions/test-variant
@@ -92,9 +80,6 @@ jobs:
       fail-fast: false
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5", "8.6"]
-    env:
-      XWIN_VERSION: "0.10.0"
-      VS_VERSION: ${{ matrix.php == '8.6' && 'vs18' || (matrix.php == '8.2' || matrix.php == '8.3') && 'vs16' || 'vs17' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -103,11 +88,6 @@ jobs:
         uses: mlugg/setup-zig@v2
       - name: Test CI orchestration
         run: node --test .github/scripts/ci.test.mjs
-      - name: Cache xwin downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/xwin/${{ env.XWIN_VERSION }}/${{ env.VS_VERSION }}/x86_64
-          key: xwin-${{ env.XWIN_VERSION }}-${{ env.VS_VERSION }}-windows-x86_64
       - name: Test NTS PHP release
         if: ${{ !cancelled() && steps.zig.outcome == 'success' }}
         uses: ./.github/actions/test-variant

@@ -27,7 +27,7 @@ A Zig framework for building PHP extensions with PHP C API bindings.
 - **Memory** — PHP-backed Zig allocator for any alignment, with optional debug leak traces that are safe under ZTS.
 - **Build integration** — PHP C translation, extension linking, and platform-specific setup.
 - **PHP build system** — optional support for built-in and shared extensions. Pass `--with-php-build-system` to `phpz_skel.php`; see the [skeleton guide](./examples/skeleton/README.md#php-build-system).
-- **Cross-compilation** — build Windows x86_64 (MSVC) extensions from Linux; see [`scripts/build-windows.sh`](./scripts/build-windows.sh).
+- **Cross-compilation** — build Linux (glibc or musl) and macOS extensions for x86_64 and ARM64 with [Bash](./scripts/build-unix.sh) or [PowerShell](./scripts/build-unix.ps1), or Windows x86_64 MSVC extensions from [Linux](./scripts/build-windows.sh) or [Windows PowerShell](./scripts/build-windows.ps1).
 
 ## Quick Start
 

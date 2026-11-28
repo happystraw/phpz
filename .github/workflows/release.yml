@@ -20,6 +20,10 @@ jobs:
     if: github.event.created
     uses: ./.github/workflows/test-windows.yml
 
+  cross-compilation:
+    if: github.event.created
+    uses: ./.github/workflows/test-cross-compilation.yml
+
   builtin:
     if: github.event.created
     uses: ./.github/workflows/test-builtin.yml
@@ -33,7 +37,7 @@ jobs:
     uses: ./.github/workflows/test-phpz-skel.yml
 
   publish:
-    needs: [linux, macos, windows, builtin, sapi, phpz-skel]
+    needs: [linux, macos, windows, cross-compilation, builtin, sapi, phpz-skel]
     permissions:
       contents: write
     runs-on: ubuntu-latest

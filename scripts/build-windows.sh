@@ -13,14 +13,13 @@ Cross-compile the current PHPZ project on Linux for Windows x86_64 MSVC.
   --xwin-cache-dir PATH    xwin cache root (default: \${XDG_CACHE_HOME:-\$HOME/.cache}/xwin)
   -h, --help               Show this help
 
-Project downloads, SDKs and temporary files live in ./build/windows/.
-Dependencies: zig, curl, tar, unzip, and standard shell utilities.
+Projects share prepared SDKs under \${XDG_CACHE_HOME:-\$HOME/.cache}/phpz/windows/linux.
+Dependencies: zig, curl, tar, unzip, flock, and standard shell utilities.
 Preparing the Windows SDK accepts Microsoft's license through xwin.
 
 Examples:
   $0 --php-version 8.6.0 --nts
-  $0 --php-version 8.6.0 --zts
-  $0 -- -Doptimize=ReleaseFast
+  $0 --php-version 8.5.13 --zts -- -Doptimize=ReleaseFast
 EOF
 }
 
@@ -38,7 +37,7 @@ require_value() {
 }
 
 php_version=8.6.0
-php_thread_safety=nts
+php_thread_safety=
 xwin_version=0.10.0
 xwin_cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/xwin
 target_arch=x86_64
@@ -62,6 +61,8 @@ while [ "$#" -gt 0 ]; do
         shift 2
         ;;
     --nts | --zts)
+        [ -z "$php_thread_safety" ] || [ "$php_thread_safety" = "${1#--}" ] ||
+            arg_error "choose either --nts or --zts"
         php_thread_safety=${1#--}
         shift
         ;;
@@ -76,6 +77,7 @@ while [ "$#" -gt 0 ]; do
     *) arg_error "unknown option: $1 (see --help)" ;;
     esac
 done
+php_thread_safety=${php_thread_safety:-nts}
 
 printf '%s\n' "$php_version" | grep -Eq '^8\.[2-6]\.[0-9]+((alpha|beta|RC)[0-9]+)?$' ||
     arg_error "unsupported PHP version: $php_version (expected 8.2-8.6 major.minor.patch with optional alpha/beta/RC suffix)"
@@ -85,10 +87,16 @@ printf '%s\n' "$xwin_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
 [ "$(uname -s)" = Linux ] || die "only Linux hosts are supported"
 host_arch=$(uname -m)
 case "$host_arch" in x86_64 | aarch64) ;; *) die "unsupported Linux host architecture: $host_arch" ;; esac
+for arg in "$@"; do
+    case "$arg" in
+    -Dtarget=*|-Dphp-include-dir=*|-Dphp-lib-dir=*|-Dlibc-file=*|-Dwindows-zts=*|-Dwindows-debug=*)
+        arg_error "SDK selection already sets $arg" ;;
+    esac
+done
 project_dir=$(pwd -P)
 [ -f "$project_dir/build.zig" ] && [ -f "$project_dir/build.zig.zon" ] ||
     die "current directory must contain build.zig and build.zig.zon: $project_dir"
-for dependency in zig curl tar unzip; do
+for dependency in zig curl tar unzip flock; do
     command -v "$dependency" >/dev/null 2>&1 || die "required command not found: $dependency"
 done
 
@@ -98,8 +106,9 @@ case "$php_version" in
 8.6.*) vs_version=18 ;;
 esac
 vs_toolset=vs$vs_version
-cache_root=$project_dir/build/windows
+cache_root=${XDG_CACHE_HOME:-$HOME/.cache}/phpz/windows/linux
 mkdir -p "$cache_root/tmp"
+cache_root=$(cd "$cache_root" && pwd -P)
 run_tmp=$(mktemp -d "$cache_root/tmp/run.XXXXXX")
 trap 'rm -rf -- "$run_tmp"' 0
 trap 'exit 130' INT
@@ -127,23 +136,42 @@ download() {
     mv "$run_tmp/download.part" "$2"
 }
 
+# Serialize cache preparation across projects, then let Zig builds run concurrently.
+exec 9>"$cache_root/prepare.lock"
+flock -x 9
+
 php_cache=$cache_root/php/$php_version/$php_thread_safety/$target_arch
-php_sdk=$php_cache/php-$php_version-devel-$vs_toolset-$ms_arch
-if [ ! -f "$php_cache/.complete" ]; then
-    thread_suffix=
-    [ "$php_thread_safety" != nts ] || thread_suffix=-nts
+sdk_name=php-$php_version-devel-$vs_toolset-$ms_arch
+php_sdk=$php_cache/$sdk_name
+case "$php_thread_safety" in
+nts) thread_suffix=-nts; import_lib=php8.lib ;;
+zts) thread_suffix=; import_lib=php8ts.lib ;;
+esac
+valid_php_sdk() {
+    [ -f "$1/include/main/php.h" ] && [ -s "$1/include/main/php.h" ] &&
+        [ -f "$1/lib/$import_lib" ] && [ -s "$1/lib/$import_lib" ]
+}
+if [ ! -f "$php_cache/.complete" ] || ! valid_php_sdk "$php_sdk"; then
     archive_name=php-devel-pack-$php_version$thread_suffix-Win32-$vs_toolset-$ms_arch.zip
     archive=$download_dir/$archive_name
-    if [ ! -f "$archive" ]; then
-        case "$php_version" in
-        *alpha* | *beta* | *RC*) base=https://downloads.php.net/~windows/qa ;;
-        *) base=https://downloads.php.net/~windows/releases/archives ;;
-        esac
-        download "$base/$archive_name" "$archive" ||
-            die "PHP development pack unavailable: $archive_name"
-    fi
-    mkdir -p "$run_tmp/php"
-    unzip -q "$archive" -d "$run_tmp/php"
+    case "$php_version" in
+    *alpha* | *beta* | *RC*) base=https://downloads.php.net/~windows/qa ;;
+    *) base=https://downloads.php.net/~windows/releases/archives ;;
+    esac
+    for attempt in 1 2; do
+        if [ ! -f "$archive" ]; then
+            download "$base/$archive_name" "$archive" ||
+                die "PHP development pack unavailable: $archive_name"
+        fi
+        mkdir -p "$run_tmp/php"
+        if unzip -q "$archive" -d "$run_tmp/php" && valid_php_sdk "$run_tmp/php/$sdk_name"; then
+            break
+        fi
+        rm -f -- "$archive"
+        rm -rf -- "$run_tmp/php"
+        [ "$attempt" -eq 1 ] || die "Invalid PHP development pack after retry: $archive_name"
+        echo "[WARN] Invalid PHP development pack; downloading $archive_name again" >&2
+    done
     touch "$run_tmp/php/.complete"
     mkdir -p "$(dirname "$php_cache")"
     rm -rf -- "$php_cache"
@@ -157,7 +185,10 @@ if [ ! -f "$tool_dir/.complete" ] || [ ! -x "$xwin" ]; then
     base=https://github.com/Jake-Shadle/xwin/releases/download/$xwin_version
     [ -f "$archive" ] || download "$base/$package.tar.gz" "$archive"
     mkdir -p "$run_tmp/tool"
-    tar -xzf "$archive" -C "$run_tmp/tool" --strip-components=1 "$package/xwin"
+    if ! tar -xzf "$archive" -C "$run_tmp/tool" --strip-components=1 "$package/xwin"; then
+        rm -f -- "$archive"
+        die "Cannot extract $package; the next build will download it again"
+    fi
     touch "$run_tmp/tool/.complete"
     mkdir -p "$(dirname "$tool_dir")"
     rm -rf -- "$tool_dir"
@@ -184,7 +215,7 @@ if [ ! -e "$win_sdk/sdk/include/um/Winsock2.h" ] && [ -f "$win_sdk/sdk/include/u
     ln -s WinSock2.h "$win_sdk/sdk/include/um/Winsock2.h"
 fi
 
-cat >"$libc_file" <<EOF
+cat >"$run_tmp/libc.txt" <<EOF
 include_dir=$win_sdk/sdk/include/ucrt
 sys_include_dir=$win_sdk/crt/include
 crt_dir=$win_sdk/sdk/lib/ucrt/$ms_arch
@@ -193,6 +224,11 @@ kernel32_lib_dir=$win_sdk/sdk/lib/um/$ms_arch
 cc_dir=
 darwin_sdk_dir=
 EOF
+if ! cmp -s "$run_tmp/libc.txt" "$libc_file"; then
+    mv "$run_tmp/libc.txt" "$libc_file"
+fi
+flock -u 9
+exec 9>&-
 
 windows_zts=false
 [ "$php_thread_safety" != zts ] || windows_zts=true

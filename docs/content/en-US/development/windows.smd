@@ -10,6 +10,14 @@ Match the PHP SDK, import libraries and runtime for version, architecture, NTS/Z
 
 # [Building with MSVC on Windows]($heading.id('windows-msvc'))
 
+From the extension directory on Windows x64, this script downloads the official PHP development pack and uses xwin to prepare the MSVC headers and libraries. Running it accepts Microsoft's SDK license through xwin. Projects reuse the SDKs under `%LOCALAPPDATA%/phpz/windows/win32` (or `$env:XDG_CACHE_HOME/phpz/windows/win32` when set). NTS is the default. Add `-Zts` for thread-safe PHP.
+
+```powershell
+C:\path\to\phpz\scripts\build-windows.ps1 -PhpVersion 8.6.0 -ZigArgs @('-Doptimize=ReleaseFast')
+```
+
+Run `Get-Help C:\path\to\phpz\scripts\build-windows.ps1 -Full` to see all parameters and examples.
+
 With a matching PHP development package, run this in PowerShell:
 
 ```powershell
@@ -37,7 +45,7 @@ From the extension project directory, run the script supplied with phpz.
 /path/to/phpz/scripts/build-windows.sh --php-version 8.6.0 --nts
 ```
 
-The script defaults to PHP `8.6.0`. It accepts `major.minor.patch` releases from 8.2 through 8.6 and optional `alpha`, `beta` or `RC` suffixes. Prerelease SDKs come from PHP's Windows QA downloads. The script prepares the Windows SDK and PHP development package under `build/windows/`. Install `zig`, `curl`, `tar` and `unzip`. Preparing the SDK with xwin includes accepting Microsoft's license.
+The script defaults to PHP `8.6.0`. It accepts `major.minor.patch` releases from 8.2 through 8.6 and optional `alpha`, `beta` or `RC` suffixes. Prerelease SDKs come from PHP's Windows QA downloads. Projects reuse the Windows SDK and PHP development pack under `${XDG_CACHE_HOME:-$HOME/.cache}/phpz/windows/linux`. Install `zig`, `curl`, `tar`, `unzip` and `flock`. Preparing the SDK with xwin includes accepting Microsoft's license.
 
 A successful cross-build verifies compilation. Load the DLL and run PHPTs on the matching Windows PHP runtime to verify execution.
 

@@ -253,13 +253,13 @@ export async function verifyShared(config, log) {
     const phpizeApi = phpize.match(/PHP\s+Api\s+Version:\s*(\d+)/i)?.[1];
     if (!api || phpizeApi !== api) throw new Error('phpize/headers API mismatch');
   }
-  return { env, args, actual };
+  return { env, args };
 }
 
 async function shared(config) {
   let verified;
   if (!await runTasks(config, [{ name: 'verify', run: async log => { verified = await verifyShared(config, log); } }])) return false;
-  const { env, args, actual } = verified;
+  const { env, args } = verified;
   const win = process.platform === 'win32';
   const run = (exe, argv, cwd, taskLog) => command(exe, argv, { cwd, env, log: taskLog });
   const tasks = [{ name: 'unit', run: taskLog => run('zig', ['build', 'test', ...args], config.repo, taskLog) }];
@@ -292,7 +292,6 @@ async function shared(config) {
       await run('make', ['test', 'TESTS=tests'], cwd, taskLog);
     } finally { collectDiagnostics(fresh, path.join(config.logs, 'phpize')); }
   } });
-  if (process.platform === 'linux') tasks.push({ name: 'cross-windows', run: taskLog => run('sh', ['scripts/test-windows.sh', '--php-version', actual[3], config.ts === 'ts' ? '--zts' : '--nts', '--xwin-cache-dir', path.join(os.homedir(), '.cache/xwin')], config.repo, taskLog) });
   return runTasks(config, tasks);
 }
 

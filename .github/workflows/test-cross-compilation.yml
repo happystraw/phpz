@@ -1,0 +1,123 @@
+name: Cross-Compilation Test
+
+on:
+  push:
+    branches: ["dev"]
+    paths: &cross_compilation_paths
+      - ".github/workflows/test-cross-compilation.yml"
+      - "scripts/build-unix.*"
+      - "scripts/build-windows.*"
+      - "scripts/test-windows.sh"
+      - "build/**"
+      - "src/**"
+      - "tests/**"
+      - "tools/**"
+      - "examples/my_php_extension/**"
+      - "examples/skeleton/**"
+      - "build.zig"
+      - "build.zig.zon"
+  pull_request:
+    branches: ["dev"]
+    paths: *cross_compilation_paths
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: Exact PHP release with published SDKs (e.g. 8.5.13)
+        type: string
+        required: true
+        default: '8.6.0'
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Cross-compilation test on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    env:
+      PHP_VERSION: ${{ inputs.php_version || '8.6.0' }}
+      XWIN_VERSION: '0.10.0'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mlugg/setup-zig@v2
+
+      - name: Compile Linux and macOS extensions
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: examples/my_php_extension
+        run: |
+          for arch in x86_64 aarch64; do
+            for platform in linux-gnu linux-musl macos; do
+              for mode in nts zts; do
+                rm -f modules/my_php_extension.so
+                ../../scripts/build-unix.sh --php-version "$PHP_VERSION" --target "$arch-$platform" "--$mode" -- -Doptimize=ReleaseFast
+                test -s modules/my_php_extension.so
+              done
+            done
+          done
+
+      - name: Compile Linux and macOS extensions via PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: examples/my_php_extension
+        run: |
+          $module = 'modules/my_php_extension.so'
+          foreach ($arch in 'x86_64', 'aarch64') {
+            foreach ($platform in 'linux-gnu', 'linux-musl', 'macos') {
+              foreach ($zts in @($false, $true)) {
+                if (Test-Path -LiteralPath $module) { Remove-Item -LiteralPath $module }
+                & ..\..\scripts\build-unix.ps1 -PhpVersion $env:PHP_VERSION -Target "$arch-$platform" -Zts:$zts -ZigArgs @('-Doptimize=ReleaseFast')
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                if ((Get-Item -LiteralPath $module -ErrorAction Stop).Length -eq 0) { throw 'Empty extension module' }
+              }
+            }
+          }
+
+      - name: Select xwin toolset
+        if: runner.os == 'Linux'
+        id: xwin
+        shell: bash
+        run: |
+          case "$PHP_VERSION" in
+            8.2.*|8.3.*) toolset=vs16 ;;
+            8.4.*|8.5.*) toolset=vs17 ;;
+            8.6.*) toolset=vs18 ;;
+            *) echo "Unsupported PHP version: $PHP_VERSION" >&2; exit 1 ;;
+          esac
+          echo "toolset=$toolset" >> "$GITHUB_OUTPUT"
+
+      - name: Cache xwin downloads
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/xwin/${{ env.XWIN_VERSION }}/${{ steps.xwin.outputs.toolset }}/x86_64
+          key: xwin-${{ env.XWIN_VERSION }}-${{ steps.xwin.outputs.toolset }}-windows-x86_64
+
+      - name: Compile phpz and examples for Windows
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for mode in nts zts; do
+            rm -f examples/my_php_extension/modules/php_my_php_extension.dll
+            sh scripts/test-windows.sh --php-version "$PHP_VERSION" --xwin-version "$XWIN_VERSION" "--$mode"
+            test -s examples/my_php_extension/modules/php_my_php_extension.dll
+          done
+
+      - name: Compile Windows extension via PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        working-directory: examples/my_php_extension
+        run: |
+          $dll = 'modules/php_my_php_extension.dll'
+          foreach ($zts in @($false, $true)) {
+            if (Test-Path -LiteralPath $dll) { Remove-Item -LiteralPath $dll }
+            & ..\..\scripts\build-windows.ps1 -PhpVersion $env:PHP_VERSION -Zts:$zts -ZigArgs @('-Doptimize=ReleaseFast')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ((Get-Item -LiteralPath $dll -ErrorAction Stop).Length -eq 0) { throw 'Empty extension DLL' }
+          }
